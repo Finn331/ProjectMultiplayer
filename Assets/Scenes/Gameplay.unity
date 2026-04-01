@@ -143,6 +143,7 @@ GameObject:
   - component: {fileID: 31602070}
   - component: {fileID: 31602069}
   - component: {fileID: 31602071}
+  - component: {fileID: 31602072}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -165,6 +166,8 @@ MonoBehaviour:
   moveSpeed: 5
   moveJoystick: {fileID: 1565621064}
   controller: {fileID: 31602060}
+  injuredAnimationController: {fileID: 31602072}
+  injuredInputThresholdForFullSpeed: 0.05
   enableJump: 1
   gravity: -9.81
   jumpForce: 1
@@ -179,7 +182,7 @@ CharacterController:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 31602058}
-  m_Material: {fileID: 1924144756}
+  m_Material: {fileID: 1530564179}
   m_IncludeLayers:
     serializedVersion: 2
     m_Bits: 0
@@ -205,7 +208,7 @@ CapsuleCollider:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 31602058}
-  m_Material: {fileID: 1632007308}
+  m_Material: {fileID: 155583284}
   m_IncludeLayers:
     serializedVersion: 2
     m_Bits: 0
@@ -317,7 +320,12 @@ MonoBehaviour:
   applyLowNeedsMovementPenalty: 1
   lowNeedsThreshold: 20
   movementSpeedMultiplierWhenLow: 0.7
+  applyLowHealthMovementPenalty: 0
+  lowHealthThresholdNormalized: 0.35
+  movementSpeedMultiplierWhenLowHealth: 1
+  applyInjuredStateMovementPenalty: 1
   movementController: {fileID: 31602059}
+  injuredAnimationController: {fileID: 31602072}
   godMode: 0
 --- !u!114 &31602066
 MonoBehaviour:
@@ -397,6 +405,7 @@ MonoBehaviour:
   animator: {fileID: 31602067}
   characterController: {fileID: 31602060}
   movementController: {fileID: 31602059}
+  injuredAnimationController: {fileID: 31602072}
   speedParam: Speed
   verticalVelocityParam: VerticalVelocity
   isGroundedParam: IsGrounded
@@ -411,6 +420,9 @@ MonoBehaviour:
   minAirTimeAfterJump: 0.15
   jumpStartVerticalThreshold: 0.25
   verticalVelocitySmoothTime: 0.06
+  injuredMaxSpeedNormalized: 0.2
+  disableRunningWhenInjured: 1
+  injuredInputThresholdForFullAnimSpeed: 0.05
 --- !u!114 &31602069
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -468,12 +480,64 @@ MonoBehaviour:
   rigBuilder: {fileID: 0}
   rebuildOnEnable: 1
   rebuildOnStart: 1
+--- !u!114 &31602072
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 31602058}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 26b6d955123c8044ba0a9df3632d932d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  animator: {fileID: 31602067}
+  survivalSystem: {fileID: 31602065}
+  injuredHealthThresholdNormalized: 0.35
+  injuredMovementSpeedMultiplier: 0.18
+  overrideInjuredFromInspector: 0
+  forcedInjuredState: 0
+  injuredIdleClip: {fileID: 8993902097722301239, guid: a57ee5c69e69fdc44b66150d65e4982e,
+    type: 3}
+  injuredWalkClip: {fileID: 8993902097722301239, guid: cbf66c1410fd22247a25299902ec8dc7,
+    type: 3}
+  injuredWalkLeftClip: {fileID: 8993902097722301239, guid: 9716eb902ed121f42b95bdb6a58d8a7e,
+    type: 3}
+  injuredWalkRightClip: {fileID: 8993902097722301239, guid: 514f2d3064515ee4eacbbb6ce4233d11,
+    type: 3}
+  injuredWalkBackwardClip: {fileID: 0}
+  useOriginalBackwardWhenMissingInjuredBackward: 1
+  injuredRunClip: {fileID: 8993902097722301239, guid: cbf66c1410fd22247a25299902ec8dc7,
+    type: 3}
+  injuredTurnLeftClip: {fileID: 8993902097722301239, guid: 9716eb902ed121f42b95bdb6a58d8a7e,
+    type: 3}
+  injuredTurnRightClip: {fileID: 8993902097722301239, guid: 514f2d3064515ee4eacbbb6ce4233d11,
+    type: 3}
+  injuredTurnClip: {fileID: 8993902097722301239, guid: 9716eb902ed121f42b95bdb6a58d8a7e,
+    type: 3}
+  replaceJumpAndFall: 0
+  injuredAirborneLoopClip: {fileID: 8993902097722301239, guid: e6f544c2218b6ac45a5fd050f031a403,
+    type: 3}
 --- !u!4 &40852342 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -450375825979048200, guid: 55afdf97579228e40afb4f92aed6af65,
     type: 3}
   m_PrefabInstance: {fileID: 1086418437}
   m_PrefabAsset: {fileID: 0}
+--- !u!134 &155583284
+PhysicMaterial:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: ' (Instance) (Instance) (Instance) (Instance) (Instance) (Instance) (Instance)
+    (Instance) (Instance) (Instance)'
+  dynamicFriction: 0.6
+  staticFriction: 0.6
+  bounciness: 0
+  frictionCombine: 0
+  bounceCombine: 0
 --- !u!1 &176889769
 GameObject:
   m_ObjectHideFlags: 0
@@ -2715,12 +2779,25 @@ Transform:
   m_GameObject: {fileID: 1483026076}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 0.525, z: 0}
+  m_LocalPosition: {x: 0, y: 0.525, z: 0.05}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 272658138}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!134 &1530564179
+PhysicMaterial:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: ' (Instance) (Instance) (Instance) (Instance) (Instance) (Instance) (Instance)
+    (Instance) (Instance) (Instance)'
+  dynamicFriction: 0.6
+  staticFriction: 0.6
+  bounciness: 0
+  frictionCombine: 0
+  bounceCombine: 0
 --- !u!4 &1545256102 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 2700830838034906516, guid: 55afdf97579228e40afb4f92aed6af65,
@@ -2745,18 +2822,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7a47f546fc70ec8428172694e78e4288, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
---- !u!134 &1632007308
-PhysicMaterial:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_Name: ' (Instance) (Instance) (Instance) (Instance) (Instance) (Instance)'
-  dynamicFriction: 0.6
-  staticFriction: 0.6
-  bounciness: 0
-  frictionCombine: 0
-  bounceCombine: 0
 --- !u!1 &1647757478
 GameObject:
   m_ObjectHideFlags: 0
@@ -3115,18 +3180,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 1648802796}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!134 &1924144756
-PhysicMaterial:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_Name: ' (Instance) (Instance) (Instance) (Instance) (Instance) (Instance)'
-  dynamicFriction: 0.6
-  staticFriction: 0.6
-  bounciness: 0
-  frictionCombine: 0
-  bounceCombine: 0
 --- !u!4 &1938986163 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 55afdf97579228e40afb4f92aed6af65,

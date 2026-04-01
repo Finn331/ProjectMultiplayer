@@ -6,6 +6,8 @@ public class FPSControllerMobile : MonoBehaviour
     public float moveSpeed = 5f;
     public FloatingJoystick moveJoystick;
     public CharacterController controller;
+    public LowHealthInjuredAnimationController injuredAnimationController;
+    [Range(0.01f, 0.5f)] public float injuredInputThresholdForFullSpeed = 0.08f;
 
     [Header("Gravity & Jump")]
     public bool enableJump = true;
@@ -29,6 +31,9 @@ public class FPSControllerMobile : MonoBehaviour
     {
         if (!controller)
             controller = GetComponent<CharacterController>();
+
+        if (!injuredAnimationController)
+            injuredAnimationController = GetComponent<LowHealthInjuredAnimationController>();
     }
 
     void Update()
@@ -41,11 +46,40 @@ public class FPSControllerMobile : MonoBehaviour
     // ================= MOVEMENT =================
     void MobileMovement()
     {
-        Vector3 move =
-            transform.right * moveJoystick.Horizontal +
-            transform.forward * moveJoystick.Vertical;
+        if (!controller || moveJoystick == null)
+        {
+            return;
+        }
 
-        controller.Move(move * moveSpeed * Time.deltaTime);
+        Vector2 joystickInput = new Vector2(moveJoystick.Horizontal, moveJoystick.Vertical);
+        float inputMagnitude = Mathf.Clamp01(joystickInput.magnitude);
+
+        if (inputMagnitude <= 0.0001f)
+        {
+            return;
+        }
+
+        bool injuredActive = injuredAnimationController != null && injuredAnimationController.IsInjuredActive;
+        float effectiveInputMagnitude = inputMagnitude;
+
+        if (injuredActive)
+        {
+            effectiveInputMagnitude = inputMagnitude >= injuredInputThresholdForFullSpeed ? 1f : 0f;
+            if (effectiveInputMagnitude <= 0f)
+            {
+                return;
+            }
+        }
+
+        Vector3 inputDirection =
+            transform.right * joystickInput.x +
+            transform.forward * joystickInput.y;
+
+        Vector3 moveDirection = inputDirection.sqrMagnitude > 0.0001f
+            ? inputDirection.normalized
+            : Vector3.zero;
+        float targetSpeed = moveSpeed * effectiveInputMagnitude;
+        controller.Move(moveDirection * targetSpeed * Time.deltaTime);
     }
 
     // ================= LOOK =================

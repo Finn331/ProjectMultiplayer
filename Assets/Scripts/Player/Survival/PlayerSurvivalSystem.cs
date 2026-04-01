@@ -29,7 +29,12 @@ public class PlayerSurvivalSystem : MonoBehaviour
     [SerializeField] private bool applyLowNeedsMovementPenalty = true;
     [SerializeField] private float lowNeedsThreshold = 20f;
     [SerializeField] private float movementSpeedMultiplierWhenLow = 0.7f;
+    [SerializeField] private bool applyLowHealthMovementPenalty = false;
+    [SerializeField, Range(0.01f, 1f)] private float lowHealthThresholdNormalized = 0.35f;
+    [SerializeField, Range(0.1f, 1f)] private float movementSpeedMultiplierWhenLowHealth = 1f;
+    [SerializeField] private bool applyInjuredStateMovementPenalty = true;
     [SerializeField] private FPSControllerMobile movementController;
+    [SerializeField] private LowHealthInjuredAnimationController injuredAnimationController;
 
     [Header("Debug")]
     [SerializeField] private bool godMode;
@@ -69,6 +74,11 @@ public class PlayerSurvivalSystem : MonoBehaviour
             movementController = GetComponent<FPSControllerMobile>();
         }
 
+        if (injuredAnimationController == null)
+        {
+            injuredAnimationController = GetComponent<LowHealthInjuredAnimationController>();
+        }
+
         if (movementController != null)
         {
             baseMoveSpeed = movementController.moveSpeed;
@@ -97,7 +107,7 @@ public class PlayerSurvivalSystem : MonoBehaviour
             this.ApplyHealthConsequences(deltaTime);
         }
 
-        this.UpdateMovementPenalty(currentHunger, currentThirst);
+        this.UpdateMovementPenalty(currentHealth, currentHunger, currentThirst);
     }
 
     public void ApplyDamage(float amount)
@@ -214,23 +224,49 @@ public class PlayerSurvivalSystem : MonoBehaviour
         }
     }
 
-    private void UpdateMovementPenalty(float hungerValue, float thirstValue)
+    private void UpdateMovementPenalty(float healthValue, float hungerValue, float thirstValue)
     {
         if (movementController == null || baseMoveSpeed <= 0f)
         {
             return;
         }
 
-        if (!applyLowNeedsMovementPenalty)
+        if (!applyLowNeedsMovementPenalty && !applyLowHealthMovementPenalty)
         {
             movementController.moveSpeed = baseMoveSpeed;
             return;
         }
 
-        bool lowNeeds = hungerValue <= lowNeedsThreshold || thirstValue <= lowNeedsThreshold;
-        movementController.moveSpeed = lowNeeds
-            ? baseMoveSpeed * Mathf.Clamp01(movementSpeedMultiplierWhenLow)
-            : baseMoveSpeed;
+        float finalMultiplier = 1f;
+
+        if (applyLowNeedsMovementPenalty)
+        {
+            bool lowNeeds = hungerValue <= lowNeedsThreshold || thirstValue <= lowNeedsThreshold;
+            if (lowNeeds)
+            {
+                finalMultiplier = Mathf.Min(finalMultiplier, Mathf.Clamp01(movementSpeedMultiplierWhenLow));
+            }
+        }
+
+        if (applyLowHealthMovementPenalty)
+        {
+            float healthNormalized = maxHealth <= 0f ? 0f : healthValue / maxHealth;
+            if (healthNormalized <= lowHealthThresholdNormalized)
+            {
+                finalMultiplier = Mathf.Min(
+                    finalMultiplier,
+                    Mathf.Clamp01(movementSpeedMultiplierWhenLowHealth));
+            }
+        }
+
+        if (applyInjuredStateMovementPenalty && injuredAnimationController != null && injuredAnimationController.IsInjuredActive)
+        {
+            finalMultiplier = Mathf.Min(
+                finalMultiplier,
+                injuredAnimationController.InjuredMovementSpeedMultiplier);
+        }
+
+        movementController.moveSpeed = baseMoveSpeed * finalMultiplier;
     }
 
     private void ChangeHealth(float delta)

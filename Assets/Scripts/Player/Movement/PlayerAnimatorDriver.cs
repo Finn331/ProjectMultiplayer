@@ -6,6 +6,7 @@ public class PlayerAnimatorDriver : MonoBehaviour
     [SerializeField] private Animator animator;
     [SerializeField] private CharacterController characterController;
     [SerializeField] private FPSControllerMobile movementController;
+    [SerializeField] private LowHealthInjuredAnimationController injuredAnimationController;
 
     [Header("Parameter Names")]
     [SerializeField] private string speedParam = "Speed";
@@ -24,6 +25,9 @@ public class PlayerAnimatorDriver : MonoBehaviour
     [SerializeField] private float minAirTimeAfterJump = 0.12f;
     [SerializeField] private float jumpStartVerticalThreshold = 0.2f;
     [SerializeField] private float verticalVelocitySmoothTime = 0.05f;
+    [SerializeField, Range(0.1f, 1f)] private float injuredMaxSpeedNormalized = 0.2f;
+    [SerializeField] private bool disableRunningWhenInjured = true;
+    [SerializeField, Range(0.01f, 0.5f)] private float injuredInputThresholdForFullAnimSpeed = 0.08f;
 
     private float lastRawGroundedTime;
     private float jumpLockUntilTime;
@@ -46,6 +50,11 @@ public class PlayerAnimatorDriver : MonoBehaviour
         if (movementController == null)
         {
             movementController = GetComponent<FPSControllerMobile>();
+        }
+
+        if (injuredAnimationController == null)
+        {
+            injuredAnimationController = GetComponent<LowHealthInjuredAnimationController>();
         }
 
         lastRawGroundedTime = Time.time;
@@ -87,11 +96,29 @@ public class PlayerAnimatorDriver : MonoBehaviour
         }
 
         speedNormalized = speedNormalized <= moveInputDeadZone ? 0f : speedNormalized;
+        bool injuredActive = injuredAnimationController != null && injuredAnimationController.IsInjuredActive;
+        float injuredSpeedCap = injuredMaxSpeedNormalized;
+
+        if (injuredAnimationController != null)
+        {
+            injuredSpeedCap = Mathf.Clamp01(injuredAnimationController.InjuredMovementSpeedMultiplier);
+        }
+
+        if (injuredActive)
+        {
+            bool hasInjuredMoveInput =
+                inputMagnitude >= injuredInputThresholdForFullAnimSpeed ||
+                speedNormalized > moveInputDeadZone;
+            speedNormalized = hasInjuredMoveInput ? injuredSpeedCap : 0f;
+        }
 
         bool bufferedGrounded = rawGrounded ||
             (Time.time - lastRawGroundedTime <= groundedBufferTime && verticalVelocity <= 0.1f);
         bool isGrounded = bufferedGrounded && Time.time >= jumpLockUntilTime;
-        bool isRunning = speedNormalized > 0.15f && inputMagnitude >= runInputThreshold;
+        bool isRunning =
+            (!disableRunningWhenInjured || !injuredActive) &&
+            speedNormalized > 0.15f &&
+            inputMagnitude >= runInputThreshold;
         smoothedVerticalVelocity = Mathf.SmoothDamp(
             smoothedVerticalVelocity,
             verticalVelocity,
