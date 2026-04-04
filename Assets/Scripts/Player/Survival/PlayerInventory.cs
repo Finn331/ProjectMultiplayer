@@ -197,6 +197,12 @@ public class PlayerInventory : MonoBehaviour
             return true;
         }
 
+        if (this.TryResolveRegisteredNetworkPrefabByItemType(itemType, out PickableItem networkPrefab))
+        {
+            prefab = networkPrefab;
+            return true;
+        }
+
         if (runtimeDropTemplates.TryGetValue(itemType, out PickableItem runtimeTemplate) && runtimeTemplate != null)
         {
             prefab = runtimeTemplate;
@@ -362,6 +368,12 @@ public class PlayerInventory : MonoBehaviour
             return;
         }
 
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+        {
+            // In multiplayer we only cache templates that map to registered NetworkPrefabs.
+            return;
+        }
+
         if (runtimeDropTemplates.TryGetValue(type, out PickableItem oldTemplate) && oldTemplate != null && runtimeCloneTemplateTypes.Contains(type))
         {
             Destroy(oldTemplate.gameObject);
@@ -408,6 +420,43 @@ public class PlayerInventory : MonoBehaviour
 
             PickableItem candidatePickable = candidate.GetComponent<PickableItem>();
             if (candidatePickable == null)
+            {
+                continue;
+            }
+
+            registeredPrefab = candidatePickable;
+            return true;
+        }
+
+        return this.TryResolveRegisteredNetworkPrefabByItemType(sourceItem.itemType, out registeredPrefab);
+    }
+
+    private bool TryResolveRegisteredNetworkPrefabByItemType(ItemType itemType, out PickableItem registeredPrefab)
+    {
+        registeredPrefab = null;
+
+        if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening || NetworkManager.Singleton.NetworkConfig?.Prefabs?.Prefabs == null)
+        {
+            return false;
+        }
+
+        var prefabs = NetworkManager.Singleton.NetworkConfig.Prefabs.Prefabs;
+        for (int i = 0; i < prefabs.Count; i++)
+        {
+            GameObject candidate = prefabs[i].Prefab;
+            if (candidate == null)
+            {
+                continue;
+            }
+
+            PickableItem candidatePickable = candidate.GetComponent<PickableItem>();
+            if (candidatePickable == null || candidatePickable.itemType != itemType)
+            {
+                continue;
+            }
+
+            NetworkObject candidateNetworkObject = candidate.GetComponent<NetworkObject>();
+            if (candidateNetworkObject == null)
             {
                 continue;
             }
