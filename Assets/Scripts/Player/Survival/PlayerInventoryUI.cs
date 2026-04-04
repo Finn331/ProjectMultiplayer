@@ -3,6 +3,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
+[ExecuteAlways]
 public class PlayerInventoryUI : MonoBehaviour
 {
     [Header("References")]
@@ -73,6 +74,12 @@ public class PlayerInventoryUI : MonoBehaviour
 
     private void OnEnable()
     {
+        if (!Application.isPlaying)
+        {
+            this.EnsureUI();
+            this.Refresh();
+        }
+
         if (inventory != null)
         {
             inventory.InventoryChanged += this.Refresh;

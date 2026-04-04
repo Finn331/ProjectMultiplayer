@@ -3,6 +3,7 @@ using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.UI;
 
+[ExecuteAlways]
 public class CoopNetworkTestUI : MonoBehaviour
 {
     [Header("References")]
@@ -48,6 +49,26 @@ public class CoopNetworkTestUI : MonoBehaviour
 
         this.BindButtons();
         this.UpdateStatusLabel(true);
+    }
+
+    private void OnEnable()
+    {
+        if (!Application.isPlaying && autoCreateUI)
+        {
+            if (targetCanvas == null)
+            {
+                targetCanvas = GetComponent<Canvas>();
+            }
+
+            if (targetCanvas == null)
+            {
+                targetCanvas = FindObjectOfType<Canvas>(true);
+            }
+
+            this.EnsureUI();
+            this.BindButtons();
+            this.UpdateStatusLabel(true);
+        }
     }
 
     private void Update()
