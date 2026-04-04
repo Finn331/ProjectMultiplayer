@@ -212,10 +212,45 @@ public class NetworkInventoryBridge : NetworkBehaviour
             NetworkObject droppedNetworkObject = droppedItem != null ? droppedItem.GetComponent<NetworkObject>() : null;
             if (droppedNetworkObject != null && !droppedNetworkObject.IsSpawned)
             {
-                droppedNetworkObject.Spawn(true);
+                if (this.IsNetworkPrefabRegistered(droppedNetworkObject.PrefabIdHash))
+                {
+                    droppedNetworkObject.Spawn(true);
+                }
+                else
+                {
+                    Debug.LogWarning(
+                        $"Skipped network spawn for dropped item '{droppedItem.name}' " +
+                        $"(hash={droppedNetworkObject.PrefabIdHash}) because prefab is not registered in NetworkManager.");
+                }
             }
         }
 
         this.PushInventoryToNetworkVariables();
+    }
+
+    private bool IsNetworkPrefabRegistered(uint prefabHash)
+    {
+        if (prefabHash == 0u || NetworkManager == null || NetworkManager.NetworkConfig?.Prefabs?.Prefabs == null)
+        {
+            return false;
+        }
+
+        var entries = NetworkManager.NetworkConfig.Prefabs.Prefabs;
+        for (int i = 0; i < entries.Count; i++)
+        {
+            GameObject prefab = entries[i].Prefab;
+            if (prefab == null)
+            {
+                continue;
+            }
+
+            NetworkObject networkObject = prefab.GetComponent<NetworkObject>();
+            if (networkObject != null && networkObject.PrefabIdHash == prefabHash)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

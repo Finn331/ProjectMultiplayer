@@ -97,6 +97,7 @@ public class PlayerAnimatorDriver : MonoBehaviour
         Vector2 moveInput = this.GetDirectionInput(referenceVelocity);
         float verticalVelocity = referenceVelocity.y;
         bool rawGrounded = characterController.isGrounded;
+        bool jumpPressedRecently = movementController != null && movementController.WasJumpPressedRecently(minAirTimeAfterJump + 0.08f);
         if (!rawGrounded && useGroundProbeFallback)
         {
             rawGrounded = this.IsGroundedByProbe();
@@ -104,6 +105,13 @@ public class PlayerAnimatorDriver : MonoBehaviour
             {
                 verticalVelocity = 0f;
             }
+        }
+
+        if (jumpPressedRecently)
+        {
+            rawGrounded = false;
+            verticalVelocity = Mathf.Max(verticalVelocity, jumpStartVerticalThreshold + 0.05f);
+            jumpLockUntilTime = Mathf.Max(jumpLockUntilTime, Time.time + minAirTimeAfterJump);
         }
 
         if (rawGrounded)

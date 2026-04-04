@@ -58,6 +58,7 @@ public class FPSControllerMobile : MonoBehaviour
 
     float xRotation = 0f;
     float verticalVelocity;
+    float lastJumpPressedTime = -999f;
     private bool jumpButtonBound;
     readonly List<Renderer> firstPersonHiddenRenderers = new List<Renderer>();
     readonly List<bool> firstPersonHiddenRendererOriginalStates = new List<bool>();
@@ -452,7 +453,16 @@ public class FPSControllerMobile : MonoBehaviour
         }
 
         if (enableJump && controller != null && controller.isGrounded)
+        {
             verticalVelocity = Mathf.Sqrt(jumpForce * -2f * gravity);
+            lastJumpPressedTime = Time.time;
+        }
+    }
+
+    public bool WasJumpPressedRecently(float windowSeconds)
+    {
+        float window = Mathf.Max(0.01f, windowSeconds);
+        return (Time.time - lastJumpPressedTime) <= window;
     }
 
     private void TryBindJumpButton()

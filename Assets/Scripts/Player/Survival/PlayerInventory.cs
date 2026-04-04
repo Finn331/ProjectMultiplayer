@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Unity.Netcode;
 using UnityEngine;
 
 public class PlayerInventory : MonoBehaviour
@@ -35,6 +36,7 @@ public class PlayerInventory : MonoBehaviour
 
     private readonly Dictionary<ItemType, int> items = new Dictionary<ItemType, int>();
     private readonly Dictionary<ItemType, PickableItem> runtimeDropTemplates = new Dictionary<ItemType, PickableItem>();
+    private readonly HashSet<ItemType> runtimeCloneTemplateTypes = new HashSet<ItemType>();
 
     public IReadOnlyList<InventoryEntry> Entries => itemEntries;
     public int MaxTotalItems => Mathf.Max(1, maxTotalItems);
@@ -221,11 +223,13 @@ public class PlayerInventory : MonoBehaviour
     {
         foreach (KeyValuePair<ItemType, PickableItem> pair in runtimeDropTemplates)
         {
-            if (pair.Value != null)
+            if (pair.Value != null && runtimeCloneTemplateTypes.Contains(pair.Key))
             {
                 Destroy(pair.Value.gameObject);
             }
         }
+
+        runtimeCloneTemplateTypes.Clear();
     }
 
     private void SyncDictionaryFromInspector()
@@ -335,7 +339,28 @@ public class PlayerInventory : MonoBehaviour
             return;
         }
 
-        if (runtimeDropTemplates.TryGetValue(type, out PickableItem oldTemplate) && oldTemplate != null)
+        if (this.TryResolveRegisteredNetworkPrefab(sourceItem, out PickableItem networkRegisteredPrefab))
+        {
+            if (runtimeDropTemplates.TryGetValue(type, out PickableItem previousTemplate) &&
+                previousTemplate != null &&
+                runtimeCloneTemplateTypes.Contains(type))
+            {
+                Destroy(previousTemplate.gameObject);
+            }
+
+            runtimeDropTemplates[type] = networkRegisteredPrefab;
+            runtimeCloneTemplateTypes.Remove(type);
+            return;
+        }
+
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+        {
+            // In multiplayer we avoid caching unregistered runtime templates because they can fail NGO spawn
+            // with unknown GlobalObjectIdHash when dropping items.
+            return;
+        }
+
+        if (runtimeDropTemplates.TryGetValue(type, out PickableItem oldTemplate) && oldTemplate != null && runtimeCloneTemplateTypes.Contains(type))
         {
             Destroy(oldTemplate.gameObject);
         }
@@ -345,6 +370,51 @@ public class PlayerInventory : MonoBehaviour
         template.gameObject.SetActive(false);
         DontDestroyOnLoad(template.gameObject);
         runtimeDropTemplates[type] = template;
+        runtimeCloneTemplateTypes.Add(type);
+    }
+
+    private bool TryResolveRegisteredNetworkPrefab(PickableItem sourceItem, out PickableItem registeredPrefab)
+    {
+        registeredPrefab = null;
+
+        if (sourceItem == null || NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening)
+        {
+            return false;
+        }
+
+        NetworkObject sourceNetworkObject = sourceItem.GetComponent<NetworkObject>();
+        if (sourceNetworkObject == null || NetworkManager.Singleton.NetworkConfig?.Prefabs?.Prefabs == null)
+        {
+            return false;
+        }
+
+        uint sourceHash = sourceNetworkObject.PrefabIdHash;
+        var prefabs = NetworkManager.Singleton.NetworkConfig.Prefabs.Prefabs;
+        for (int i = 0; i < prefabs.Count; i++)
+        {
+            GameObject candidate = prefabs[i].Prefab;
+            if (candidate == null)
+            {
+                continue;
+            }
+
+            NetworkObject candidateNetworkObject = candidate.GetComponent<NetworkObject>();
+            if (candidateNetworkObject == null || candidateNetworkObject.PrefabIdHash != sourceHash)
+            {
+                continue;
+            }
+
+            PickableItem candidatePickable = candidate.GetComponent<PickableItem>();
+            if (candidatePickable == null)
+            {
+                continue;
+            }
+
+            registeredPrefab = candidatePickable;
+            return true;
+        }
+
+        return false;
     }
 
     private int GetCurrentTotalItems()
