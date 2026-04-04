@@ -197,11 +197,19 @@ public class PlayerInventoryUI : MonoBehaviour
 
         if (networkInventoryBridge != null && networkInventoryBridge.UseNetworkedInventory)
         {
-            networkInventoryBridge.TryRequestDrop(selected.itemType, 1);
+            bool requested = networkInventoryBridge.TryRequestDrop(selected.itemType, 1);
+            if (!requested && PickupUIManager.instance != null)
+            {
+                PickupUIManager.instance.ShowInfo("Drop gagal: tidak punya otoritas.");
+            }
             return;
         }
 
-        inventory.DropItem(selected.itemType, 1);
+        bool dropped = inventory.DropItem(selected.itemType, 1);
+        if (!dropped && PickupUIManager.instance != null)
+        {
+            PickupUIManager.instance.ShowInfo("Drop gagal.");
+        }
     }
 
     private void EnsureUI()

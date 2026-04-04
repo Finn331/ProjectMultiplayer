@@ -100,6 +100,7 @@ public class NetworkInventoryBridge : NetworkBehaviour
 
         if (!IsOwner)
         {
+            Debug.LogWarning($"Drop request rejected on client because this player is not owner. Item={itemType}");
             return false;
         }
 
@@ -204,6 +205,7 @@ public class NetworkInventoryBridge : NetworkBehaviour
 
         if (!inventory.RemoveItem(itemType, clampedAmount))
         {
+            this.SendDropFeedbackClientRpc("Drop gagal: item tidak cukup.", this.BuildOwnerRpcTarget());
             return;
         }
 
@@ -216,6 +218,9 @@ public class NetworkInventoryBridge : NetworkBehaviour
         if (!spawnedDrop)
         {
             this.RestoreInventoryAfterFailedDrop(itemType, clampedAmount);
+            this.SendDropFeedbackClientRpc(
+                $"Drop gagal: prefab network untuk {itemType} tidak ditemukan/terdaftar.",
+                this.BuildOwnerRpcTarget());
             this.PushInventoryToNetworkVariables();
             return;
         }
@@ -236,6 +241,9 @@ public class NetworkInventoryBridge : NetworkBehaviour
                         $"(hash={droppedNetworkObject.PrefabIdHash}) because prefab is not registered in NetworkManager.");
                     Destroy(droppedItem.gameObject);
                     this.RestoreInventoryAfterFailedDrop(itemType, clampedAmount);
+                    this.SendDropFeedbackClientRpc(
+                        $"Drop gagal: NetworkPrefab hash {droppedNetworkObject.PrefabIdHash} belum terdaftar.",
+                        this.BuildOwnerRpcTarget());
                 }
             }
         }
@@ -255,39 +263,44 @@ public class NetworkInventoryBridge : NetworkBehaviour
         var prefabs = NetworkManager.NetworkConfig.Prefabs.Prefabs;
         for (int i = 0; i < prefabs.Count; i++)
         {
-            GameObject prefabObject = prefabs[i].Prefab;
-            if (prefabObject == null)
+            NetworkPrefab entry = prefabs[i];
+            GameObject[] candidates = { entry.Prefab, entry.SourcePrefabToOverride, entry.OverridingTargetPrefab };
+            for (int c = 0; c < candidates.Length; c++)
             {
-                continue;
-            }
+                GameObject prefabObject = candidates[c];
+                if (prefabObject == null)
+                {
+                    continue;
+                }
 
-            PickableItem prefabPickable = prefabObject.GetComponent<PickableItem>();
-            NetworkObject prefabNetworkObject = prefabObject.GetComponent<NetworkObject>();
-            if (prefabPickable == null || prefabNetworkObject == null || prefabPickable.itemType != itemType)
-            {
-                continue;
-            }
+                PickableItem prefabPickable = prefabObject.GetComponent<PickableItem>();
+                NetworkObject prefabNetworkObject = prefabObject.GetComponent<NetworkObject>();
+                if (prefabPickable == null || prefabNetworkObject == null || prefabPickable.itemType != itemType)
+                {
+                    continue;
+                }
 
-            Vector3 spawnPosition = inventory != null
-                ? inventory.GetDropPositionWorld()
-                : transform.position + transform.forward + (Vector3.up * 0.2f);
-            droppedItem = Instantiate(prefabPickable, spawnPosition, Quaternion.identity);
-            droppedItem.gameObject.SetActive(true);
-            droppedItem.itemType = itemType;
-            droppedItem.amount = Mathf.Max(1, amount);
-            if (string.IsNullOrWhiteSpace(droppedItem.itemName))
-            {
-                droppedItem.itemName = itemType.ToString();
-            }
+                Vector3 spawnPosition = inventory != null
+                    ? inventory.GetDropPositionWorld()
+                    : transform.position + transform.forward + (Vector3.up * 0.2f);
+                droppedItem = Instantiate(prefabPickable, spawnPosition, Quaternion.identity);
+                droppedItem.gameObject.SetActive(true);
+                droppedItem.itemType = itemType;
+                droppedItem.amount = Mathf.Max(1, amount);
+                if (string.IsNullOrWhiteSpace(droppedItem.itemName))
+                {
+                    droppedItem.itemName = itemType.ToString();
+                }
 
-            Rigidbody rb = droppedItem.GetComponent<Rigidbody>();
-            if (rb != null)
-            {
-                Vector3 forward = inventory != null ? inventory.GetDropForwardDirection() : transform.forward;
-                rb.AddForce(forward * 2.2f, ForceMode.VelocityChange);
-            }
+                Rigidbody rb = droppedItem.GetComponent<Rigidbody>();
+                if (rb != null)
+                {
+                    Vector3 forward = inventory != null ? inventory.GetDropForwardDirection() : transform.forward;
+                    rb.AddForce(forward * 2.2f, ForceMode.VelocityChange);
+                }
 
-            return true;
+                return true;
+            }
         }
 
         return false;
@@ -325,19 +338,53 @@ public class NetworkInventoryBridge : NetworkBehaviour
         var entries = NetworkManager.NetworkConfig.Prefabs.Prefabs;
         for (int i = 0; i < entries.Count; i++)
         {
-            GameObject prefab = entries[i].Prefab;
-            if (prefab == null)
+            NetworkPrefab entry = entries[i];
+            GameObject[] candidates = { entry.Prefab, entry.SourcePrefabToOverride, entry.OverridingTargetPrefab };
+            for (int c = 0; c < candidates.Length; c++)
             {
-                continue;
-            }
+                GameObject prefab = candidates[c];
+                if (prefab == null)
+                {
+                    continue;
+                }
 
-            NetworkObject networkObject = prefab.GetComponent<NetworkObject>();
-            if (networkObject != null && networkObject.PrefabIdHash == prefabHash)
-            {
-                return true;
+                NetworkObject networkObject = prefab.GetComponent<NetworkObject>();
+                if (networkObject != null && networkObject.PrefabIdHash == prefabHash)
+                {
+                    return true;
+                }
             }
         }
 
         return false;
+    }
+
+    private ClientRpcParams BuildOwnerRpcTarget()
+    {
+        return new ClientRpcParams
+        {
+            Send = new ClientRpcSendParams
+            {
+                TargetClientIds = new[] { OwnerClientId }
+            }
+        };
+    }
+
+    [ClientRpc]
+    private void SendDropFeedbackClientRpc(string message, ClientRpcParams clientRpcParams = default)
+    {
+        if (!IsOwner)
+        {
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(message))
+        {
+            Debug.LogWarning(message);
+            if (PickupUIManager.instance != null)
+            {
+                PickupUIManager.instance.ShowInfo(message);
+            }
+        }
     }
 }

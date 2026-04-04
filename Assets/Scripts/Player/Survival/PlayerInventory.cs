@@ -406,26 +406,31 @@ public class PlayerInventory : MonoBehaviour
         var prefabs = NetworkManager.Singleton.NetworkConfig.Prefabs.Prefabs;
         for (int i = 0; i < prefabs.Count; i++)
         {
-            GameObject candidate = prefabs[i].Prefab;
-            if (candidate == null)
+            NetworkPrefab entry = prefabs[i];
+            GameObject[] candidates = { entry.Prefab, entry.SourcePrefabToOverride, entry.OverridingTargetPrefab };
+            for (int c = 0; c < candidates.Length; c++)
             {
-                continue;
-            }
+                GameObject candidate = candidates[c];
+                if (candidate == null)
+                {
+                    continue;
+                }
 
-            NetworkObject candidateNetworkObject = candidate.GetComponent<NetworkObject>();
-            if (candidateNetworkObject == null || candidateNetworkObject.PrefabIdHash != sourceHash)
-            {
-                continue;
-            }
+                NetworkObject candidateNetworkObject = candidate.GetComponent<NetworkObject>();
+                if (candidateNetworkObject == null || candidateNetworkObject.PrefabIdHash != sourceHash)
+                {
+                    continue;
+                }
 
-            PickableItem candidatePickable = candidate.GetComponent<PickableItem>();
-            if (candidatePickable == null)
-            {
-                continue;
-            }
+                PickableItem candidatePickable = candidate.GetComponent<PickableItem>();
+                if (candidatePickable == null)
+                {
+                    continue;
+                }
 
-            registeredPrefab = candidatePickable;
-            return true;
+                registeredPrefab = candidatePickable;
+                return true;
+            }
         }
 
         return this.TryResolveRegisteredNetworkPrefabByItemType(sourceItem.itemType, out registeredPrefab);
@@ -443,26 +448,31 @@ public class PlayerInventory : MonoBehaviour
         var prefabs = NetworkManager.Singleton.NetworkConfig.Prefabs.Prefabs;
         for (int i = 0; i < prefabs.Count; i++)
         {
-            GameObject candidate = prefabs[i].Prefab;
-            if (candidate == null)
+            NetworkPrefab entry = prefabs[i];
+            GameObject[] candidates = { entry.Prefab, entry.SourcePrefabToOverride, entry.OverridingTargetPrefab };
+            for (int c = 0; c < candidates.Length; c++)
             {
-                continue;
-            }
+                GameObject candidate = candidates[c];
+                if (candidate == null)
+                {
+                    continue;
+                }
 
-            PickableItem candidatePickable = candidate.GetComponent<PickableItem>();
-            if (candidatePickable == null || candidatePickable.itemType != itemType)
-            {
-                continue;
-            }
+                PickableItem candidatePickable = candidate.GetComponent<PickableItem>();
+                if (candidatePickable == null || candidatePickable.itemType != itemType)
+                {
+                    continue;
+                }
 
-            NetworkObject candidateNetworkObject = candidate.GetComponent<NetworkObject>();
-            if (candidateNetworkObject == null)
-            {
-                continue;
-            }
+                NetworkObject candidateNetworkObject = candidate.GetComponent<NetworkObject>();
+                if (candidateNetworkObject == null)
+                {
+                    continue;
+                }
 
-            registeredPrefab = candidatePickable;
-            return true;
+                registeredPrefab = candidatePickable;
+                return true;
+            }
         }
 
         return false;
