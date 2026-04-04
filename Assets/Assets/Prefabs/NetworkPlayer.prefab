@@ -196,6 +196,7 @@ GameObject:
   - component: {fileID: 7211170005674340024}
   - component: {fileID: 1609948806003333438}
   - component: {fileID: 4417228228232811220}
+  - component: {fileID: 4785656247688361288}
   m_Layer: 0
   m_Name: NetworkPlayer
   m_TagString: Untagged
@@ -339,6 +340,9 @@ MonoBehaviour:
   enableJump: 1
   gravity: -9.81
   jumpForce: 1
+  jumpButton: {fileID: 0}
+  autoBindJumpButton: 1
+  jumpButtonNameContains: jump
   cameraHolder: {fileID: 5851512890922007198}
   lookArea: {fileID: 0}
   mobileLookSensitivity: 0.2
@@ -493,6 +497,11 @@ MonoBehaviour:
   minAirTimeAfterJump: 0.15
   jumpStartVerticalThreshold: 0.25
   verticalVelocitySmoothTime: 0.06
+  useGroundProbeFallback: 1
+  groundProbeDistance: 0.25
+  groundProbeMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
   injuredMaxSpeedNormalized: 0.2
   disableRunningWhenInjured: 1
   injuredInputThresholdForFullAnimSpeed: 0.05
@@ -635,6 +644,8 @@ MonoBehaviour:
   inventory: {fileID: 5077874351100244328}
   networkInventoryBridge: {fileID: 0}
   pickButton: {fileID: 0}
+  autoBindPickButton: 1
+  pickButtonNameContains: pick
 --- !u!114 &79516211214704680
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -768,6 +779,28 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   survivalSystem: {fileID: 0}
+  syncIntervalSeconds: 0.2
+  minDeltaToSync: 0.1
+--- !u!114 &4785656247688361288
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4472293491055181419}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 764407af35e9c244fbba3ee7ddb7f11e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  animator: {fileID: 0}
+  speedParam: Speed
+  verticalVelocityParam: VerticalVelocity
+  isGroundedParam: IsGrounded
+  isRunningParam: IsRunning
+  moveXParam: MoveX
+  moveYParam: MoveY
+  floatSyncThreshold: 0.01
 --- !u!1 &7516938604735521551
 GameObject:
   m_ObjectHideFlags: 0

@@ -207,9 +207,17 @@ public class NetworkInventoryBridge : NetworkBehaviour
             return;
         }
 
-        if (inventory.SpawnDropItemWorld(itemType, clampedAmount, out PickableItem droppedItem))
+        bool spawnedDrop = inventory.SpawnDropItemWorld(itemType, clampedAmount, out PickableItem droppedItem);
+        if (!spawnedDrop)
         {
-            NetworkObject droppedNetworkObject = droppedItem != null ? droppedItem.GetComponent<NetworkObject>() : null;
+            this.RestoreInventoryAfterFailedDrop(itemType, clampedAmount);
+            this.PushInventoryToNetworkVariables();
+            return;
+        }
+
+        if (droppedItem != null)
+        {
+            NetworkObject droppedNetworkObject = droppedItem.GetComponent<NetworkObject>();
             if (droppedNetworkObject != null && !droppedNetworkObject.IsSpawned)
             {
                 if (this.IsNetworkPrefabRegistered(droppedNetworkObject.PrefabIdHash))
@@ -221,11 +229,35 @@ public class NetworkInventoryBridge : NetworkBehaviour
                     Debug.LogWarning(
                         $"Skipped network spawn for dropped item '{droppedItem.name}' " +
                         $"(hash={droppedNetworkObject.PrefabIdHash}) because prefab is not registered in NetworkManager.");
+                    Destroy(droppedItem.gameObject);
+                    this.RestoreInventoryAfterFailedDrop(itemType, clampedAmount);
                 }
             }
         }
 
         this.PushInventoryToNetworkVariables();
+    }
+
+    private void RestoreInventoryAfterFailedDrop(ItemType itemType, int amount)
+    {
+        if (inventory == null)
+        {
+            return;
+        }
+
+        GameObject rollbackObject = new GameObject($"DropRollback-{itemType}");
+        try
+        {
+            PickableItem rollbackItem = rollbackObject.AddComponent<PickableItem>();
+            rollbackItem.itemType = itemType;
+            rollbackItem.itemName = itemType.ToString();
+            rollbackItem.amount = Mathf.Max(1, amount);
+            inventory.AddItem(rollbackItem);
+        }
+        finally
+        {
+            Destroy(rollbackObject);
+        }
     }
 
     private bool IsNetworkPrefabRegistered(uint prefabHash)

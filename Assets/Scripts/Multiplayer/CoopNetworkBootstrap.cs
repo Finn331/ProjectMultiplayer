@@ -38,6 +38,7 @@ public class CoopNetworkBootstrap : MonoBehaviour
     [SerializeField] private UnityTransport unityTransport;
     [SerializeField] private GameObject playerPrefab;
     [SerializeField] private List<GameObject> additionalNetworkPrefabs = new List<GameObject>();
+    [SerializeField] private bool autoRegisterScenePickableObjects = true;
     [SerializeField] private bool disableScenePlayerBeforeStart = true;
     [SerializeField] private GameObject scenePlayerObject;
 
@@ -315,6 +316,31 @@ public class CoopNetworkBootstrap : MonoBehaviour
             this.TryRegisterPrefab(additionalNetworkPrefabs[i]);
         }
 
+        if (autoRegisterScenePickableObjects)
+        {
+            this.RegisterScenePickableObjects();
+        }
+    }
+
+    private void RegisterScenePickableObjects()
+    {
+        PickableItem[] pickables = FindObjectsOfType<PickableItem>(true);
+        for (int i = 0; i < pickables.Length; i++)
+        {
+            PickableItem pickable = pickables[i];
+            if (pickable == null || pickable.gameObject == null)
+            {
+                continue;
+            }
+
+            NetworkObject networkObject = pickable.GetComponent<NetworkObject>();
+            if (networkObject == null)
+            {
+                continue;
+            }
+
+            this.TryRegisterPrefab(pickable.gameObject);
+        }
     }
 
     private void TryRegisterPrefab(GameObject prefab)

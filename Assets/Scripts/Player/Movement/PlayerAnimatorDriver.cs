@@ -266,6 +266,13 @@ public class PlayerAnimatorDriver : MonoBehaviour
             return true;
         }
 
-        return networkObject.IsSpawned;
+        if (!networkObject.IsSpawned)
+        {
+            return false;
+        }
+
+        // In multiplayer, only owner computes animator parameters from local input/physics.
+        // Remote players receive synced parameters via network bridge to avoid false "falling" state.
+        return networkObject.IsOwner;
     }
 }

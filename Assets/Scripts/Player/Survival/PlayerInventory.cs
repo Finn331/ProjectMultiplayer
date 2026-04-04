@@ -138,6 +138,7 @@ public class PlayerInventory : MonoBehaviour
     {
         droppedItem = null;
         int clampedAmount = Mathf.Max(1, amount);
+        bool isNetworkSessionActive = NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening;
 
         if (this.TryResolveDropPrefab(itemType, out PickableItem prefab))
         {
@@ -146,6 +147,14 @@ public class PlayerInventory : MonoBehaviour
             this.ConfigureDroppedItem(droppedItem, itemType, clampedAmount);
             this.ApplyDropImpulse(droppedItem.gameObject);
             return true;
+        }
+
+        if (isNetworkSessionActive)
+        {
+            // In multiplayer we must spawn a registered NetworkObject prefab.
+            // Returning false allows caller to rollback inventory state instead of
+            // silently dropping an unsynchronized local object.
+            return false;
         }
 
         GameObject fallback = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -350,13 +359,6 @@ public class PlayerInventory : MonoBehaviour
 
             runtimeDropTemplates[type] = networkRegisteredPrefab;
             runtimeCloneTemplateTypes.Remove(type);
-            return;
-        }
-
-        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
-        {
-            // In multiplayer we avoid caching unregistered runtime templates because they can fail NGO spawn
-            // with unknown GlobalObjectIdHash when dropping items.
             return;
         }
 
