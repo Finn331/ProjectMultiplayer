@@ -1,9 +1,9 @@
 using System.Text;
 using TMPro;
+using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.UI;
 
-[ExecuteAlways]
 public class PlayerInventoryUI : MonoBehaviour
 {
     [Header("References")]
@@ -50,6 +50,10 @@ public class PlayerInventoryUI : MonoBehaviour
     private readonly StringBuilder builder = new StringBuilder(256);
     private bool initialized;
     private int selectedIndex;
+    private bool createdPanelAtRuntime;
+    private bool createdToggleButtonAtRuntime;
+    private bool createdNextButtonAtRuntime;
+    private bool createdDropButtonAtRuntime;
 
     private void Awake()
     {
@@ -93,6 +97,11 @@ public class PlayerInventoryUI : MonoBehaviour
         if (inventory != null)
         {
             inventory.InventoryChanged -= this.Refresh;
+        }
+
+        if (Application.isPlaying)
+        {
+            this.CleanupRuntimeGeneratedUI();
         }
     }
 
@@ -211,12 +220,23 @@ public class PlayerInventoryUI : MonoBehaviour
 
         if (panelRoot == null)
         {
-            panelRoot = this.CreatePanel(targetCanvas.transform as RectTransform);
+            panelRoot = this.FindExistingPanel(targetCanvas.transform as RectTransform);
+            if (panelRoot == null)
+            {
+                panelRoot = this.CreatePanel(targetCanvas.transform as RectTransform);
+                createdPanelAtRuntime = true;
+            }
         }
 
         if (titleText == null)
         {
-            titleText = this.CreateLabel("Title", panelRoot, 26f, FontStyles.Bold, titleColor, TextAlignmentOptions.Center, true);
+            Transform existingTitle = panelRoot.Find("Title");
+            titleText = existingTitle != null ? existingTitle.GetComponent<TextMeshProUGUI>() : null;
+            if (titleText == null)
+            {
+                titleText = this.CreateLabel("Title", panelRoot, 26f, FontStyles.Bold, titleColor, TextAlignmentOptions.Center, true);
+            }
+
             RectTransform titleRect = titleText.rectTransform;
             titleRect.anchorMin = new Vector2(0f, 1f);
             titleRect.anchorMax = new Vector2(1f, 1f);
@@ -228,7 +248,13 @@ public class PlayerInventoryUI : MonoBehaviour
 
         if (itemsText == null)
         {
-            itemsText = this.CreateLabel("Items", panelRoot, 22f, FontStyles.Normal, itemTextColor, TextAlignmentOptions.TopLeft, false);
+            Transform existingItems = panelRoot.Find("Items");
+            itemsText = existingItems != null ? existingItems.GetComponent<TextMeshProUGUI>() : null;
+            if (itemsText == null)
+            {
+                itemsText = this.CreateLabel("Items", panelRoot, 22f, FontStyles.Normal, itemTextColor, TextAlignmentOptions.TopLeft, false);
+            }
+
             RectTransform itemsRect = itemsText.rectTransform;
             itemsRect.anchorMin = new Vector2(0f, 0f);
             itemsRect.anchorMax = new Vector2(1f, 1f);
@@ -238,7 +264,12 @@ public class PlayerInventoryUI : MonoBehaviour
 
         if (toggleButton == null && autoCreateToggleButton)
         {
-            toggleButton = this.CreateToggleButton(targetCanvas.transform as RectTransform);
+            toggleButton = this.FindExistingButton(targetCanvas.transform as RectTransform, "Inventory Toggle Button");
+            if (toggleButton == null)
+            {
+                toggleButton = this.CreateToggleButton(targetCanvas.transform as RectTransform);
+                createdToggleButtonAtRuntime = true;
+            }
         }
 
         if (toggleButton != null)
@@ -251,12 +282,22 @@ public class PlayerInventoryUI : MonoBehaviour
         {
             if (nextItemButton == null)
             {
-                nextItemButton = this.CreateActionButton("Next Item Button", panelRoot, nextButtonOffset, "Next");
+                nextItemButton = this.FindExistingButton(panelRoot, "Next Item Button");
+                if (nextItemButton == null)
+                {
+                    nextItemButton = this.CreateActionButton("Next Item Button", panelRoot, nextButtonOffset, "Next");
+                    createdNextButtonAtRuntime = true;
+                }
             }
 
             if (dropItemButton == null)
             {
-                dropItemButton = this.CreateActionButton("Drop Item Button", panelRoot, dropButtonOffset, "Drop 1");
+                dropItemButton = this.FindExistingButton(panelRoot, "Drop Item Button");
+                if (dropItemButton == null)
+                {
+                    dropItemButton = this.CreateActionButton("Drop Item Button", panelRoot, dropButtonOffset, "Drop 1");
+                    createdDropButtonAtRuntime = true;
+                }
             }
         }
 
@@ -393,6 +434,28 @@ public class PlayerInventoryUI : MonoBehaviour
         return text;
     }
 
+    private RectTransform FindExistingPanel(RectTransform parent)
+    {
+        if (parent == null)
+        {
+            return null;
+        }
+
+        Transform existing = parent.Find("Inventory UI");
+        return existing != null ? existing as RectTransform : null;
+    }
+
+    private Button FindExistingButton(RectTransform parent, string objectName)
+    {
+        if (parent == null)
+        {
+            return null;
+        }
+
+        Transform existing = parent.Find(objectName);
+        return existing != null ? existing.GetComponent<Button>() : null;
+    }
+
     private void Refresh()
     {
         if (!initialized || itemsText == null || inventory == null)
@@ -436,11 +499,57 @@ public class PlayerInventoryUI : MonoBehaviour
 
     private bool HasLocalInventoryAuthority()
     {
+        NetworkObject networkObject = GetComponent<NetworkObject>();
+        if (networkObject != null && NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+        {
+            if (!networkObject.IsSpawned)
+            {
+                return false;
+            }
+
+            return networkObject.IsOwner;
+        }
+
         if (networkInventoryBridge == null || !networkInventoryBridge.UseNetworkedInventory)
         {
             return true;
         }
 
         return networkInventoryBridge.HasInputAuthority;
+    }
+
+    private void CleanupRuntimeGeneratedUI()
+    {
+        if (createdDropButtonAtRuntime && dropItemButton != null)
+        {
+            Destroy(dropItemButton.gameObject);
+        }
+
+        if (createdNextButtonAtRuntime && nextItemButton != null)
+        {
+            Destroy(nextItemButton.gameObject);
+        }
+
+        if (createdToggleButtonAtRuntime && toggleButton != null)
+        {
+            Destroy(toggleButton.gameObject);
+        }
+
+        if (createdPanelAtRuntime && panelRoot != null)
+        {
+            Destroy(panelRoot.gameObject);
+        }
+
+        createdPanelAtRuntime = false;
+        createdToggleButtonAtRuntime = false;
+        createdNextButtonAtRuntime = false;
+        createdDropButtonAtRuntime = false;
+        initialized = false;
+        panelRoot = null;
+        itemsText = null;
+        titleText = null;
+        toggleButton = null;
+        nextItemButton = null;
+        dropItemButton = null;
     }
 }

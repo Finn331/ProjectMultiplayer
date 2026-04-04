@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 
 public class PlayerInteractionSystem : MonoBehaviour
 {
@@ -17,12 +18,16 @@ public class PlayerInteractionSystem : MonoBehaviour
     [SerializeField] private NetworkInventoryBridge networkInventoryBridge;
 
     [Header("UI")]
-    public GameObject pickButton; // 🔥 button UI
+    public GameObject pickButton;
+    [SerializeField] private bool autoBindPickButton = true;
+    [SerializeField] private string pickButtonNameContains = "pick";
 
-    private List<Interactable> currentInteractables = new List<Interactable>();
+    private readonly List<Interactable> currentInteractables = new List<Interactable>();
     private Interactable currentTarget;
+    private Button pickButtonComponent;
+    private bool pickButtonBound;
 
-    void Start()
+    private void Start()
     {
         if (inventory == null)
         {
@@ -34,13 +39,16 @@ public class PlayerInteractionSystem : MonoBehaviour
             networkInventoryBridge = GetComponent<NetworkInventoryBridge>();
         }
 
+        this.ResolvePickButton();
+        this.BindPickButtonClick();
+
         if (pickButton != null)
         {
             pickButton.SetActive(false);
         }
     }
 
-    void Update()
+    private void Update()
     {
         if (!this.HasLocalInteractAuthority())
         {
@@ -51,46 +59,58 @@ public class PlayerInteractionSystem : MonoBehaviour
             return;
         }
 
-        DetectInteractable();
-        CheckInteractableInFront();
+        if (pickButton == null && autoBindPickButton)
+        {
+            this.ResolvePickButton();
+            this.BindPickButtonClick();
+        }
+
+        this.DetectInteractable();
+        this.CheckInteractableInFront();
     }
 
-    // ================= DETEKSI OBJECT =================
-    void DetectInteractable()
+    private void DetectInteractable()
     {
+        if (playerCamera == null)
+        {
+            return;
+        }
+
         Collider[] hits = Physics.OverlapSphere(transform.position, detectionRadius, interactableLayer);
 
-        // disable semua dulu
-        foreach (var item in currentInteractables)
+        for (int i = 0; i < currentInteractables.Count; i++)
         {
-            if (item != null)
-                item.DisableOutline();
+            if (currentInteractables[i] != null)
+            {
+                currentInteractables[i].DisableOutline();
+            }
         }
 
         currentInteractables.Clear();
 
-        foreach (Collider col in hits)
+        for (int i = 0; i < hits.Length; i++)
         {
+            Collider col = hits[i];
             Interactable interactable = col.GetComponent<Interactable>();
-            if (interactable == null) continue;
+            if (interactable == null)
+            {
+                continue;
+            }
 
             Vector3 direction = (col.transform.position - playerCamera.transform.position).normalized;
             float distance = Vector3.Distance(playerCamera.transform.position, col.transform.position);
 
-            // 🔥 CEK HALANGAN
             if (Physics.Raycast(playerCamera.transform.position, direction, out RaycastHit hit, distance, obstacleLayer))
             {
                 continue;
             }
 
-            // 🔥 AKTIFKAN OUTLINE
             interactable.EnableOutline();
             currentInteractables.Add(interactable);
         }
     }
 
-    // ================= CEK YANG BISA DI PICK =================
-    void CheckInteractableInFront()
+    private void CheckInteractableInFront()
     {
         currentTarget = null;
         if (pickButton != null)
@@ -98,73 +118,83 @@ public class PlayerInteractionSystem : MonoBehaviour
             pickButton.SetActive(false);
         }
 
-        Ray ray = new Ray(playerCamera.transform.position, playerCamera.transform.forward);
-
-        if (Physics.Raycast(ray, out RaycastHit hit, interactDistance, interactableLayer))
+        if (playerCamera == null)
         {
-            Interactable interactable = hit.collider.GetComponent<Interactable>();
+            return;
+        }
 
-            if (interactable != null)
-            {
-                // 🔥 CEK HALANGAN LAGI
-                Vector3 direction = (hit.collider.transform.position - playerCamera.transform.position).normalized;
-                float distance = Vector3.Distance(playerCamera.transform.position, hit.collider.transform.position);
+        Ray ray = new Ray(playerCamera.transform.position, playerCamera.transform.forward);
+        if (!Physics.Raycast(ray, out RaycastHit hit, interactDistance, interactableLayer))
+        {
+            return;
+        }
 
-                if (!Physics.Raycast(playerCamera.transform.position, direction, distance, obstacleLayer))
-                {
-                    currentTarget = interactable;
+        Interactable interactable = hit.collider.GetComponent<Interactable>();
+        if (interactable == null)
+        {
+            return;
+        }
 
-                    // 🔥 TAMPILKAN BUTTON
-                    if (pickButton != null)
-                    {
-                        pickButton.SetActive(true);
-                    }
-                }
-            }
+        Vector3 direction = (hit.collider.transform.position - playerCamera.transform.position).normalized;
+        float distance = Vector3.Distance(playerCamera.transform.position, hit.collider.transform.position);
+        if (Physics.Raycast(playerCamera.transform.position, direction, distance, obstacleLayer))
+        {
+            return;
+        }
+
+        currentTarget = interactable;
+        if (pickButton != null)
+        {
+            pickButton.SetActive(true);
         }
     }
 
-    // ================= INTERACT =================
     public void TryInteract()
     {
-        if (currentTarget == null) return;
+        if (!this.HasLocalInteractAuthority() || currentTarget == null)
+        {
+            return;
+        }
 
         PickableItem item = currentTarget.GetComponent<PickableItem>();
-
-        if (item != null)
+        if (item == null)
         {
-            if (networkInventoryBridge != null && networkInventoryBridge.UseNetworkedInventory)
-            {
-                bool requested = networkInventoryBridge.TryRequestPickup(item);
-                if (requested && pickButton != null)
-                {
-                    pickButton.SetActive(false);
-                }
-                return;
-            }
+            return;
+        }
 
-            if (inventory != null)
-            {
-                int addedAmount = inventory.AddItem(item);
-                if (addedAmount <= 0)
-                {
-                    return;
-                }
-
-                if (addedAmount >= item.amount)
-                {
-                    Destroy(currentTarget.gameObject);
-                }
-                else
-                {
-                    item.amount -= addedAmount;
-                }
-            }
-
-            if (pickButton != null)
+        if (networkInventoryBridge != null && networkInventoryBridge.UseNetworkedInventory)
+        {
+            bool requested = networkInventoryBridge.TryRequestPickup(item);
+            if (requested && pickButton != null)
             {
                 pickButton.SetActive(false);
             }
+            return;
+        }
+
+        if (inventory == null)
+        {
+            return;
+        }
+
+        int addedAmount = inventory.AddItem(item);
+        if (addedAmount <= 0)
+        {
+            return;
+        }
+
+        if (addedAmount >= item.amount)
+        {
+            Destroy(currentTarget.gameObject);
+        }
+        else
+        {
+            item.amount -= addedAmount;
+        }
+
+        if (pickButton != null)
+        {
+            pickButton.SetActive(false);
         }
     }
 
@@ -176,5 +206,60 @@ public class PlayerInteractionSystem : MonoBehaviour
         }
 
         return networkInventoryBridge.HasInputAuthority;
+    }
+
+    private void ResolvePickButton()
+    {
+        if (pickButton == null && autoBindPickButton)
+        {
+            pickButton = this.FindPickButtonObject();
+        }
+
+        pickButtonComponent = pickButton != null ? pickButton.GetComponent<Button>() : null;
+    }
+
+    private void BindPickButtonClick()
+    {
+        if (pickButtonComponent == null || pickButtonBound)
+        {
+            return;
+        }
+
+        pickButtonComponent.onClick.AddListener(this.TryInteract);
+        pickButtonBound = true;
+    }
+
+    private GameObject FindPickButtonObject()
+    {
+        Button[] buttons = FindObjectsOfType<Button>(true);
+        string keyword = string.IsNullOrWhiteSpace(pickButtonNameContains)
+            ? "pick"
+            : pickButtonNameContains.Trim().ToLowerInvariant();
+
+        for (int i = 0; i < buttons.Length; i++)
+        {
+            Button button = buttons[i];
+            if (button == null || button.gameObject == null)
+            {
+                continue;
+            }
+
+            if (button.gameObject.name.ToLowerInvariant().Contains(keyword))
+            {
+                return button.gameObject;
+            }
+        }
+
+        return null;
+    }
+
+    private void OnDestroy()
+    {
+        if (pickButtonComponent != null && pickButtonBound)
+        {
+            pickButtonComponent.onClick.RemoveListener(this.TryInteract);
+        }
+
+        pickButtonBound = false;
     }
 }

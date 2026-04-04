@@ -28,6 +28,9 @@ public class OwnerDrivenNetworkTransform : NetworkBehaviour
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();
+        sendInterval = Mathf.Max(0.05f, sendInterval);
+        positionThreshold = Mathf.Max(0.003f, positionThreshold);
+        rotationThresholdDegrees = Mathf.Max(1f, rotationThresholdDegrees);
         lastSentPosition = transform.position;
         lastSentRotation = transform.rotation;
         nextSendTime = Time.time;

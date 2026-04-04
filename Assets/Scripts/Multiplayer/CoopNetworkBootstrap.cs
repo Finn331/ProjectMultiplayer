@@ -28,6 +28,10 @@ public class CoopNetworkBootstrap : MonoBehaviour
     [SerializeField] private int connectTimeoutMs = 1000;
     [SerializeField] private int disconnectTimeoutMs = 5000;
     [SerializeField] private int maxConnectAttempts = 10;
+    [SerializeField] private int maxPacketQueueSize = 1024;
+    [SerializeField] private int maxSendQueueSize = 4 * 1024 * 1024;
+    [SerializeField] private int maxPayloadSize = 6 * 1024;
+    [SerializeField] private int heartbeatTimeoutMs = 1500;
 
     [Header("Networking")]
     [SerializeField] private NetworkManager networkManager;
@@ -276,6 +280,10 @@ public class CoopNetworkBootstrap : MonoBehaviour
         }
 
         string targetAddress = string.IsNullOrWhiteSpace(serverAddress) ? "127.0.0.1" : serverAddress.Trim();
+        unityTransport.MaxPacketQueueSize = Mathf.Max(UnityTransport.InitialMaxPacketQueueSize, maxPacketQueueSize);
+        unityTransport.MaxSendQueueSize = Mathf.Max(0, maxSendQueueSize);
+        unityTransport.MaxPayloadSize = Mathf.Max(UnityTransport.InitialMaxPayloadSize, maxPayloadSize);
+        unityTransport.HeartbeatTimeoutMS = Mathf.Max(500, heartbeatTimeoutMs);
         unityTransport.ConnectTimeoutMS = Mathf.Max(100, connectTimeoutMs);
         unityTransport.DisconnectTimeoutMS = Mathf.Max(1000, disconnectTimeoutMs);
         unityTransport.MaxConnectAttempts = Mathf.Max(1, maxConnectAttempts);

@@ -25,6 +25,9 @@ public class PlayerAnimatorDriver : MonoBehaviour
     [SerializeField] private float minAirTimeAfterJump = 0.12f;
     [SerializeField] private float jumpStartVerticalThreshold = 0.2f;
     [SerializeField] private float verticalVelocitySmoothTime = 0.05f;
+    [SerializeField] private bool useGroundProbeFallback = true;
+    [SerializeField] private float groundProbeDistance = 0.25f;
+    [SerializeField] private LayerMask groundProbeMask = ~0;
     [SerializeField, Range(0.1f, 1f)] private float injuredMaxSpeedNormalized = 0.2f;
     [SerializeField] private bool disableRunningWhenInjured = true;
     [SerializeField, Range(0.01f, 0.5f)] private float injuredInputThresholdForFullAnimSpeed = 0.08f;
@@ -88,6 +91,14 @@ public class PlayerAnimatorDriver : MonoBehaviour
         Vector2 moveInput = this.GetDirectionInput(referenceVelocity);
         float verticalVelocity = referenceVelocity.y;
         bool rawGrounded = characterController.isGrounded;
+        if (!rawGrounded && useGroundProbeFallback)
+        {
+            rawGrounded = this.IsGroundedByProbe();
+            if (rawGrounded && verticalVelocity < 0f)
+            {
+                verticalVelocity = 0f;
+            }
+        }
 
         if (rawGrounded)
         {
@@ -202,5 +213,27 @@ public class PlayerAnimatorDriver : MonoBehaviour
         }
 
         return this.GetInputVector();
+    }
+
+    private bool IsGroundedByProbe()
+    {
+        Vector3 center = transform.position;
+        float probeRadius = 0.2f;
+
+        if (characterController != null)
+        {
+            center = transform.TransformPoint(characterController.center);
+            probeRadius = Mathf.Max(0.05f, characterController.radius * 0.92f);
+        }
+
+        float castDistance = Mathf.Max(0.05f, groundProbeDistance);
+        return Physics.SphereCast(
+            center + (Vector3.up * 0.04f),
+            probeRadius,
+            Vector3.down,
+            out _,
+            castDistance,
+            groundProbeMask,
+            QueryTriggerInteraction.Ignore);
     }
 }

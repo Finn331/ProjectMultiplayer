@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.UI;
 
 public class FPSControllerMobile : MonoBehaviour
 {
@@ -16,6 +17,11 @@ public class FPSControllerMobile : MonoBehaviour
     public bool enableJump = true;
     public float gravity = -9.81f;
     public float jumpForce = 1.6f;
+
+    [Header("Input Buttons")]
+    [SerializeField] private Button jumpButton;
+    [SerializeField] private bool autoBindJumpButton = true;
+    [SerializeField] private string jumpButtonNameContains = "jump";
 
     [Header("Look Settings")]
     public Transform cameraHolder;
@@ -52,6 +58,7 @@ public class FPSControllerMobile : MonoBehaviour
 
     float xRotation = 0f;
     float verticalVelocity;
+    private bool jumpButtonBound;
     readonly List<Renderer> firstPersonHiddenRenderers = new List<Renderer>();
     readonly List<bool> firstPersonHiddenRendererOriginalStates = new List<bool>();
     readonly List<ShadowCastingMode> firstPersonHiddenRendererOriginalShadowModes = new List<ShadowCastingMode>();
@@ -59,12 +66,7 @@ public class FPSControllerMobile : MonoBehaviour
 
     void Start()
     {
-        NetworkObject networkObject = GetComponent<NetworkObject>();
-        if (networkObject != null &&
-            NetworkManager.Singleton != null &&
-            NetworkManager.Singleton.IsListening &&
-            networkObject.IsSpawned &&
-            !networkObject.IsOwner)
+        if (!this.HasInputAuthority())
         {
             enabled = false;
             return;
@@ -125,10 +127,16 @@ public class FPSControllerMobile : MonoBehaviour
 
         this.ApplyFirstPersonRendererVisibility();
         this.ApplyFirstPersonCameraStabilization();
+        this.TryBindJumpButton();
     }
 
     void Update()
     {
+        if (!this.HasInputAuthority())
+        {
+            return;
+        }
+
         MobileMovement();
         MobileLook();
         ApplyGravity();
@@ -136,6 +144,11 @@ public class FPSControllerMobile : MonoBehaviour
 
     void LateUpdate()
     {
+        if (!this.HasInputAuthority())
+        {
+            return;
+        }
+
         this.ApplyFirstPersonRendererVisibility();
         this.ApplyFirstPersonCameraStabilization();
     }
@@ -431,8 +444,80 @@ public class FPSControllerMobile : MonoBehaviour
 
     public void Jump()
     {
-        if (enableJump && controller.isGrounded)
+        if (!this.HasInputAuthority())
+        {
+            return;
+        }
+
+        if (enableJump && controller != null && controller.isGrounded)
             verticalVelocity = Mathf.Sqrt(jumpForce * -2f * gravity);
+    }
+
+    private void TryBindJumpButton()
+    {
+        if (jumpButton == null && autoBindJumpButton)
+        {
+            jumpButton = this.FindJumpButtonInScene();
+        }
+
+        if (jumpButton == null || jumpButtonBound)
+        {
+            return;
+        }
+
+        jumpButton.onClick.AddListener(this.Jump);
+        jumpButtonBound = true;
+    }
+
+    private Button FindJumpButtonInScene()
+    {
+        Button[] buttons = FindObjectsOfType<Button>(true);
+        string keyword = string.IsNullOrWhiteSpace(jumpButtonNameContains)
+            ? "jump"
+            : jumpButtonNameContains.Trim().ToLowerInvariant();
+
+        for (int i = 0; i < buttons.Length; i++)
+        {
+            Button button = buttons[i];
+            if (button == null || button.gameObject == null)
+            {
+                continue;
+            }
+
+            string buttonName = button.gameObject.name.ToLowerInvariant();
+            if (buttonName.Contains(keyword))
+            {
+                return button;
+            }
+        }
+
+        return null;
+    }
+
+    private bool HasInputAuthority()
+    {
+        NetworkObject networkObject = GetComponent<NetworkObject>();
+        if (networkObject == null || NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening)
+        {
+            return true;
+        }
+
+        if (!networkObject.IsSpawned)
+        {
+            return true;
+        }
+
+        return networkObject.IsOwner;
+    }
+
+    private void OnDestroy()
+    {
+        if (jumpButton != null && jumpButtonBound)
+        {
+            jumpButton.onClick.RemoveListener(this.Jump);
+        }
+
+        jumpButtonBound = false;
     }
 
 }
