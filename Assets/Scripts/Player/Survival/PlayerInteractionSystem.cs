@@ -14,6 +14,7 @@ public class PlayerInteractionSystem : MonoBehaviour
     [Header("Reference")]
     public Camera playerCamera;
     public PlayerInventory inventory;
+    [SerializeField] private NetworkInventoryBridge networkInventoryBridge;
 
     [Header("UI")]
     public GameObject pickButton; // 🔥 button UI
@@ -23,11 +24,33 @@ public class PlayerInteractionSystem : MonoBehaviour
 
     void Start()
     {
-        pickButton.SetActive(false);
+        if (inventory == null)
+        {
+            inventory = GetComponent<PlayerInventory>();
+        }
+
+        if (networkInventoryBridge == null)
+        {
+            networkInventoryBridge = GetComponent<NetworkInventoryBridge>();
+        }
+
+        if (pickButton != null)
+        {
+            pickButton.SetActive(false);
+        }
     }
 
     void Update()
     {
+        if (!this.HasLocalInteractAuthority())
+        {
+            if (pickButton != null)
+            {
+                pickButton.SetActive(false);
+            }
+            return;
+        }
+
         DetectInteractable();
         CheckInteractableInFront();
     }
@@ -70,7 +93,10 @@ public class PlayerInteractionSystem : MonoBehaviour
     void CheckInteractableInFront()
     {
         currentTarget = null;
-        pickButton.SetActive(false);
+        if (pickButton != null)
+        {
+            pickButton.SetActive(false);
+        }
 
         Ray ray = new Ray(playerCamera.transform.position, playerCamera.transform.forward);
 
@@ -89,7 +115,10 @@ public class PlayerInteractionSystem : MonoBehaviour
                     currentTarget = interactable;
 
                     // 🔥 TAMPILKAN BUTTON
-                    pickButton.SetActive(true);
+                    if (pickButton != null)
+                    {
+                        pickButton.SetActive(true);
+                    }
                 }
             }
         }
@@ -104,10 +133,48 @@ public class PlayerInteractionSystem : MonoBehaviour
 
         if (item != null)
         {
-            inventory.AddItem(item);
-            Destroy(currentTarget.gameObject);
+            if (networkInventoryBridge != null && networkInventoryBridge.UseNetworkedInventory)
+            {
+                bool requested = networkInventoryBridge.TryRequestPickup(item);
+                if (requested && pickButton != null)
+                {
+                    pickButton.SetActive(false);
+                }
+                return;
+            }
 
-            pickButton.SetActive(false);
+            if (inventory != null)
+            {
+                int addedAmount = inventory.AddItem(item);
+                if (addedAmount <= 0)
+                {
+                    return;
+                }
+
+                if (addedAmount >= item.amount)
+                {
+                    Destroy(currentTarget.gameObject);
+                }
+                else
+                {
+                    item.amount -= addedAmount;
+                }
+            }
+
+            if (pickButton != null)
+            {
+                pickButton.SetActive(false);
+            }
         }
+    }
+
+    private bool HasLocalInteractAuthority()
+    {
+        if (networkInventoryBridge == null || !networkInventoryBridge.UseNetworkedInventory)
+        {
+            return true;
+        }
+
+        return networkInventoryBridge.HasInputAuthority;
     }
 }

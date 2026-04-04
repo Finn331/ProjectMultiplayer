@@ -34,6 +34,8 @@ public class PlayerAnimatorDriver : MonoBehaviour
     private float smoothedVerticalVelocity;
     private float verticalVelocityDamp;
     private bool wasGrounded;
+    private Vector3 lastFramePosition;
+    private bool hasLastFramePosition;
 
     private void Awake()
     {
@@ -62,6 +64,8 @@ public class PlayerAnimatorDriver : MonoBehaviour
         smoothedVerticalVelocity = 0f;
         verticalVelocityDamp = 0f;
         wasGrounded = characterController != null && characterController.isGrounded;
+        lastFramePosition = transform.position;
+        hasLastFramePosition = true;
     }
 
     private void LateUpdate()
@@ -72,10 +76,17 @@ public class PlayerAnimatorDriver : MonoBehaviour
         }
 
         Vector3 velocity = characterController.velocity;
+        Vector3 syntheticVelocity = Vector3.zero;
+        if (hasLastFramePosition && Time.deltaTime > 0.0001f)
+        {
+            syntheticVelocity = (transform.position - lastFramePosition) / Time.deltaTime;
+        }
+
+        Vector3 referenceVelocity = velocity.sqrMagnitude > 0.0001f ? velocity : syntheticVelocity;
         float inputMagnitude = this.GetInputMagnitude();
         float speedNormalized = inputMagnitude;
-        Vector2 moveInput = this.GetDirectionInput(velocity);
-        float verticalVelocity = velocity.y;
+        Vector2 moveInput = this.GetDirectionInput(referenceVelocity);
+        float verticalVelocity = referenceVelocity.y;
         bool rawGrounded = characterController.isGrounded;
 
         if (rawGrounded)
@@ -91,7 +102,7 @@ public class PlayerAnimatorDriver : MonoBehaviour
         // Fallback if joystick input is unavailable, e.g. during non-mobile testing.
         if (speedNormalized <= moveInputDeadZone && movementController != null && movementController.moveSpeed > 0.01f)
         {
-            float horizontalSpeed = new Vector3(velocity.x, 0f, velocity.z).magnitude;
+            float horizontalSpeed = new Vector3(referenceVelocity.x, 0f, referenceVelocity.z).magnitude;
             speedNormalized = Mathf.Clamp01(horizontalSpeed / movementController.moveSpeed);
         }
 
@@ -138,6 +149,8 @@ public class PlayerAnimatorDriver : MonoBehaviour
         animator.SetFloat(moveYParam, moveInput.y, directionSmoothTime, Time.deltaTime);
 
         wasGrounded = isGrounded;
+        lastFramePosition = transform.position;
+        hasLastFramePosition = true;
     }
 
     private float GetInputMagnitude()

@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using Unity.Netcode;
 
 public class PlayerSurvivalUI : MonoBehaviour
 {
@@ -27,10 +28,7 @@ public class PlayerSurvivalUI : MonoBehaviour
 
     private void Awake()
     {
-        if (survivalSystem == null)
-        {
-            survivalSystem = FindObjectOfType<PlayerSurvivalSystem>();
-        }
+        this.ResolveSurvivalSystemBinding();
 
         this.EnsureContainer();
 
@@ -44,6 +42,24 @@ public class PlayerSurvivalUI : MonoBehaviour
         this.ConfigureSlider(hungerSlider);
 
         this.RefreshBars();
+    }
+
+    private void Update()
+    {
+        if (survivalSystem == null || !survivalSystem.gameObject.activeInHierarchy)
+        {
+            this.ResolveSurvivalSystemBinding();
+            return;
+        }
+
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+        {
+            NetworkObject networkObject = survivalSystem.GetComponent<NetworkObject>();
+            if (networkObject == null || !networkObject.IsOwner)
+            {
+                this.ResolveSurvivalSystemBinding();
+            }
+        }
     }
 
     private void OnEnable()
@@ -220,5 +236,52 @@ public class PlayerSurvivalUI : MonoBehaviour
         }
 
         slider.value = Mathf.Clamp01(normalizedValue);
+    }
+
+    private void ResolveSurvivalSystemBinding()
+    {
+        PlayerSurvivalSystem preferred = this.FindPreferredSurvivalSystem();
+        if (preferred == survivalSystem)
+        {
+            return;
+        }
+
+        if (survivalSystem != null)
+        {
+            survivalSystem.StatsChanged -= this.HandleStatsChanged;
+        }
+
+        survivalSystem = preferred;
+
+        if (isActiveAndEnabled && survivalSystem != null)
+        {
+            survivalSystem.StatsChanged -= this.HandleStatsChanged;
+            survivalSystem.StatsChanged += this.HandleStatsChanged;
+        }
+
+        this.RefreshBars();
+    }
+
+    private PlayerSurvivalSystem FindPreferredSurvivalSystem()
+    {
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+        {
+            PlayerSurvivalSystem[] allSystems = FindObjectsOfType<PlayerSurvivalSystem>(true);
+            for (int i = 0; i < allSystems.Length; i++)
+            {
+                if (allSystems[i] == null)
+                {
+                    continue;
+                }
+
+                NetworkObject networkObject = allSystems[i].GetComponent<NetworkObject>();
+                if (networkObject != null && networkObject.IsOwner)
+                {
+                    return allSystems[i];
+                }
+            }
+        }
+
+        return FindObjectOfType<PlayerSurvivalSystem>(true);
     }
 }

@@ -15,4 +15,9 @@ public class PickupTextUI : MonoBehaviour
     {
         text.text = itemName + " +" + amount;
     }
+
+    public void SetupMessage(string message)
+    {
+        text.text = message;
+    }
 }

@@ -58,6 +58,7 @@ public class PlayerSurvivalSystem : MonoBehaviour
 
     private bool isDead;
     private float baseMoveSpeed;
+    private bool localSimulationEnabled = true;
 
     private void Awake()
     {
@@ -99,6 +100,12 @@ public class PlayerSurvivalSystem : MonoBehaviour
             return;
         }
 
+        if (!localSimulationEnabled)
+        {
+            this.UpdateMovementPenalty(currentHealth, currentHunger, currentThirst);
+            return;
+        }
+
         float deltaTime = Time.deltaTime;
 
         if (!godMode)
@@ -108,6 +115,26 @@ public class PlayerSurvivalSystem : MonoBehaviour
         }
 
         this.UpdateMovementPenalty(currentHealth, currentHunger, currentThirst);
+    }
+
+    public void SetLocalSimulationEnabled(bool enabled)
+    {
+        localSimulationEnabled = enabled;
+    }
+
+    public void ApplyNetworkSnapshot(float healthValue, float hungerValue, float thirstValue)
+    {
+        currentHealth = Mathf.Clamp(healthValue, 0f, maxHealth);
+        currentHunger = Mathf.Clamp(hungerValue, 0f, maxHunger);
+        currentThirst = Mathf.Clamp(thirstValue, 0f, maxThirst);
+
+        if (currentHealth <= 0f)
+        {
+            this.SetDeathState(true);
+        }
+
+        this.UpdateMovementPenalty(currentHealth, currentHunger, currentThirst);
+        this.RaiseStatsChanged(currentHealth, currentHunger, currentThirst);
     }
 
     public void ApplyDamage(float amount)
