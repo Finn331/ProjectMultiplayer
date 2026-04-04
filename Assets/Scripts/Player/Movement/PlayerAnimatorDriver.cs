@@ -1,4 +1,5 @@
 using UnityEngine;
+using Unity.Netcode;
 
 public class PlayerAnimatorDriver : MonoBehaviour
 {
@@ -74,6 +75,11 @@ public class PlayerAnimatorDriver : MonoBehaviour
     private void LateUpdate()
     {
         if (animator == null || characterController == null)
+        {
+            return;
+        }
+
+        if (!this.ShouldProcessAnimator())
         {
             return;
         }
@@ -217,23 +223,41 @@ public class PlayerAnimatorDriver : MonoBehaviour
 
     private bool IsGroundedByProbe()
     {
-        Vector3 center = transform.position;
-        float probeRadius = 0.2f;
-
-        if (characterController != null)
+        if (characterController == null)
         {
-            center = transform.TransformPoint(characterController.center);
-            probeRadius = Mathf.Max(0.05f, characterController.radius * 0.92f);
+            return false;
         }
 
-        float castDistance = Mathf.Max(0.05f, groundProbeDistance);
+        Bounds bounds = characterController.bounds;
+        float probeRadius = Mathf.Max(0.05f, characterController.radius * 0.9f);
+        float castDistance = Mathf.Max(0.1f, groundProbeDistance);
+
+        Vector3 footCenter = bounds.center;
+        footCenter.y = bounds.min.y + probeRadius + 0.02f;
+
+        if (Physics.CheckSphere(footCenter, probeRadius, groundProbeMask, QueryTriggerInteraction.Ignore))
+        {
+            return true;
+        }
+
         return Physics.SphereCast(
-            center + (Vector3.up * 0.04f),
+            footCenter + (Vector3.up * 0.05f),
             probeRadius,
             Vector3.down,
             out _,
             castDistance,
             groundProbeMask,
             QueryTriggerInteraction.Ignore);
+    }
+
+    private bool ShouldProcessAnimator()
+    {
+        NetworkObject networkObject = GetComponent<NetworkObject>();
+        if (networkObject == null || NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening)
+        {
+            return true;
+        }
+
+        return networkObject.IsSpawned;
     }
 }

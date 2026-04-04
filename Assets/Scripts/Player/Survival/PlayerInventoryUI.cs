@@ -78,11 +78,19 @@ public class PlayerInventoryUI : MonoBehaviour
 
     private void OnEnable()
     {
+        if (Application.isPlaying && !this.HasLocalInventoryAuthority())
+        {
+            enabled = false;
+            return;
+        }
+
         if (!Application.isPlaying)
         {
             this.EnsureUI();
             this.Refresh();
         }
+
+        this.EnsureUI();
 
         if (inventory != null)
         {

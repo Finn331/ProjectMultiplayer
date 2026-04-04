@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using Unity.Netcode;
 
 public class PlayerInteractionSystem : MonoBehaviour
 {
@@ -200,6 +201,20 @@ public class PlayerInteractionSystem : MonoBehaviour
 
     private bool HasLocalInteractAuthority()
     {
+        NetworkObject networkObject = GetComponent<NetworkObject>();
+        if (networkObject != null && NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+        {
+            if (!networkObject.IsSpawned)
+            {
+                return false;
+            }
+
+            if (!networkObject.IsOwner)
+            {
+                return false;
+            }
+        }
+
         if (networkInventoryBridge == null || !networkInventoryBridge.UseNetworkedInventory)
         {
             return true;

@@ -115,6 +115,11 @@ public class CoopNetworkBootstrap : MonoBehaviour
 
     private void Update()
     {
+        if (networkManager != null && networkManager.IsListening)
+        {
+            this.DisableScenePlayerIfNeeded();
+        }
+
         if (!waitingClientConnect)
         {
             return;
@@ -512,6 +517,15 @@ public class CoopNetworkBootstrap : MonoBehaviour
 
         if (scenePlayerObject == null)
         {
+            GameObject namedPlayer = GameObject.Find("Player");
+            if (namedPlayer != null)
+            {
+                scenePlayerObject = namedPlayer;
+            }
+        }
+
+        if (scenePlayerObject == null)
+        {
             FPSControllerMobile sceneController = FindObjectOfType<FPSControllerMobile>(true);
             if (sceneController != null)
             {
@@ -526,6 +540,11 @@ public class CoopNetworkBootstrap : MonoBehaviour
 
         NetworkObject sceneNetworkObject = scenePlayerObject.GetComponent<NetworkObject>();
         if (sceneNetworkObject != null && sceneNetworkObject.IsSpawned)
+        {
+            return;
+        }
+
+        if (!scenePlayerObject.activeSelf)
         {
             return;
         }

@@ -68,6 +68,7 @@ public class FPSControllerMobile : MonoBehaviour
     {
         if (!this.HasInputAuthority())
         {
+            this.SetLocalFirstPersonRigActive(false);
             enabled = false;
             return;
         }
@@ -128,6 +129,7 @@ public class FPSControllerMobile : MonoBehaviour
         this.ApplyFirstPersonRendererVisibility();
         this.ApplyFirstPersonCameraStabilization();
         this.TryBindJumpButton();
+        this.SetLocalFirstPersonRigActive(true);
     }
 
     void Update()
@@ -504,10 +506,24 @@ public class FPSControllerMobile : MonoBehaviour
 
         if (!networkObject.IsSpawned)
         {
-            return true;
+            return false;
         }
 
         return networkObject.IsOwner;
+    }
+
+    private void SetLocalFirstPersonRigActive(bool active)
+    {
+        if (mainCamera != null)
+        {
+            mainCamera.enabled = active;
+        }
+
+        AudioListener listener = mainCamera != null ? mainCamera.GetComponent<AudioListener>() : null;
+        if (listener != null)
+        {
+            listener.enabled = active;
+        }
     }
 
     private void OnDestroy()
