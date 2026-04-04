@@ -210,6 +210,11 @@ public class NetworkInventoryBridge : NetworkBehaviour
         bool spawnedDrop = inventory.SpawnDropItemWorld(itemType, clampedAmount, out PickableItem droppedItem);
         if (!spawnedDrop)
         {
+            spawnedDrop = this.SpawnDropFromRegisteredPrefabs(itemType, clampedAmount, out droppedItem);
+        }
+
+        if (!spawnedDrop)
+        {
             this.RestoreInventoryAfterFailedDrop(itemType, clampedAmount);
             this.PushInventoryToNetworkVariables();
             return;
@@ -236,6 +241,56 @@ public class NetworkInventoryBridge : NetworkBehaviour
         }
 
         this.PushInventoryToNetworkVariables();
+    }
+
+    private bool SpawnDropFromRegisteredPrefabs(ItemType itemType, int amount, out PickableItem droppedItem)
+    {
+        droppedItem = null;
+
+        if (NetworkManager == null || NetworkManager.NetworkConfig?.Prefabs?.Prefabs == null)
+        {
+            return false;
+        }
+
+        var prefabs = NetworkManager.NetworkConfig.Prefabs.Prefabs;
+        for (int i = 0; i < prefabs.Count; i++)
+        {
+            GameObject prefabObject = prefabs[i].Prefab;
+            if (prefabObject == null)
+            {
+                continue;
+            }
+
+            PickableItem prefabPickable = prefabObject.GetComponent<PickableItem>();
+            NetworkObject prefabNetworkObject = prefabObject.GetComponent<NetworkObject>();
+            if (prefabPickable == null || prefabNetworkObject == null || prefabPickable.itemType != itemType)
+            {
+                continue;
+            }
+
+            Vector3 spawnPosition = inventory != null
+                ? inventory.GetDropPositionWorld()
+                : transform.position + transform.forward + (Vector3.up * 0.2f);
+            droppedItem = Instantiate(prefabPickable, spawnPosition, Quaternion.identity);
+            droppedItem.gameObject.SetActive(true);
+            droppedItem.itemType = itemType;
+            droppedItem.amount = Mathf.Max(1, amount);
+            if (string.IsNullOrWhiteSpace(droppedItem.itemName))
+            {
+                droppedItem.itemName = itemType.ToString();
+            }
+
+            Rigidbody rb = droppedItem.GetComponent<Rigidbody>();
+            if (rb != null)
+            {
+                Vector3 forward = inventory != null ? inventory.GetDropForwardDirection() : transform.forward;
+                rb.AddForce(forward * 2.2f, ForceMode.VelocityChange);
+            }
+
+            return true;
+        }
+
+        return false;
     }
 
     private void RestoreInventoryAfterFailedDrop(ItemType itemType, int amount)
