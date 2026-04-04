@@ -38,6 +38,7 @@ public class CoopNetworkBootstrap : MonoBehaviour
     [SerializeField] private UnityTransport unityTransport;
     [SerializeField] private GameObject playerPrefab;
     [SerializeField] private List<GameObject> additionalNetworkPrefabs = new List<GameObject>();
+    [SerializeField] private bool spawnScenePickablesOnServerStart = true;
     [SerializeField] private bool disableScenePlayerBeforeStart = true;
     [SerializeField] private GameObject scenePlayerObject;
 
@@ -433,6 +434,7 @@ public class CoopNetworkBootstrap : MonoBehaviour
             return;
         }
 
+        networkManager.OnServerStarted += this.OnServerStarted;
         networkManager.OnClientConnectedCallback += this.OnClientConnected;
         networkManager.OnClientDisconnectCallback += this.OnClientDisconnected;
         networkManager.OnTransportFailure += this.OnTransportFailure;
@@ -446,10 +448,54 @@ public class CoopNetworkBootstrap : MonoBehaviour
             return;
         }
 
+        networkManager.OnServerStarted -= this.OnServerStarted;
         networkManager.OnClientConnectedCallback -= this.OnClientConnected;
         networkManager.OnClientDisconnectCallback -= this.OnClientDisconnected;
         networkManager.OnTransportFailure -= this.OnTransportFailure;
         callbacksBound = false;
+    }
+
+    private void OnServerStarted()
+    {
+        if (!spawnScenePickablesOnServerStart || networkManager == null || !networkManager.IsServer)
+        {
+            return;
+        }
+
+        this.SpawnScenePickablesForNetwork();
+    }
+
+    private void SpawnScenePickablesForNetwork()
+    {
+        PickableItem[] pickables = FindObjectsOfType<PickableItem>(true);
+        for (int i = 0; i < pickables.Length; i++)
+        {
+            PickableItem pickable = pickables[i];
+            if (pickable == null || pickable.gameObject == null || !pickable.gameObject.activeInHierarchy)
+            {
+                continue;
+            }
+
+            NetworkObject networkObject = pickable.GetComponent<NetworkObject>();
+            if (networkObject == null || networkObject.IsSpawned)
+            {
+                continue;
+            }
+
+            if (!this.IsPrefabAlreadyRegistered(pickable.gameObject))
+            {
+                continue;
+            }
+
+            try
+            {
+                networkObject.Spawn(true);
+            }
+            catch (System.Exception exception)
+            {
+                Debug.LogWarning($"Failed to spawn scene pickable '{pickable.name}': {exception.Message}");
+            }
+        }
     }
 
     private void OnClientConnected(ulong clientId)

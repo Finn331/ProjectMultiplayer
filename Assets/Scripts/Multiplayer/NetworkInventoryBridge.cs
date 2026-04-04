@@ -3,6 +3,9 @@ using UnityEngine;
 
 public class NetworkInventoryBridge : NetworkBehaviour
 {
+    private const float PickupResolveRadius = 2.5f;
+    private const float PickupOwnerDistanceMax = 4.0f;
+
     [Header("References")]
     [SerializeField] private PlayerInventory inventory;
 
@@ -79,14 +82,19 @@ public class NetworkInventoryBridge : NetworkBehaviour
         }
 
         NetworkObject itemNetworkObject = item.GetComponent<NetworkObject>();
-        if (itemNetworkObject == null || !itemNetworkObject.IsSpawned)
+        if (itemNetworkObject != null && itemNetworkObject.IsSpawned)
         {
-            Debug.LogWarning("Pickable item requires spawned NetworkObject for multiplayer pickup.");
-            return false;
+            this.RequestPickupServerRpc(itemNetworkObject.NetworkObjectId);
+            return true;
         }
 
-        this.RequestPickupServerRpc(itemNetworkObject.NetworkObjectId);
-        return true;
+        // Fallback path for legacy/non-spawned scene items: resolve by item type + position on server.
+        if (itemNetworkObject == null || !itemNetworkObject.IsSpawned)
+        {
+            this.RequestPickupBySnapshotServerRpc((int)item.itemType, item.transform.position);
+            return true;
+        }
+        return false;
     }
 
     public bool TryRequestDrop(ItemType itemType, int amount = 1)
@@ -177,6 +185,40 @@ public class NetworkInventoryBridge : NetworkBehaviour
         else
         {
             item.amount -= acceptedAmount;
+        }
+
+        this.PushInventoryToNetworkVariables();
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    private void RequestPickupBySnapshotServerRpc(int itemTypeValue, Vector3 approximatePosition, ServerRpcParams serverRpcParams = default)
+    {
+        if (inventory == null || NetworkManager == null)
+        {
+            return;
+        }
+
+        if (serverRpcParams.Receive.SenderClientId != OwnerClientId)
+        {
+            return;
+        }
+
+        if (!System.Enum.IsDefined(typeof(ItemType), itemTypeValue))
+        {
+            return;
+        }
+
+        ItemType itemType = (ItemType)itemTypeValue;
+        if (!this.TryFindPickupCandidate(itemType, approximatePosition, out PickableItem candidate))
+        {
+            this.SendDropFeedbackClientRpc("Pickup gagal: item tidak ditemukan di server.", this.BuildOwnerRpcTarget());
+            return;
+        }
+
+        if (!this.TryProcessPickup(candidate))
+        {
+            this.SendDropFeedbackClientRpc("Pickup gagal: item belum siap di network.", this.BuildOwnerRpcTarget());
+            return;
         }
 
         this.PushInventoryToNetworkVariables();
@@ -304,6 +346,85 @@ public class NetworkInventoryBridge : NetworkBehaviour
         }
 
         return false;
+    }
+
+    private bool TryFindPickupCandidate(ItemType itemType, Vector3 approximatePosition, out PickableItem candidate)
+    {
+        candidate = null;
+        float resolveRadiusSqr = PickupResolveRadius * PickupResolveRadius;
+        float ownerDistanceLimitSqr = PickupOwnerDistanceMax * PickupOwnerDistanceMax;
+        float bestSqr = resolveRadiusSqr;
+
+        PickableItem[] items = FindObjectsOfType<PickableItem>(true);
+        for (int i = 0; i < items.Length; i++)
+        {
+            PickableItem current = items[i];
+            if (current == null || current.itemType != itemType || !current.gameObject.activeInHierarchy)
+            {
+                continue;
+            }
+
+            Vector3 currentPosition = current.transform.position;
+            float positionSqr = (currentPosition - approximatePosition).sqrMagnitude;
+            if (positionSqr > bestSqr)
+            {
+                continue;
+            }
+
+            float ownerDistanceSqr = (currentPosition - transform.position).sqrMagnitude;
+            if (ownerDistanceSqr > ownerDistanceLimitSqr)
+            {
+                continue;
+            }
+
+            bestSqr = positionSqr;
+            candidate = current;
+        }
+
+        return candidate != null;
+    }
+
+    private bool TryProcessPickup(PickableItem item)
+    {
+        if (item == null || inventory == null)
+        {
+            return false;
+        }
+
+        NetworkObject networkObject = item.GetComponent<NetworkObject>();
+        if (networkObject != null && !networkObject.IsSpawned)
+        {
+            if (!this.IsNetworkPrefabRegistered(networkObject.PrefabIdHash))
+            {
+                return false;
+            }
+
+            networkObject.Spawn(true);
+        }
+
+        int acceptedAmount = inventory.AddItem(item);
+        if (acceptedAmount <= 0)
+        {
+            return false;
+        }
+
+        if (acceptedAmount >= item.amount)
+        {
+            if (networkObject != null && networkObject.IsSpawned)
+            {
+                networkObject.Despawn(true);
+            }
+            else
+            {
+                Destroy(item.gameObject);
+            }
+        }
+        else
+        {
+            item.amount -= acceptedAmount;
+        }
+
+        return true;
     }
 
     private void RestoreInventoryAfterFailedDrop(ItemType itemType, int amount)
