@@ -21,6 +21,13 @@ public class CoopNetworkBootstrap : MonoBehaviour
     [SerializeField] private ushort serverPort = 9005;
     [SerializeField] private string listenAddress = "0.0.0.0";
     [SerializeField] private AutoStartMode autoStartMode = AutoStartMode.Manual;
+    [SerializeField] private string vpsAddress = "31.56.56.8";
+    [SerializeField] private ushort vpsPort = 9005;
+    [SerializeField] private bool forceDedicatedServerInBatchMode = true;
+    [SerializeField] private float clientConnectTimeoutSeconds = 10f;
+    [SerializeField] private int connectTimeoutMs = 1000;
+    [SerializeField] private int disconnectTimeoutMs = 5000;
+    [SerializeField] private int maxConnectAttempts = 10;
 
     [Header("Networking")]
     [SerializeField] private NetworkManager networkManager;
@@ -37,6 +44,11 @@ public class CoopNetworkBootstrap : MonoBehaviour
     [SerializeField] private Button stopButton;
 
     private readonly HashSet<int> runtimeRegisteredPrefabIds = new HashSet<int>();
+    private bool callbacksBound;
+    private bool waitingClientConnect;
+    private float connectDeadline;
+
+    public event System.Action<string> StatusChanged;
 
     public string ServerAddress
     {
@@ -50,14 +62,29 @@ public class CoopNetworkBootstrap : MonoBehaviour
         set => serverPort = value;
     }
 
+    public string CurrentEndpoint => $"{serverAddress}:{serverPort}";
+    public string VpsEndpoint => $"{vpsAddress}:{vpsPort}";
+    public string LastStatusMessage { get; private set; } = "Offline";
+
     private void Awake()
     {
         this.EnsureNetworkStack();
         this.BindButtons();
+        this.SetStatus("Offline");
     }
 
     private void Start()
     {
+        if (forceDedicatedServerInBatchMode && Application.isBatchMode)
+        {
+            if (networkManager == null || !networkManager.IsListening)
+            {
+                this.StartServer();
+            }
+
+            return;
+        }
+
         if (autoStartMode == AutoStartMode.Manual)
         {
             return;
@@ -82,6 +109,32 @@ public class CoopNetworkBootstrap : MonoBehaviour
         }
     }
 
+    private void Update()
+    {
+        if (!waitingClientConnect)
+        {
+            return;
+        }
+
+        if (networkManager == null || !networkManager.IsClient)
+        {
+            waitingClientConnect = false;
+            return;
+        }
+
+        if (networkManager.IsConnectedClient)
+        {
+            waitingClientConnect = false;
+            return;
+        }
+
+        if (Time.unscaledTime >= connectDeadline)
+        {
+            waitingClientConnect = false;
+            this.SetStatus($"Join timeout ke {CurrentEndpoint}. Pastikan dedicated server VPS aktif dan UDP {serverPort} terbuka.");
+        }
+    }
+
     [ContextMenu("Start Host")]
     public void StartHost()
     {
@@ -90,7 +143,8 @@ public class CoopNetworkBootstrap : MonoBehaviour
             return;
         }
 
-        networkManager.StartHost();
+        bool started = networkManager.StartHost();
+        this.SetStatus(started ? $"Host aktif di {CurrentEndpoint}" : "Gagal start Host");
     }
 
     [ContextMenu("Start Client")]
@@ -101,7 +155,13 @@ public class CoopNetworkBootstrap : MonoBehaviour
             return;
         }
 
-        networkManager.StartClient();
+        bool started = networkManager.StartClient();
+        this.SetStatus(started ? $"Mencoba join {CurrentEndpoint}..." : $"Gagal mulai koneksi ke {CurrentEndpoint}");
+        if (started)
+        {
+            waitingClientConnect = true;
+            connectDeadline = Time.unscaledTime + Mathf.Max(3f, clientConnectTimeoutSeconds);
+        }
     }
 
     [ContextMenu("Start Server")]
@@ -112,7 +172,28 @@ public class CoopNetworkBootstrap : MonoBehaviour
             return;
         }
 
-        networkManager.StartServer();
+        bool started = networkManager.StartServer();
+        this.SetStatus(started ? $"Server aktif di {CurrentEndpoint}" : "Gagal start Server");
+    }
+
+    [ContextMenu("Start Host Local")]
+    public void StartHostLocal()
+    {
+        this.SetEndpoint("127.0.0.1", serverPort);
+        this.StartHost();
+    }
+
+    [ContextMenu("Start Client To VPS")]
+    public void StartClientToVps()
+    {
+        this.SetEndpoint(vpsAddress, vpsPort);
+        this.StartClient();
+    }
+
+    public void SetEndpoint(string address, ushort port)
+    {
+        serverAddress = string.IsNullOrWhiteSpace(address) ? "127.0.0.1" : address.Trim();
+        serverPort = port;
     }
 
     [ContextMenu("Stop Network Session")]
@@ -124,6 +205,8 @@ public class CoopNetworkBootstrap : MonoBehaviour
         }
 
         networkManager.Shutdown();
+        waitingClientConnect = false;
+        this.SetStatus("Offline");
     }
 
     private bool PrepareNetworkManager()
@@ -181,6 +264,7 @@ public class CoopNetworkBootstrap : MonoBehaviour
                 networkManager.NetworkConfig.Prefabs = new NetworkPrefabs();
             }
             networkManager.NetworkConfig.NetworkTransport = unityTransport;
+            this.BindNetworkCallbacks();
         }
     }
 
@@ -192,6 +276,9 @@ public class CoopNetworkBootstrap : MonoBehaviour
         }
 
         string targetAddress = string.IsNullOrWhiteSpace(serverAddress) ? "127.0.0.1" : serverAddress.Trim();
+        unityTransport.ConnectTimeoutMS = Mathf.Max(100, connectTimeoutMs);
+        unityTransport.DisconnectTimeoutMS = Mathf.Max(1000, disconnectTimeoutMs);
+        unityTransport.MaxConnectAttempts = Mathf.Max(1, maxConnectAttempts);
         unityTransport.SetConnectionData(targetAddress, serverPort, listenAddress);
     }
 
@@ -305,8 +392,13 @@ public class CoopNetworkBootstrap : MonoBehaviour
 
     private void BindButtons()
     {
-        this.BindButton(hostButton, this.StartHost);
-        this.BindButton(joinButton, this.StartClient);
+        if (Application.isBatchMode)
+        {
+            return;
+        }
+
+        this.BindButton(hostButton, this.StartHostLocal);
+        this.BindButton(joinButton, this.StartClientToVps);
         this.BindButton(serverButton, this.StartServer);
         this.BindButton(stopButton, this.StopSession);
     }
@@ -320,6 +412,87 @@ public class CoopNetworkBootstrap : MonoBehaviour
 
         button.onClick.RemoveListener(action);
         button.onClick.AddListener(action);
+    }
+
+    private void BindNetworkCallbacks()
+    {
+        if (networkManager == null || callbacksBound)
+        {
+            return;
+        }
+
+        networkManager.OnClientConnectedCallback += this.OnClientConnected;
+        networkManager.OnClientDisconnectCallback += this.OnClientDisconnected;
+        networkManager.OnTransportFailure += this.OnTransportFailure;
+        callbacksBound = true;
+    }
+
+    private void OnDestroy()
+    {
+        if (networkManager == null || !callbacksBound)
+        {
+            return;
+        }
+
+        networkManager.OnClientConnectedCallback -= this.OnClientConnected;
+        networkManager.OnClientDisconnectCallback -= this.OnClientDisconnected;
+        networkManager.OnTransportFailure -= this.OnTransportFailure;
+        callbacksBound = false;
+    }
+
+    private void OnClientConnected(ulong clientId)
+    {
+        if (networkManager == null)
+        {
+            return;
+        }
+
+        if (networkManager.IsHost)
+        {
+            this.SetStatus($"Host aktif ({networkManager.ConnectedClientsIds.Count} klien)");
+            return;
+        }
+
+        if (networkManager.IsClient && clientId == networkManager.LocalClientId)
+        {
+            waitingClientConnect = false;
+            this.SetStatus($"Berhasil join ke {CurrentEndpoint}");
+        }
+    }
+
+    private void OnClientDisconnected(ulong clientId)
+    {
+        if (networkManager == null)
+        {
+            return;
+        }
+
+        if (networkManager.IsClient && clientId == networkManager.LocalClientId)
+        {
+            waitingClientConnect = false;
+            string reason = string.IsNullOrWhiteSpace(networkManager.DisconnectReason)
+                ? "Tidak ada response dari server."
+                : networkManager.DisconnectReason;
+            this.SetStatus($"Join gagal / terputus dari {CurrentEndpoint}. Reason: {reason}");
+            return;
+        }
+
+        if (networkManager.IsHost)
+        {
+            this.SetStatus($"Host aktif ({networkManager.ConnectedClientsIds.Count} klien)");
+        }
+    }
+
+    private void OnTransportFailure()
+    {
+        waitingClientConnect = false;
+        this.SetStatus($"Transport gagal ke {CurrentEndpoint}. Pastikan dedicated server Unity aktif di VPS dan UDP {serverPort} terbuka.");
+    }
+
+    private void SetStatus(string message)
+    {
+        LastStatusMessage = message;
+        StatusChanged?.Invoke(message);
     }
 
     private void DisableScenePlayerIfNeeded()
