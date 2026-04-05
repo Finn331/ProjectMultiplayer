@@ -7,6 +7,7 @@ public class NetworkPlayerOwnerSetup : NetworkBehaviour
     [SerializeField] private FPSControllerMobile movementController;
     [SerializeField] private PlayerInteractionSystem interactionSystem;
     [SerializeField] private PlayerInventoryUI inventoryUI;
+    [SerializeField] private PlayerAxeCombat axeCombat;
     [SerializeField] private LookArea lookArea;
     [SerializeField] private HeadLookRigAutoSetup headLookRigSetup;
 
@@ -29,6 +30,16 @@ public class NetworkPlayerOwnerSetup : NetworkBehaviour
         if (inventoryUI == null)
         {
             inventoryUI = GetComponent<PlayerInventoryUI>();
+        }
+
+        if (axeCombat == null)
+        {
+            axeCombat = GetComponent<PlayerAxeCombat>();
+        }
+
+        if (axeCombat == null)
+        {
+            axeCombat = gameObject.AddComponent<PlayerAxeCombat>();
         }
 
         if (headLookRigSetup == null)
@@ -58,6 +69,9 @@ public class NetworkPlayerOwnerSetup : NetworkBehaviour
         this.SetBehaviourState(movementController, isLocalOwner);
         this.SetBehaviourState(interactionSystem, isLocalOwner);
         this.SetBehaviourState(inventoryUI, isLocalOwner);
+        // Keep axe combat behaviour enabled on all clients so remote players can
+        // still render replicated swing visuals via RPC, while input is gated inside the component.
+        this.SetBehaviourState(axeCombat, true);
         this.SetBehaviourState(lookArea, isLocalOwner);
         this.SetBehaviourState(headLookRigSetup, isLocalOwner);
 

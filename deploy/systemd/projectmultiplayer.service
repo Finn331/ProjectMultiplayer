@@ -1,0 +1,21 @@
+[Unit]
+Description=Project Multiplayer Dedicated Server
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/project-multiplayer-server
+ExecStart=/root/project-multiplayer-server/ServerProjectMultiplayer.x86_64 -batchmode -nographics
+Restart=always
+RestartSec=3
+KillSignal=SIGINT
+TimeoutStopSec=20
+LimitNOFILE=65535
+Environment=HOME=/root
+StandardOutput=append:/root/project-multiplayer-server/server.log
+StandardError=append:/root/project-multiplayer-server/server.err.log
+
+[Install]
+WantedBy=multi-user.target

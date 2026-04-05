@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.Animations.Rigging;
 
+[ExecuteAlways]
 [DefaultExecutionOrder(-1000)]
 public class RigBuilderRuntimeBootstrap : MonoBehaviour
 {
@@ -18,6 +19,20 @@ public class RigBuilderRuntimeBootstrap : MonoBehaviour
 
     private void OnEnable()
     {
+        if (!Application.isPlaying)
+        {
+            if (rigBuilder != null)
+            {
+                rigBuilder.enabled = false;
+            }
+            return;
+        }
+
+        if (rigBuilder != null)
+        {
+            rigBuilder.enabled = true;
+        }
+
         if (rebuildOnEnable)
         {
             this.TryBuild();
@@ -26,15 +41,28 @@ public class RigBuilderRuntimeBootstrap : MonoBehaviour
 
     private void Start()
     {
+        if (!Application.isPlaying)
+        {
+            return;
+        }
+
         if (rebuildOnStart)
         {
             this.TryBuild();
         }
     }
 
+    private void OnDisable()
+    {
+        if (!Application.isPlaying && rigBuilder != null)
+        {
+            rigBuilder.enabled = false;
+        }
+    }
+
     private void TryBuild()
     {
-        if (rigBuilder == null)
+        if (!Application.isPlaying || rigBuilder == null)
         {
             return;
         }

@@ -4,7 +4,6 @@ using System.Reflection;
 using UnityEngine;
 using UnityEngine.Animations.Rigging;
 
-[ExecuteAlways]
 public class HeadLookRigAutoSetup : MonoBehaviour
 {
     [Header("References")]
@@ -32,6 +31,11 @@ public class HeadLookRigAutoSetup : MonoBehaviour
 
     private void OnEnable()
     {
+        if (!Application.isPlaying)
+        {
+            return;
+        }
+
         runtimeRigBuilt = false;
 
         if (setupOnEnable)
@@ -241,6 +245,15 @@ public class HeadLookRigAutoSetup : MonoBehaviour
         }
 
         List<RigLayer> layers = rigBuilder.layers ?? new List<RigLayer>();
+        for (int i = layers.Count - 1; i >= 0; i--)
+        {
+            RigLayer layer = layers[i];
+            if (layer == null || layer.rig == null)
+            {
+                layers.RemoveAt(i);
+            }
+        }
+
         bool exists = false;
 
         for (int i = 0; i < layers.Count; i++)

@@ -4,6 +4,7 @@ using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.UI;
 
+[ExecuteAlways]
 public class PlayerInventoryUI : MonoBehaviour
 {
     [Header("References")]
@@ -25,6 +26,7 @@ public class PlayerInventoryUI : MonoBehaviour
     [SerializeField] private bool visibleOnStart = false;
     [SerializeField] private bool autoCreateToggleButton = true;
     [SerializeField] private bool autoCreateActionButtons = true;
+    [SerializeField] private bool showEditorPreview = true;
     [SerializeField] private bool allowKeyboardToggle = false;
     [SerializeField] private bool allowKeyboardInventoryActions = true;
     [SerializeField] private KeyCode toggleKey = KeyCode.I;
@@ -54,6 +56,9 @@ public class PlayerInventoryUI : MonoBehaviour
     private bool createdToggleButtonAtRuntime;
     private bool createdNextButtonAtRuntime;
     private bool createdDropButtonAtRuntime;
+#if UNITY_EDITOR
+    private bool editorEnsureQueued;
+#endif
 
     private void Awake()
     {
@@ -84,21 +89,49 @@ public class PlayerInventoryUI : MonoBehaviour
             return;
         }
 
-        if (!Application.isPlaying)
-        {
-            this.EnsureUI();
-            this.Refresh();
-        }
-
         this.EnsureUI();
 
-        if (inventory != null)
+        if (Application.isPlaying && inventory != null)
         {
             inventory.InventoryChanged += this.Refresh;
         }
 
         this.Refresh();
     }
+
+    private void OnValidate()
+    {
+        if (!this.CanRenderEditorPreview())
+        {
+            return;
+        }
+
+        initialized = false;
+#if UNITY_EDITOR
+        if (editorEnsureQueued)
+        {
+            return;
+        }
+
+        editorEnsureQueued = true;
+        UnityEditor.EditorApplication.delayCall += this.EnsureEditorPreviewDelayed;
+#endif
+    }
+
+#if UNITY_EDITOR
+    private void EnsureEditorPreviewDelayed()
+    {
+        editorEnsureQueued = false;
+
+        if (this == null || !this.CanRenderEditorPreview())
+        {
+            return;
+        }
+
+        this.EnsureUI();
+        this.Refresh();
+    }
+#endif
 
     private void OnDisable()
     {
@@ -221,7 +254,7 @@ public class PlayerInventoryUI : MonoBehaviour
 
         if (targetCanvas == null)
         {
-            targetCanvas = FindObjectOfType<Canvas>();
+            targetCanvas = this.FindTargetCanvas();
         }
 
         if (targetCanvas == null && autoCreateUI)
@@ -229,7 +262,7 @@ public class PlayerInventoryUI : MonoBehaviour
             targetCanvas = this.CreateFallbackCanvas();
         }
 
-        if (targetCanvas == null || !autoCreateUI)
+        if (targetCanvas == null)
         {
             return;
         }
@@ -237,11 +270,16 @@ public class PlayerInventoryUI : MonoBehaviour
         if (panelRoot == null)
         {
             panelRoot = this.FindExistingPanel(targetCanvas.transform as RectTransform);
-            if (panelRoot == null)
+            if (panelRoot == null && autoCreateUI)
             {
                 panelRoot = this.CreatePanel(targetCanvas.transform as RectTransform);
                 createdPanelAtRuntime = true;
             }
+        }
+
+        if (panelRoot == null)
+        {
+            return;
         }
 
         if (titleText == null)
@@ -457,7 +495,7 @@ public class PlayerInventoryUI : MonoBehaviour
             return null;
         }
 
-        Transform existing = parent.Find("Inventory UI");
+        Transform existing = this.FindDeepChildByName(parent, "Inventory UI");
         return existing != null ? existing as RectTransform : null;
     }
 
@@ -468,8 +506,64 @@ public class PlayerInventoryUI : MonoBehaviour
             return null;
         }
 
-        Transform existing = parent.Find(objectName);
+        Transform existing = this.FindDeepChildByName(parent, objectName);
         return existing != null ? existing.GetComponent<Button>() : null;
+    }
+
+    private Canvas FindTargetCanvas()
+    {
+        Canvas[] canvases = FindObjectsOfType<Canvas>(true);
+        if (canvases == null || canvases.Length == 0)
+        {
+            return null;
+        }
+
+        Canvas fallback = null;
+        for (int i = 0; i < canvases.Length; i++)
+        {
+            Canvas canvas = canvases[i];
+            if (canvas == null)
+            {
+                continue;
+            }
+
+            if (fallback == null)
+            {
+                fallback = canvas;
+            }
+
+            if (canvas.GetComponent<PlayerSurvivalUI>() != null || canvas.GetComponent<PickupUIManager>() != null)
+            {
+                return canvas;
+            }
+        }
+
+        return fallback;
+    }
+
+    private Transform FindDeepChildByName(Transform root, string childName)
+    {
+        if (root == null || string.IsNullOrEmpty(childName))
+        {
+            return null;
+        }
+
+        for (int i = 0; i < root.childCount; i++)
+        {
+            Transform child = root.GetChild(i);
+            if (child.name == childName)
+            {
+                return child;
+            }
+
+            Transform nested = this.FindDeepChildByName(child, childName);
+            if (nested != null)
+            {
+                return nested;
+            }
+        }
+
+        return null;
     }
 
     private void Refresh()
@@ -532,6 +626,21 @@ public class PlayerInventoryUI : MonoBehaviour
         }
 
         return networkInventoryBridge.HasInputAuthority;
+    }
+
+    private bool CanRenderEditorPreview()
+    {
+        if (Application.isPlaying || !showEditorPreview)
+        {
+            return false;
+        }
+
+        if (!gameObject.scene.IsValid())
+        {
+            return false;
+        }
+
+        return !string.IsNullOrEmpty(gameObject.scene.path);
     }
 
     private void CleanupRuntimeGeneratedUI()

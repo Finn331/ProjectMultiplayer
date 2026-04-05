@@ -22,11 +22,13 @@ public class PlayerInteractionSystem : MonoBehaviour
     public GameObject pickButton;
     [SerializeField] private bool autoBindPickButton = true;
     [SerializeField] private string pickButtonNameContains = "pick";
+    [SerializeField] private float interactDebounceSeconds = 0.1f;
 
     private readonly List<Interactable> currentInteractables = new List<Interactable>();
     private Interactable currentTarget;
     private Button pickButtonComponent;
     private bool pickButtonBound;
+    private float nextInteractTime;
 
     private void Start()
     {
@@ -152,6 +154,13 @@ public class PlayerInteractionSystem : MonoBehaviour
 
     public void TryInteract()
     {
+        if (Time.unscaledTime < nextInteractTime)
+        {
+            return;
+        }
+
+        nextInteractTime = Time.unscaledTime + Mathf.Max(0.01f, interactDebounceSeconds);
+
         if (!this.HasLocalInteractAuthority() || currentTarget == null)
         {
             return;
@@ -240,8 +249,35 @@ public class PlayerInteractionSystem : MonoBehaviour
             return;
         }
 
+        if (this.HasPersistentTryInteractBinding())
+        {
+            pickButtonBound = true;
+            return;
+        }
+
         pickButtonComponent.onClick.AddListener(this.TryInteract);
         pickButtonBound = true;
+    }
+
+    private bool HasPersistentTryInteractBinding()
+    {
+        if (pickButtonComponent == null)
+        {
+            return false;
+        }
+
+        int persistentCount = pickButtonComponent.onClick.GetPersistentEventCount();
+        for (int i = 0; i < persistentCount; i++)
+        {
+            Object target = pickButtonComponent.onClick.GetPersistentTarget(i);
+            string methodName = pickButtonComponent.onClick.GetPersistentMethodName(i);
+            if (target == (Object)this && methodName == nameof(TryInteract))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private GameObject FindPickButtonObject()
