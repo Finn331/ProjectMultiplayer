@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
 using TMPro;
 
 public class MobileHotbarUI : MonoBehaviour
@@ -29,8 +30,15 @@ public class MobileHotbarUI : MonoBehaviour
     [Header("Item Count UI")]
     public List<TMP_Text> slotCounts = new List<TMP_Text>();
 
+    [Header("Drag Settings")]
+    [HideInInspector] public System.Action<int, ItemType> OnSlotDragStart;
+    [HideInInspector] public System.Action<ItemType, int> OnSlotDragEnd;
+
     private ItemType?[] slotItems;
     private int selectedSlot = -1;
+    private int dragSourceSlot = -1;
+    private ItemType? draggedItemType;
+    private ItemType? itemToSkipFromAssignment;
 
     void Start()
     {
@@ -41,6 +49,7 @@ public class MobileHotbarUI : MonoBehaviour
         }
 
         inventory.InventoryChanged += Refresh;
+        SetupDragEvents();
         Refresh();
     }
 
@@ -65,29 +74,30 @@ public class MobileHotbarUI : MonoBehaviour
 
     void AutoAssignFromInventory()
     {
-        foreach (var entry in inventory.Entries)
+        ItemType? skipThisItem = itemToSkipFromAssignment;
+        itemToSkipFromAssignment = null;
+
+        for (int slotIndex = 0; slotIndex < maxSlots; slotIndex++)
         {
-            ItemType type = entry.itemType;
+            if (slotItems[slotIndex] != null) continue;
 
-            // cek apakah sudah ada di hotbar
-            bool alreadyExists = false;
-            for (int i = 0; i < maxSlots; i++)
+            foreach (var entry in inventory.Entries)
             {
-                if (slotItems[i] != null && slotItems[i] == type)
+                if (skipThisItem != null && entry.itemType == skipThisItem.Value) continue;
+
+                bool alreadyInHotbar = false;
+                for (int i = 0; i < maxSlots; i++)
                 {
-                    alreadyExists = true;
-                    break;
+                    if (slotItems[i] == entry.itemType)
+                    {
+                        alreadyInHotbar = true;
+                        break;
+                    }
                 }
-            }
 
-            if (alreadyExists) continue;
-
-            // cari slot kosong
-            for (int i = 0; i < maxSlots; i++)
-            {
-                if (slotItems[i] == null)
+                if (!alreadyInHotbar)
                 {
-                    slotItems[i] = type;
+                    slotItems[slotIndex] = entry.itemType;
                     break;
                 }
             }
@@ -221,7 +231,115 @@ public class MobileHotbarUI : MonoBehaviour
 
     public void AssignToSlot(int slotIndex, ItemType type)
     {
+        if (slotIndex < 0 || slotIndex >= maxSlots) return;
         slotItems[slotIndex] = type;
+        Refresh();
+    }
+
+    public int GetSlotIndex(Button button)
+    {
+        if (button == null) return -1;
+        for (int i = 0; i < slotButtons.Count; i++)
+        {
+            if (slotButtons[i] == button)
+            {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    public int GetFirstEmptySlot()
+    {
+        for (int i = 0; i < maxSlots; i++)
+        {
+            if (slotItems[i] == null)
+            {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private void SetupDragEvents()
+    {
+        for (int i = 0; i < slotButtons.Count && i < maxSlots; i++)
+        {
+            int slotIndex = i;
+            EventTrigger trigger = slotButtons[i].GetComponent<EventTrigger>();
+            if (trigger == null)
+            {
+                trigger = slotButtons[i].gameObject.AddComponent<EventTrigger>();
+            }
+
+            EventTrigger.Entry pointerDown = new EventTrigger.Entry { eventID = EventTriggerType.PointerDown };
+            pointerDown.callback.AddListener((data) => OnHotbarSlotPointerDown(slotIndex));
+            trigger.triggers.Add(pointerDown);
+
+            EventTrigger.Entry pointerUp = new EventTrigger.Entry { eventID = EventTriggerType.PointerUp };
+            pointerUp.callback.AddListener((data) => OnHotbarSlotPointerUp(slotIndex));
+            trigger.triggers.Add(pointerUp);
+        }
+    }
+
+    private void OnHotbarSlotPointerDown(int slotIndex)
+    {
+        if (slotIndex < 0 || slotIndex >= maxSlots || slotItems[slotIndex] == null) return;
+
+        draggedItemType = slotItems[slotIndex];
+        dragSourceSlot = slotIndex;
+        OnSlotDragStart?.Invoke(slotIndex, draggedItemType.Value);
+    }
+
+    private void OnHotbarSlotPointerUp(int slotIndex)
+    {
+        if (draggedItemType == null) return;
+
+        ItemType itemType = draggedItemType.Value;
+        OnSlotDragEnd?.Invoke(itemType, dragSourceSlot);
+        draggedItemType = null;
+        dragSourceSlot = -1;
+    }
+
+    public void RemoveItemFromSlot(int slotIndex)
+    {
+        if (slotIndex < 0 || slotIndex >= maxSlots || slotItems[slotIndex] == null) return;
+
+        ItemType type = slotItems[slotIndex].Value;
+        slotItems[slotIndex] = null;
+        Refresh();
+    }
+
+    public ItemType? GetSlotItem(int slotIndex)
+    {
+        if (slotIndex < 0 || slotIndex >= maxSlots) return null;
+        return slotItems[slotIndex];
+    }
+
+    public void ClearSlot(int slotIndex)
+    {
+        if (slotIndex < 0 || slotIndex >= maxSlots) return;
+        slotItems[slotIndex] = null;
+        Refresh();
+    }
+
+    public void SetItemToSkipFromAssignment(ItemType itemType)
+    {
+        itemToSkipFromAssignment = itemType;
+    }
+
+    public void SwapOrMoveSlot(int sourceSlot, int targetSlot)
+    {
+        if (sourceSlot < 0 || sourceSlot >= maxSlots) return;
+        if (targetSlot < 0 || targetSlot >= maxSlots) return;
+        if (sourceSlot == targetSlot) return;
+
+        ItemType? sourceItem = slotItems[sourceSlot];
+        ItemType? targetItem = slotItems[targetSlot];
+
+        slotItems[targetSlot] = sourceItem;
+        slotItems[sourceSlot] = targetItem;
+
         Refresh();
     }
 }

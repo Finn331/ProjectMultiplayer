@@ -63,6 +63,23 @@ public class PlayerInventory : MonoBehaviour
         this.CacheRuntimeDropTemplate(item);
 
         int requestedAmount = Mathf.Max(1, item.amount);
+        int acceptedAmount = this.AddItem(item.itemType, requestedAmount);
+        
+        if (PickupUIManager.instance != null && acceptedAmount > 0)
+        {
+            PickupUIManager.instance.ShowPickup(item.itemName, acceptedAmount);
+            if (acceptedAmount < requestedAmount)
+            {
+                PickupUIManager.instance.ShowInfo("Inventory Full");
+            }
+        }
+
+        return acceptedAmount;
+    }
+
+    public int AddItem(ItemType itemType, int amount)
+    {
+        int requestedAmount = Mathf.Max(1, amount);
         int acceptedAmount = Mathf.Min(requestedAmount, this.RemainingCapacity);
         if (acceptedAmount <= 0)
         {
@@ -73,23 +90,13 @@ public class PlayerInventory : MonoBehaviour
             return 0;
         }
 
-        if (!items.ContainsKey(item.itemType))
+        if (!items.ContainsKey(itemType))
         {
-            items[item.itemType] = 0;
+            items[itemType] = 0;
         }
 
-        items[item.itemType] += acceptedAmount;
+        items[itemType] += acceptedAmount;
         this.SyncInspectorEntries();
-
-        if (PickupUIManager.instance != null)
-        {
-            PickupUIManager.instance.ShowPickup(item.itemName, acceptedAmount);
-            if (acceptedAmount < requestedAmount)
-            {
-                PickupUIManager.instance.ShowInfo("Inventory Full");
-            }
-        }
-
         InventoryChanged?.Invoke();
         return acceptedAmount;
     }
