@@ -1,8 +1,8 @@
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.UI;
-using UnityEngine.EventSystems;
+using System;
 using TMPro;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
 
 public class MobileHotbarUI : MonoBehaviour
 {
@@ -11,8 +11,8 @@ public class MobileHotbarUI : MonoBehaviour
     public NetworkInventoryBridge networkBridge;
 
     [Header("UI")]
-    public List<Button> slotButtons = new List<Button>();
-    public List<Image> slotIcons = new List<Image>();
+    public System.Collections.Generic.List<Button> slotButtons = new System.Collections.Generic.List<Button>();
+    public System.Collections.Generic.List<Image> slotIcons = new System.Collections.Generic.List<Image>();
 
     [Header("Setting")]
     public int maxSlots = 5;
@@ -28,217 +28,414 @@ public class MobileHotbarUI : MonoBehaviour
     public ItemIconDatabase iconDatabase;
 
     [Header("Item Count UI")]
-    public List<TMP_Text> slotCounts = new List<TMP_Text>();
+    public System.Collections.Generic.List<TMP_Text> slotCounts = new System.Collections.Generic.List<TMP_Text>();
 
     [Header("Drag Settings")]
-    [HideInInspector] public System.Action<int, ItemType> OnSlotDragStart;
-    [HideInInspector] public System.Action<ItemType, int> OnSlotDragEnd;
+    [HideInInspector] public Action<int, ItemType> OnSlotDragStart;
+    [HideInInspector] public Action<ItemType, int> OnSlotDragEnd;
 
-    private ItemType?[] slotItems;
+    public event Action<int, ItemType?> SelectedSlotChanged;
+
     private int selectedSlot = -1;
     private int dragSourceSlot = -1;
     private ItemType? draggedItemType;
-    private ItemType? itemToSkipFromAssignment;
+    private bool dragEventsInitialized;
+    private int lastSelectedSlotBroadcast = int.MinValue;
+    private ItemType? lastSelectedItemBroadcast;
 
-    void Start()
+    private int SlotCount => inventory != null ? Mathf.Min(Mathf.Max(1, maxSlots), inventory.HotbarSlotCount) : Mathf.Max(1, maxSlots);
+    public int SelectedSlotIndex => selectedSlot;
+    public ItemType? SelectedItem => this.GetSlotItem(selectedSlot);
+
+    private void Awake()
     {
-        slotItems = new ItemType?[maxSlots];
-        if (inventory != null)
+        this.ResolveReferences();
+    }
+
+    private void OnEnable()
+    {
+        this.ResolveReferences();
+        this.SubscribeInventory();
+        this.SetupDragEvents();
+        this.Refresh();
+    }
+
+    private void OnDisable()
+    {
+        this.UnsubscribeInventory();
+    }
+
+    private void OnValidate()
+    {
+        if (maxSlots < 1)
         {
-            inventory.InventoryChanged += OnInventoryChanged;
+            maxSlots = 1;
+        }
+    }
+
+    private void Update()
+    {
+        this.HandleSwipe();
+    }
+
+    private void ResolveReferences()
+    {
+        if (inventory == null)
+        {
+            inventory = GetComponent<PlayerInventory>();
         }
 
-        inventory.InventoryChanged += Refresh;
-        SetupDragEvents();
-        Refresh();
-    }
-
-    void Update()
-    {
-        HandleSwipe();
-    }
-
-    void OnDisable()
-    {
-        if (inventory != null)
+        if (networkBridge == null)
         {
-            inventory.InventoryChanged -= OnInventoryChanged;
+            networkBridge = GetComponent<NetworkInventoryBridge>();
         }
     }
 
-    void OnInventoryChanged()
+    private void SubscribeInventory()
     {
-        AutoAssignFromInventory();
-        Refresh();
+        if (inventory == null)
+        {
+            return;
+        }
+
+        inventory.InventoryChanged -= this.OnInventoryChanged;
+        inventory.InventoryChanged += this.OnInventoryChanged;
     }
 
-    void AutoAssignFromInventory()
+    private void UnsubscribeInventory()
     {
-        ItemType? skipThisItem = itemToSkipFromAssignment;
-        itemToSkipFromAssignment = null;
-
-        for (int slotIndex = 0; slotIndex < maxSlots; slotIndex++)
+        if (inventory == null)
         {
-            if (slotItems[slotIndex] != null) continue;
+            return;
+        }
 
-            foreach (var entry in inventory.Entries)
+        inventory.InventoryChanged -= this.OnInventoryChanged;
+    }
+
+    private void OnInventoryChanged()
+    {
+        this.Refresh();
+    }
+
+    public int GetHotbarGlobalSlotIndex(int hotbarSlotIndex)
+    {
+        if (inventory == null || hotbarSlotIndex < 0 || hotbarSlotIndex >= SlotCount)
+        {
+            return -1;
+        }
+
+        return inventory.HotbarStartIndex + hotbarSlotIndex;
+    }
+
+    public ItemType? GetSlotItem(int hotbarSlotIndex)
+    {
+        int globalSlotIndex = this.GetHotbarGlobalSlotIndex(hotbarSlotIndex);
+        return globalSlotIndex >= 0 && inventory != null ? inventory.GetSlotItemType(globalSlotIndex) : (ItemType?)null;
+    }
+
+    public int GetSlotAmount(int hotbarSlotIndex)
+    {
+        int globalSlotIndex = this.GetHotbarGlobalSlotIndex(hotbarSlotIndex);
+        return globalSlotIndex >= 0 && inventory != null ? inventory.GetSlotAmount(globalSlotIndex) : 0;
+    }
+
+    public void Refresh()
+    {
+        this.ResolveReferences();
+        this.EnsureSelectedSlotValidity();
+
+        for (int i = 0; i < slotButtons.Count; i++)
+        {
+            Button button = slotButtons[i];
+            if (button != null && button.image != null)
             {
-                if (skipThisItem != null && entry.itemType == skipThisItem.Value) continue;
-
-                bool alreadyInHotbar = false;
-                for (int i = 0; i < maxSlots; i++)
-                {
-                    if (slotItems[i] == entry.itemType)
-                    {
-                        alreadyInHotbar = true;
-                        break;
-                    }
-                }
-
-                if (!alreadyInHotbar)
-                {
-                    slotItems[slotIndex] = entry.itemType;
-                    break;
-                }
+                button.image.color = i == selectedSlot ? selectedColor : normalColor;
             }
-        }
-    }
 
-    void Refresh()
-    {
-        for (int i = 0; i < maxSlots; i++)
-        {
-            // 🔥 DEFAULT VISUAL SLOT
-            slotButtons[i].image.color = (i == selectedSlot) ? selectedColor : normalColor;
+            Image icon = i < slotIcons.Count ? slotIcons[i] : null;
+            TMP_Text countLabel = i < slotCounts.Count ? slotCounts[i] : null;
 
-            if (slotItems[i] == null)
+            if (i >= SlotCount || inventory == null)
             {
-                slotIcons[i].enabled = false;
-                slotCounts[i].text = "";
-                slotCounts[i].gameObject.SetActive(false);
+                this.ClearSlotVisual(icon, countLabel);
                 continue;
             }
 
-            ItemType type = slotItems[i].Value;
-            int amount = inventory.GetAmount(type);
-
-            if (amount <= 0)
+            ItemType? itemType = this.GetSlotItem(i);
+            int amount = this.GetSlotAmount(i);
+            if (itemType == null || amount <= 0)
             {
-                slotItems[i] = null;
-                slotIcons[i].enabled = false;
-                slotCounts[i].text = "";
-                slotCounts[i].gameObject.SetActive(false);
+                this.ClearSlotVisual(icon, countLabel);
                 continue;
             }
 
-            // ICON
-            Sprite icon = iconDatabase.GetIcon(type);
-            slotIcons[i].sprite = icon;
-            slotIcons[i].enabled = true;
+            if (icon != null)
+            {
+                icon.sprite = iconDatabase != null ? iconDatabase.GetIcon(itemType.Value) : null;
+                icon.enabled = icon.sprite != null;
+            }
 
-            // 🔢 COUNT
-            slotCounts[i].text = amount.ToString();
-            slotCounts[i].gameObject.SetActive(true);
+            if (countLabel != null)
+            {
+                countLabel.text = amount.ToString();
+                countLabel.gameObject.SetActive(true);
+            }
         }
+
+        this.BroadcastSelectedStateIfNeeded();
+    }
+
+    private void ClearSlotVisual(Image icon, TMP_Text countLabel)
+    {
+        if (icon != null)
+        {
+            icon.sprite = null;
+            icon.enabled = false;
+        }
+
+        if (countLabel != null)
+        {
+            countLabel.text = string.Empty;
+            countLabel.gameObject.SetActive(false);
+        }
+    }
+
+    private void BroadcastSelectedStateIfNeeded()
+    {
+        ItemType? currentItem = this.SelectedItem;
+        if (lastSelectedSlotBroadcast == selectedSlot && lastSelectedItemBroadcast == currentItem)
+        {
+            return;
+        }
+
+        lastSelectedSlotBroadcast = selectedSlot;
+        lastSelectedItemBroadcast = currentItem;
+        SelectedSlotChanged?.Invoke(selectedSlot, currentItem);
     }
 
     public void SelectSlot(int slotIndex)
     {
-        selectedSlot = slotIndex;
-        Refresh();
-    }
-
-    void UseItem(ItemType itemType)
-    {
-        Debug.Log("Use item: " + itemType);
-
-        // 🔥 MULTIPLAYER SAFE
-        if (networkBridge != null && networkBridge.UseNetworkedInventory)
+        if (slotIndex < 0 || slotIndex >= SlotCount)
         {
-            bool success = networkBridge.TryRequestDrop(itemType, 1);
-
-            if (!success)
-            {
-                Debug.Log("Gagal pakai item (no authority)");
-            }
-
             return;
         }
 
-        // LOCAL
-        inventory.DropItem(itemType, 1);
+        selectedSlot = slotIndex;
+        this.Refresh();
     }
 
-    void HandleSwipe()
+    public void SelectNext()
     {
-        if (Input.touchCount == 0) return;
+        if (SlotCount <= 0)
+        {
+            return;
+        }
+
+        int next = selectedSlot < 0 ? -1 : selectedSlot;
+        for (int attempt = 0; attempt < SlotCount; attempt++)
+        {
+            next = (next + 1 + SlotCount) % SlotCount;
+            if (this.GetSlotItem(next) != null)
+            {
+                this.SelectSlot(next);
+                return;
+            }
+        }
+
+        selectedSlot = -1;
+        this.Refresh();
+    }
+
+    public void SelectPrevious()
+    {
+        if (SlotCount <= 0)
+        {
+            return;
+        }
+
+        int previous = selectedSlot < 0 ? 0 : selectedSlot;
+        for (int attempt = 0; attempt < SlotCount; attempt++)
+        {
+            previous = (previous - 1 + SlotCount) % SlotCount;
+            if (this.GetSlotItem(previous) != null)
+            {
+                this.SelectSlot(previous);
+                return;
+            }
+        }
+
+        selectedSlot = -1;
+        this.Refresh();
+    }
+
+    private void HandleSwipe()
+    {
+        if (Input.touchCount == 0)
+        {
+            return;
+        }
 
         Touch touch = Input.GetTouch(0);
-
-        if (touch.phase == TouchPhase.Ended)
+        if (touch.phase != TouchPhase.Ended)
         {
-            if (touch.deltaPosition.x > swipeThreshold)
-            {
-                SelectNext();
-            }
-            else if (touch.deltaPosition.x < -swipeThreshold)
-            {
-                SelectPrevious();
-            }
+            return;
+        }
+
+        if (touch.deltaPosition.x > swipeThreshold)
+        {
+            this.SelectNext();
+        }
+        else if (touch.deltaPosition.x < -swipeThreshold)
+        {
+            this.SelectPrevious();
         }
     }
 
-    void SelectNext()
+    public void DropSelectedItem()
     {
-        selectedSlot = (selectedSlot + 1) % maxSlots;
-        SelectSlot(selectedSlot);
-    }
-
-    void SelectPrevious()
-    {
-        selectedSlot--;
-
         if (selectedSlot < 0)
-            selectedSlot = maxSlots - 1;
+        {
+            return;
+        }
 
-        SelectSlot(selectedSlot);
+        this.DropFromSlot(selectedSlot);
     }
 
-    public void DropFromSlot(int index)
+    public void DropFromSlot(int hotbarSlotIndex)
     {
-        if (slotItems[index] == null) return;
+        int globalSlotIndex = this.GetHotbarGlobalSlotIndex(hotbarSlotIndex);
+        if (globalSlotIndex < 0 || inventory == null || inventory.IsSlotEmpty(globalSlotIndex))
+        {
+            return;
+        }
 
-        ItemType type = slotItems[index].Value;
-
+        bool dropRequested;
         if (networkBridge != null && networkBridge.UseNetworkedInventory)
         {
-            networkBridge.TryRequestDrop(type, 1);
+            dropRequested = networkBridge.TryRequestDropFromSlot(globalSlotIndex, 1);
         }
         else
         {
-            inventory.DropItem(type, 1);
+            dropRequested = inventory.DropItemFromSlot(globalSlotIndex, 1);
         }
+
+        if (!dropRequested)
+        {
+            return;
+        }
+
+        if (inventory.IsSlotEmpty(globalSlotIndex) && selectedSlot == hotbarSlotIndex)
+        {
+            selectedSlot = this.FindFirstOccupiedSlot();
+        }
+
+        this.Refresh();
     }
 
-    public void SwapSlot(int a, int b)
+    public bool AssignInventorySlotToHotbar(int sourceInventorySlot, int hotbarSlotIndex)
     {
-        var temp = slotItems[a];
-        slotItems[a] = slotItems[b];
-        slotItems[b] = temp;
+        int targetGlobalSlotIndex = this.GetHotbarGlobalSlotIndex(hotbarSlotIndex);
+        if (inventory == null || targetGlobalSlotIndex < 0)
+        {
+            return false;
+        }
 
-        Refresh();
+        bool moved = networkBridge != null && networkBridge.UseNetworkedInventory
+            ? networkBridge.TryRequestMoveSlot(sourceInventorySlot, targetGlobalSlotIndex)
+            : inventory.MoveOrSwapSlot(sourceInventorySlot, targetGlobalSlotIndex);
+
+        if (moved)
+        {
+            selectedSlot = hotbarSlotIndex;
+            this.Refresh();
+        }
+
+        return moved;
     }
 
-    public void AssignToSlot(int slotIndex, ItemType type)
+    public void SwapOrMoveSlot(int sourceHotbarSlot, int targetHotbarSlot)
     {
-        if (slotIndex < 0 || slotIndex >= maxSlots) return;
-        slotItems[slotIndex] = type;
-        Refresh();
+        int sourceGlobal = this.GetHotbarGlobalSlotIndex(sourceHotbarSlot);
+        int targetGlobal = this.GetHotbarGlobalSlotIndex(targetHotbarSlot);
+        if (sourceGlobal < 0 || targetGlobal < 0)
+        {
+            return;
+        }
+
+        bool moved = networkBridge != null && networkBridge.UseNetworkedInventory
+            ? networkBridge.TryRequestMoveSlot(sourceGlobal, targetGlobal)
+            : inventory != null && inventory.MoveOrSwapSlot(sourceGlobal, targetGlobal);
+
+        if (!moved)
+        {
+            return;
+        }
+
+        if (selectedSlot == sourceHotbarSlot)
+        {
+            selectedSlot = targetHotbarSlot;
+        }
+        else if (selectedSlot == targetHotbarSlot)
+        {
+            selectedSlot = sourceHotbarSlot;
+        }
+
+        this.Refresh();
+    }
+
+    public void SwapSlot(int sourceHotbarSlot, int targetHotbarSlot)
+    {
+        this.SwapOrMoveSlot(sourceHotbarSlot, targetHotbarSlot);
+    }
+
+    public bool MoveHotbarSlotToInventory(int hotbarSlotIndex, int inventorySlotIndex)
+    {
+        int sourceGlobal = this.GetHotbarGlobalSlotIndex(hotbarSlotIndex);
+        if (sourceGlobal < 0 || inventory == null || inventorySlotIndex < 0 || inventorySlotIndex >= inventory.InventorySlotCount)
+        {
+            return false;
+        }
+
+        bool moved = networkBridge != null && networkBridge.UseNetworkedInventory
+            ? networkBridge.TryRequestMoveSlot(sourceGlobal, inventorySlotIndex)
+            : inventory.MoveOrSwapSlot(sourceGlobal, inventorySlotIndex);
+
+        if (moved && selectedSlot == hotbarSlotIndex && inventory.IsSlotEmpty(sourceGlobal))
+        {
+            selectedSlot = this.FindFirstOccupiedSlot();
+        }
+
+        if (moved)
+        {
+            this.Refresh();
+        }
+
+        return moved;
+    }
+
+    public void AssignToSlot(int hotbarSlotIndex, ItemType type)
+    {
+        if (inventory == null)
+        {
+            return;
+        }
+
+        int sourceSlotIndex = inventory.FindFirstSlotWithItemType(type);
+        if (sourceSlotIndex < 0)
+        {
+            return;
+        }
+
+        this.AssignInventorySlotToHotbar(sourceSlotIndex, hotbarSlotIndex);
     }
 
     public int GetSlotIndex(Button button)
     {
-        if (button == null) return -1;
+        if (button == null)
+        {
+            return -1;
+        }
+
         for (int i = 0; i < slotButtons.Count; i++)
         {
             if (slotButtons[i] == button)
@@ -246,54 +443,76 @@ public class MobileHotbarUI : MonoBehaviour
                 return i;
             }
         }
+
         return -1;
     }
 
     public int GetFirstEmptySlot()
     {
-        for (int i = 0; i < maxSlots; i++)
+        for (int i = 0; i < SlotCount; i++)
         {
-            if (slotItems[i] == null)
+            if (this.GetSlotItem(i) == null)
             {
                 return i;
             }
         }
+
         return -1;
     }
 
     private void SetupDragEvents()
     {
-        for (int i = 0; i < slotButtons.Count && i < maxSlots; i++)
+        if (dragEventsInitialized)
         {
+            return;
+        }
+
+        for (int i = 0; i < slotButtons.Count; i++)
+        {
+            Button slotButton = slotButtons[i];
+            if (slotButton == null)
+            {
+                continue;
+            }
+
             int slotIndex = i;
-            EventTrigger trigger = slotButtons[i].GetComponent<EventTrigger>();
+            EventTrigger trigger = slotButton.GetComponent<EventTrigger>();
             if (trigger == null)
             {
-                trigger = slotButtons[i].gameObject.AddComponent<EventTrigger>();
+                trigger = slotButton.gameObject.AddComponent<EventTrigger>();
             }
 
             EventTrigger.Entry pointerDown = new EventTrigger.Entry { eventID = EventTriggerType.PointerDown };
-            pointerDown.callback.AddListener((data) => OnHotbarSlotPointerDown(slotIndex));
+            pointerDown.callback.AddListener(_ => this.OnHotbarSlotPointerDown(slotIndex));
             trigger.triggers.Add(pointerDown);
 
             EventTrigger.Entry pointerUp = new EventTrigger.Entry { eventID = EventTriggerType.PointerUp };
-            pointerUp.callback.AddListener((data) => OnHotbarSlotPointerUp(slotIndex));
+            pointerUp.callback.AddListener(_ => this.OnHotbarSlotPointerUp(slotIndex));
             trigger.triggers.Add(pointerUp);
         }
+
+        dragEventsInitialized = true;
     }
 
     private void OnHotbarSlotPointerDown(int slotIndex)
     {
-        if (slotIndex < 0 || slotIndex >= maxSlots || slotItems[slotIndex] == null) return;
+        ItemType? slotItem = this.GetSlotItem(slotIndex);
+        if (slotItem == null)
+        {
+            return;
+        }
 
-        draggedItemType = slotItems[slotIndex];
+        draggedItemType = slotItem;
         dragSourceSlot = slotIndex;
-        OnSlotDragStart?.Invoke(slotIndex, draggedItemType.Value);
+        OnSlotDragStart?.Invoke(slotIndex, slotItem.Value);
     }
 
     private void OnHotbarSlotPointerUp(int slotIndex)
     {
-        if (draggedItemType == null) return;
+        if (draggedItemType == null)
+        {
+            return;
+        }
 
         ItemType itemType = draggedItemType.Value;
         OnSlotDragEnd?.Invoke(itemType, dragSourceSlot);
@@ -301,45 +520,31 @@ public class MobileHotbarUI : MonoBehaviour
         dragSourceSlot = -1;
     }
 
-    public void RemoveItemFromSlot(int slotIndex)
+    private void EnsureSelectedSlotValidity()
     {
-        if (slotIndex < 0 || slotIndex >= maxSlots || slotItems[slotIndex] == null) return;
+        if (selectedSlot >= SlotCount)
+        {
+            selectedSlot = -1;
+        }
 
-        ItemType type = slotItems[slotIndex].Value;
-        slotItems[slotIndex] = null;
-        Refresh();
+        if (selectedSlot >= 0)
+        {
+            return;
+        }
+
+        selectedSlot = this.FindFirstOccupiedSlot();
     }
 
-    public ItemType? GetSlotItem(int slotIndex)
+    private int FindFirstOccupiedSlot()
     {
-        if (slotIndex < 0 || slotIndex >= maxSlots) return null;
-        return slotItems[slotIndex];
-    }
+        for (int i = 0; i < SlotCount; i++)
+        {
+            if (this.GetSlotItem(i) != null)
+            {
+                return i;
+            }
+        }
 
-    public void ClearSlot(int slotIndex)
-    {
-        if (slotIndex < 0 || slotIndex >= maxSlots) return;
-        slotItems[slotIndex] = null;
-        Refresh();
-    }
-
-    public void SetItemToSkipFromAssignment(ItemType itemType)
-    {
-        itemToSkipFromAssignment = itemType;
-    }
-
-    public void SwapOrMoveSlot(int sourceSlot, int targetSlot)
-    {
-        if (sourceSlot < 0 || sourceSlot >= maxSlots) return;
-        if (targetSlot < 0 || targetSlot >= maxSlots) return;
-        if (sourceSlot == targetSlot) return;
-
-        ItemType? sourceItem = slotItems[sourceSlot];
-        ItemType? targetItem = slotItems[targetSlot];
-
-        slotItems[targetSlot] = sourceItem;
-        slotItems[sourceSlot] = targetItem;
-
-        Refresh();
+        return -1;
     }
 }

@@ -1,3 +1,4 @@
+using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -9,12 +10,11 @@ public class NetworkInventoryBridge : NetworkBehaviour
     [Header("References")]
     [SerializeField] private PlayerInventory inventory;
 
-    private readonly NetworkVariable<int> woodAmount =
-        new NetworkVariable<int>(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
-    private readonly NetworkVariable<int> stoneAmount =
-        new NetworkVariable<int>(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
-    private readonly NetworkVariable<int> foodAmount =
-        new NetworkVariable<int>(0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    private readonly NetworkVariable<FixedString512Bytes> inventorySnapshot =
+        new NetworkVariable<FixedString512Bytes>(
+            default,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Server);
 
     public bool UseNetworkedInventory => NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && IsSpawned;
     public bool HasInputAuthority => !UseNetworkedInventory || IsOwner;
@@ -44,9 +44,7 @@ public class NetworkInventoryBridge : NetworkBehaviour
 
         if (!IsServer)
         {
-            woodAmount.OnValueChanged += this.OnInventoryVariableChanged;
-            stoneAmount.OnValueChanged += this.OnInventoryVariableChanged;
-            foodAmount.OnValueChanged += this.OnInventoryVariableChanged;
+            inventorySnapshot.OnValueChanged += this.OnInventoryVariableChanged;
             this.PullInventoryToLocalClient();
         }
     }
@@ -58,25 +56,13 @@ public class NetworkInventoryBridge : NetworkBehaviour
             inventory.InventoryChanged -= this.OnServerInventoryChanged;
         }
 
-        woodAmount.OnValueChanged -= this.OnInventoryVariableChanged;
-        stoneAmount.OnValueChanged -= this.OnInventoryVariableChanged;
-        foodAmount.OnValueChanged -= this.OnInventoryVariableChanged;
+        inventorySnapshot.OnValueChanged -= this.OnInventoryVariableChanged;
         base.OnNetworkDespawn();
     }
 
     public bool TryRequestPickup(PickableItem item)
     {
-        if (item == null)
-        {
-            return false;
-        }
-
-        if (!UseNetworkedInventory)
-        {
-            return false;
-        }
-
-        if (!IsOwner)
+        if (item == null || !UseNetworkedInventory || !IsOwner)
         {
             return false;
         }
@@ -88,13 +74,8 @@ public class NetworkInventoryBridge : NetworkBehaviour
             return true;
         }
 
-        // Fallback path for legacy/non-spawned scene items: resolve by item type + position on server.
-        if (itemNetworkObject == null || !itemNetworkObject.IsSpawned)
-        {
-            this.RequestPickupBySnapshotServerRpc((int)item.itemType, item.transform.position);
-            return true;
-        }
-        return false;
+        this.RequestPickupBySnapshotServerRpc((int)item.itemType, item.transform.position);
+        return true;
     }
 
     public bool TryRequestDrop(ItemType itemType, int amount = 1)
@@ -106,13 +87,63 @@ public class NetworkInventoryBridge : NetworkBehaviour
             return inventory != null && inventory.DropItem(itemType, clampedAmount);
         }
 
-        if (!IsOwner)
+        if (!IsOwner || inventory == null)
         {
             Debug.LogWarning($"Drop request rejected on client because this player is not owner. Item={itemType}");
             return false;
         }
 
-        this.RequestDropServerRpc((int)itemType, clampedAmount);
+        int sourceSlot = inventory.FindFirstSlotWithItemType(itemType);
+        if (sourceSlot < 0)
+        {
+            return false;
+        }
+
+        return this.TryRequestDropFromSlot(sourceSlot, clampedAmount);
+    }
+
+    public bool TryRequestDropFromSlot(int slotIndex, int amount = 1)
+    {
+        int clampedAmount = Mathf.Max(1, amount);
+        if (!UseNetworkedInventory)
+        {
+            return inventory != null && inventory.DropItemFromSlot(slotIndex, clampedAmount);
+        }
+
+        if (!IsOwner || inventory == null)
+        {
+            return false;
+        }
+
+        ItemType? itemType = inventory.GetSlotItemType(slotIndex);
+        if (itemType == null)
+        {
+            return false;
+        }
+
+        this.RequestDropServerRpc(slotIndex, (int)itemType.Value, clampedAmount);
+        return true;
+    }
+
+    public bool TryRequestMoveSlot(int sourceSlotIndex, int targetSlotIndex)
+    {
+        if (!UseNetworkedInventory)
+        {
+            return inventory != null && inventory.MoveOrSwapSlot(sourceSlotIndex, targetSlotIndex);
+        }
+
+        if (!IsOwner || inventory == null)
+        {
+            return false;
+        }
+
+        bool movedLocally = inventory.MoveOrSwapSlot(sourceSlotIndex, targetSlotIndex);
+        if (!movedLocally)
+        {
+            return false;
+        }
+
+        this.RequestMoveSlotServerRpc(sourceSlotIndex, targetSlotIndex);
         return true;
     }
 
@@ -128,9 +159,7 @@ public class NetworkInventoryBridge : NetworkBehaviour
             return;
         }
 
-        woodAmount.Value = inventory.GetAmount(ItemType.Wood);
-        stoneAmount.Value = inventory.GetAmount(ItemType.Stone);
-        foodAmount.Value = inventory.GetAmount(ItemType.Food);
+        inventorySnapshot.Value = new FixedString512Bytes(inventory.BuildSnapshotString());
     }
 
     private void PullInventoryToLocalClient()
@@ -140,10 +169,10 @@ public class NetworkInventoryBridge : NetworkBehaviour
             return;
         }
 
-        inventory.SetInventorySnapshot(woodAmount.Value, stoneAmount.Value, foodAmount.Value);
+        inventory.SetInventorySnapshot(inventorySnapshot.Value.ToString());
     }
 
-    private void OnInventoryVariableChanged(int previousValue, int newValue)
+    private void OnInventoryVariableChanged(FixedString512Bytes previousValue, FixedString512Bytes newValue)
     {
         this.PullInventoryToLocalClient();
     }
@@ -151,12 +180,7 @@ public class NetworkInventoryBridge : NetworkBehaviour
     [ServerRpc(RequireOwnership = false)]
     private void RequestPickupServerRpc(ulong targetNetworkObjectId, ServerRpcParams serverRpcParams = default)
     {
-        if (inventory == null || NetworkManager == null)
-        {
-            return;
-        }
-
-        if (serverRpcParams.Receive.SenderClientId != OwnerClientId)
+        if (inventory == null || NetworkManager == null || serverRpcParams.Receive.SenderClientId != OwnerClientId)
         {
             return;
         }
@@ -193,12 +217,7 @@ public class NetworkInventoryBridge : NetworkBehaviour
     [ServerRpc(RequireOwnership = false)]
     private void RequestPickupBySnapshotServerRpc(int itemTypeValue, Vector3 approximatePosition, ServerRpcParams serverRpcParams = default)
     {
-        if (inventory == null || NetworkManager == null)
-        {
-            return;
-        }
-
-        if (serverRpcParams.Receive.SenderClientId != OwnerClientId)
+        if (inventory == null || NetworkManager == null || serverRpcParams.Receive.SenderClientId != OwnerClientId)
         {
             return;
         }
@@ -225,72 +244,52 @@ public class NetworkInventoryBridge : NetworkBehaviour
     }
 
     [ServerRpc(RequireOwnership = false)]
-    private void RequestDropServerRpc(int itemTypeValue, int amount, ServerRpcParams serverRpcParams = default)
+    private void RequestDropServerRpc(int slotIndex, int expectedItemTypeValue, int amount, ServerRpcParams serverRpcParams = default)
     {
-        if (inventory == null || NetworkManager == null)
+        if (inventory == null || NetworkManager == null || serverRpcParams.Receive.SenderClientId != OwnerClientId)
         {
             return;
         }
 
-        if (serverRpcParams.Receive.SenderClientId != OwnerClientId)
+        ItemType? slotItemType = inventory.GetSlotItemType(slotIndex);
+        if (slotItemType == null)
         {
+            this.SendDropFeedbackClientRpc("Drop gagal: slot kosong.", this.BuildOwnerRpcTarget());
             return;
         }
 
-        if (!System.Enum.IsDefined(typeof(ItemType), itemTypeValue))
+        if (System.Enum.IsDefined(typeof(ItemType), expectedItemTypeValue) && slotItemType.Value != (ItemType)expectedItemTypeValue)
         {
+            this.SendDropFeedbackClientRpc("Drop gagal: slot berubah sebelum server memproses.", this.BuildOwnerRpcTarget());
+            this.PushInventoryToNetworkVariables();
             return;
         }
 
-        ItemType itemType = (ItemType)itemTypeValue;
         int clampedAmount = Mathf.Max(1, amount);
-
-        if (!inventory.RemoveItem(itemType, clampedAmount))
+        if (!inventory.DropItemFromSlot(slotIndex, clampedAmount))
         {
-            this.SendDropFeedbackClientRpc("Drop gagal: item tidak cukup.", this.BuildOwnerRpcTarget());
-            return;
-        }
-
-        bool spawnedDrop = inventory.SpawnDropItemWorld(itemType, clampedAmount, out PickableItem droppedItem);
-        if (!spawnedDrop)
-        {
-            spawnedDrop = this.SpawnDropFromRegisteredPrefabs(itemType, clampedAmount, out droppedItem);
-        }
-
-        if (!spawnedDrop)
-        {
-            this.RestoreInventoryAfterFailedDrop(itemType, clampedAmount);
             this.SendDropFeedbackClientRpc(
-                $"Drop gagal: prefab network untuk {itemType} tidak ditemukan/terdaftar.",
+                $"Drop gagal: prefab network untuk {slotItemType.Value} tidak ditemukan/terdaftar.",
                 this.BuildOwnerRpcTarget());
             this.PushInventoryToNetworkVariables();
             return;
         }
 
-        if (droppedItem != null)
+        this.PushInventoryToNetworkVariables();
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    private void RequestMoveSlotServerRpc(int sourceSlotIndex, int targetSlotIndex, ServerRpcParams serverRpcParams = default)
+    {
+        if (inventory == null || serverRpcParams.Receive.SenderClientId != OwnerClientId)
         {
-            NetworkObject droppedNetworkObject = droppedItem.GetComponent<NetworkObject>();
-            if (droppedNetworkObject != null && !droppedNetworkObject.IsSpawned)
-            {
-                if (this.IsNetworkPrefabRegistered(droppedNetworkObject.PrefabIdHash))
-                {
-                    droppedNetworkObject.Spawn(true);
-                }
-                else
-                {
-                    Debug.LogWarning(
-                        $"Skipped network spawn for dropped item '{droppedItem.name}' " +
-                        $"(hash={droppedNetworkObject.PrefabIdHash}) because prefab is not registered in NetworkManager.");
-                    Destroy(droppedItem.gameObject);
-                    this.RestoreInventoryAfterFailedDrop(itemType, clampedAmount);
-                    this.SendDropFeedbackClientRpc(
-                        $"Drop gagal: NetworkPrefab hash {droppedNetworkObject.PrefabIdHash} belum terdaftar.",
-                        this.BuildOwnerRpcTarget());
-                }
-            }
+            return;
         }
 
-        this.PushInventoryToNetworkVariables();
+        if (inventory.MoveOrSwapSlot(sourceSlotIndex, targetSlotIndex))
+        {
+            this.PushInventoryToNetworkVariables();
+        }
     }
 
     private bool SpawnDropFromRegisteredPrefabs(ItemType itemType, int amount, out PickableItem droppedItem)
@@ -425,28 +424,6 @@ public class NetworkInventoryBridge : NetworkBehaviour
         }
 
         return true;
-    }
-
-    private void RestoreInventoryAfterFailedDrop(ItemType itemType, int amount)
-    {
-        if (inventory == null)
-        {
-            return;
-        }
-
-        GameObject rollbackObject = new GameObject($"DropRollback-{itemType}");
-        try
-        {
-            PickableItem rollbackItem = rollbackObject.AddComponent<PickableItem>();
-            rollbackItem.itemType = itemType;
-            rollbackItem.itemName = itemType.ToString();
-            rollbackItem.amount = Mathf.Max(1, amount);
-            inventory.AddItem(rollbackItem);
-        }
-        finally
-        {
-            Destroy(rollbackObject);
-        }
     }
 
     private bool IsNetworkPrefabRegistered(uint prefabHash)

@@ -200,6 +200,7 @@ GameObject:
   - component: {fileID: 4785656247688361288}
   - component: {fileID: 5881460033544063950}
   - component: {fileID: 1186351504326561986}
+  - component: {fileID: 2494538136560816848}
   m_Layer: 0
   m_Name: NetworkPlayer
   m_TagString: Untagged
@@ -616,9 +617,45 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9c0a8a9862640714b85b20768e629529, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  itemEntries: []
+  itemEntries:
+  - itemType: 0
+    amount: 0
+  - itemType: 0
+    amount: 0
+  - itemType: 0
+    amount: 0
+  - itemType: 0
+    amount: 0
+  - itemType: 0
+    amount: 0
+  - itemType: 0
+    amount: 0
+  - itemType: 0
+    amount: 0
+  - itemType: 0
+    amount: 0
+  - itemType: 0
+    amount: 0
+  - itemType: 0
+    amount: 0
+  - itemType: 0
+    amount: 0
+  - itemType: 0
+    amount: 0
+  - itemType: 0
+    amount: 0
+  - itemType: 0
+    amount: 0
+  - itemType: 0
+    amount: 0
+  - itemType: 0
+    amount: 0
+  - itemType: 0
+    amount: 0
   dropBindings: []
-  maxTotalItems: 5
+  inventorySlotCount: 12
+  hotbarSlotCount: 5
+  maxStackPerSlot: 16
   dropOrigin: {fileID: 0}
   dropForwardDistance: 1.2
   dropUpOffset: 0.2
@@ -664,6 +701,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   inventory: {fileID: 5077874351100244328}
   networkInventoryBridge: {fileID: 1609948806003333438}
+  hotbarUI: {fileID: 4659772919811998255}
   targetCanvas: {fileID: 0}
   panelRoot: {fileID: 0}
   titleText: {fileID: 0}
@@ -717,6 +755,7 @@ MonoBehaviour:
   selectedColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
   swipeThreshold: 50
   iconDatabase: {fileID: 11400000, guid: 2690faf9946f70d41b1c280c162af876, type: 2}
+  slotCounts: []
 --- !u!114 &1472526472057511422
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -729,7 +768,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  GlobalObjectIdHash: 1431040281
+  GlobalObjectIdHash: 3390129187
   InScenePlacedSourceGlobalObjectIdHash: 1431040281
   AlwaysReplicateAsRoot: 0
   SynchronizeTransform: 1
@@ -968,6 +1007,28 @@ MonoBehaviour:
   attackButtonAnchorOffset: {x: -260, y: 120}
   keyboardAttackKey: 102
   allowKeyboardAttack: 1
+--- !u!114 &2494538136560816848
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4472293491055181419}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4d45488cfc00bee47801612c3e31706e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  hotbarUI: {fileID: 0}
+  inventory: {fileID: 0}
+  axeCombat: {fileID: 0}
+  animator: {fileID: 0}
+  handBone: {fileID: 0}
+  heldItemBindings: []
+  defaultLocalPosition: {x: 0.04, y: 0.02, z: 0.02}
+  defaultLocalEulerAngles: {x: 0, y: 90, z: 90}
+  defaultLocalScale: {x: 1, y: 1, z: 1}
+  hideAxeWhileHoldingInventoryItem: 1
 --- !u!1 &7516938604735521551
 GameObject:
   m_ObjectHideFlags: 0

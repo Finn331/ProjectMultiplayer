@@ -10,6 +10,7 @@ public class PlayerInventoryUI : MonoBehaviour
     [Header("References")]
     [SerializeField] private PlayerInventory inventory;
     [SerializeField] private NetworkInventoryBridge networkInventoryBridge;
+    [SerializeField] private MobileHotbarUI hotbarUI;
     [SerializeField] private Canvas targetCanvas;
     [SerializeField] private RectTransform panelRoot;
     [SerializeField] private TextMeshProUGUI titleText;
@@ -70,6 +71,11 @@ public class PlayerInventoryUI : MonoBehaviour
         if (networkInventoryBridge == null)
         {
             networkInventoryBridge = GetComponent<NetworkInventoryBridge>();
+        }
+
+        if (hotbarUI == null)
+        {
+            hotbarUI = GetComponent<MobileHotbarUI>();
         }
 
         if (!this.HasLocalInventoryAuthority())
@@ -207,30 +213,41 @@ public class PlayerInventoryUI : MonoBehaviour
 
     public void SelectNextItem()
     {
-        if (inventory == null || inventory.Entries.Count == 0)
+        int visibleCount = this.GetVisibleInventorySlotCount();
+        if (inventory == null || visibleCount == 0)
         {
             selectedIndex = 0;
             this.Refresh();
             return;
         }
 
-        selectedIndex = (selectedIndex + 1) % inventory.Entries.Count;
+        selectedIndex = (selectedIndex + 1) % visibleCount;
         this.Refresh();
     }
 
     public void DropSelectedItem()
     {
-        if (inventory == null || inventory.Entries.Count == 0)
+        if (hotbarUI != null && hotbarUI.SelectedItem != null)
+        {
+            hotbarUI.DropSelectedItem();
+            return;
+        }
+
+        int slotIndex = this.GetVisibleInventorySlotIndexAt(selectedIndex);
+        if (inventory == null || slotIndex < 0)
+        {
+            return;
+        }
+        
+        ItemType? selectedType = inventory.GetSlotItemType(slotIndex);
+        if (selectedType == null)
         {
             return;
         }
 
-        int clampedIndex = Mathf.Clamp(selectedIndex, 0, inventory.Entries.Count - 1);
-        PlayerInventory.InventoryEntry selected = inventory.Entries[clampedIndex];
-
         if (networkInventoryBridge != null && networkInventoryBridge.UseNetworkedInventory)
         {
-            bool requested = networkInventoryBridge.TryRequestDrop(selected.itemType, 1);
+            bool requested = networkInventoryBridge.TryRequestDropFromSlot(slotIndex, 1);
             if (!requested && PickupUIManager.instance != null)
             {
                 PickupUIManager.instance.ShowInfo("Drop gagal: tidak punya otoritas.");
@@ -238,7 +255,7 @@ public class PlayerInventoryUI : MonoBehaviour
             return;
         }
 
-        bool dropped = inventory.DropItem(selected.itemType, 1);
+        bool dropped = inventory.DropItemFromSlot(slotIndex, 1);
         if (!dropped && PickupUIManager.instance != null)
         {
             PickupUIManager.instance.ShowInfo("Drop gagal.");
@@ -575,12 +592,12 @@ public class PlayerInventoryUI : MonoBehaviour
 
         if (titleText != null)
         {
-            titleText.text = "Inventory (" + inventory.CurrentTotalItems + "/" + inventory.MaxTotalItems + ")";
+            titleText.text = "Inventory (" + inventory.UsedSlotCount + "/" + inventory.TotalSlotCount + ")";
         }
 
         builder.Clear();
 
-        int entryCount = inventory.Entries.Count;
+        int entryCount = this.GetVisibleInventorySlotCount();
         if (entryCount == 0)
         {
             selectedIndex = 0;
@@ -591,11 +608,23 @@ public class PlayerInventoryUI : MonoBehaviour
             selectedIndex = Mathf.Clamp(selectedIndex, 0, entryCount - 1);
             for (int i = 0; i < entryCount; i++)
             {
-                PlayerInventory.InventoryEntry entry = inventory.Entries[i];
+                int slotIndex = this.GetVisibleInventorySlotIndexAt(i);
+                if (slotIndex < 0)
+                {
+                    continue;
+                }
+
+                ItemType? itemType = inventory.GetSlotItemType(slotIndex);
+                int amount = inventory.GetSlotAmount(slotIndex);
+                if (itemType == null || amount <= 0)
+                {
+                    continue;
+                }
+
                 builder.Append(i == selectedIndex ? "> " : "  ")
-                    .Append(entry.itemType)
+                    .Append(itemType.Value)
                     .Append(" x")
-                    .Append(entry.amount);
+                    .Append(amount);
 
                 if (i < entryCount - 1)
                 {
@@ -605,6 +634,51 @@ public class PlayerInventoryUI : MonoBehaviour
         }
 
         itemsText.text = builder.ToString();
+    }
+
+    private int GetVisibleInventorySlotCount()
+    {
+        if (inventory == null)
+        {
+            return 0;
+        }
+
+        int count = 0;
+        for (int i = 0; i < inventory.InventorySlotCount; i++)
+        {
+            if (!inventory.IsSlotEmpty(i))
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    private int GetVisibleInventorySlotIndexAt(int visibleIndex)
+    {
+        if (inventory == null || visibleIndex < 0)
+        {
+            return -1;
+        }
+
+        int currentVisibleIndex = 0;
+        for (int i = 0; i < inventory.InventorySlotCount; i++)
+        {
+            if (inventory.IsSlotEmpty(i))
+            {
+                continue;
+            }
+
+            if (currentVisibleIndex == visibleIndex)
+            {
+                return i;
+            }
+
+            currentVisibleIndex++;
+        }
+
+        return -1;
     }
 
     private bool HasLocalInventoryAuthority()

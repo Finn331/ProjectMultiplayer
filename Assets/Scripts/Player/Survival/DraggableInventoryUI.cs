@@ -1,8 +1,8 @@
 using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.UI;
-using UnityEngine.EventSystems;
 using TMPro;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
 
 public class DraggableInventoryUI : MonoBehaviour
 {
@@ -10,11 +10,12 @@ public class DraggableInventoryUI : MonoBehaviour
     [SerializeField] private PlayerInventory inventory;
     [SerializeField] private ItemIconDatabase iconDatabase;
     [SerializeField] private MobileHotbarUI hotbarUI;
+    [SerializeField] private NetworkInventoryBridge networkBridge;
 
     [Header("Settings")]
     [SerializeField] private int maxSlots = 12;
 
-    private List<InventorySlotData> slotDataList = new List<InventorySlotData>();
+    private readonly List<InventorySlotData> slotDataList = new List<InventorySlotData>();
     private bool initialized;
     private GameObject draggedIcon;
     private Image draggedImage;
@@ -41,6 +42,10 @@ public class DraggableInventoryUI : MonoBehaviour
         {
             hotbarUI = GetComponent<MobileHotbarUI>();
         }
+        if (networkBridge == null)
+        {
+            networkBridge = GetComponent<NetworkInventoryBridge>();
+        }
     }
 
     private void Start()
@@ -60,6 +65,12 @@ public class DraggableInventoryUI : MonoBehaviour
         {
             inventory.InventoryChanged -= RefreshUI;
         }
+
+        if (hotbarUI != null)
+        {
+            hotbarUI.OnSlotDragStart -= OnHotbarDragStart;
+            hotbarUI.OnSlotDragEnd -= OnHotbarDragEnd;
+        }
     }
 
     private void Update()
@@ -72,23 +83,34 @@ public class DraggableInventoryUI : MonoBehaviour
 
     private void SetupSlots()
     {
-        if (initialized) return;
-        if (iconDatabase == null) return;
+        if (initialized || iconDatabase == null)
+        {
+            return;
+        }
 
         slotDataList.Clear();
 
         Transform itemsTransform = FindItemsTransform();
-        if (itemsTransform == null) return;
+        if (itemsTransform == null)
+        {
+            return;
+        }
 
-        for (int i = 0; i < maxSlots; i++)
+        int slotLimit = inventory != null ? Mathf.Min(maxSlots, inventory.InventorySlotCount) : maxSlots;
+        for (int i = 0; i < slotLimit; i++)
         {
             string slotName = $"Slot_{i}";
             Transform slotTransform = FindDeepChild(itemsTransform, slotName);
-            if (slotTransform == null) continue;
+            if (slotTransform == null)
+            {
+                continue;
+            }
 
-            InventorySlotData slotData = new InventorySlotData();
-            slotData.slotObject = slotTransform.gameObject;
-            slotData.slotIndex = i;
+            InventorySlotData slotData = new InventorySlotData
+            {
+                slotObject = slotTransform.gameObject,
+                slotIndex = i
+            };
 
             Transform iconTransform = FindDeepChild(slotTransform, "ItemIcon");
             if (iconTransform != null)
@@ -101,7 +123,7 @@ public class DraggableInventoryUI : MonoBehaviour
                     slotData.amountText = countTransform.GetComponent<TextMeshProUGUI>();
                     if (slotData.amountText != null)
                     {
-                        slotData.amountText.text = "";
+                        slotData.amountText.text = string.Empty;
                         slotData.amountText.gameObject.SetActive(false);
                     }
                 }
@@ -121,67 +143,97 @@ public class DraggableInventoryUI : MonoBehaviour
 
     private void AddDragEvents(InventorySlotData slotData)
     {
-        if (slotData.slotObject == null) return;
+        if (slotData.slotObject == null)
+        {
+            return;
+        }
 
-        EventTrigger trigger = slotData.slotObject.AddComponent<EventTrigger>();
+        EventTrigger trigger = slotData.slotObject.GetComponent<EventTrigger>();
+        if (trigger == null)
+        {
+            trigger = slotData.slotObject.AddComponent<EventTrigger>();
+        }
 
         EventTrigger.Entry pointerDown = new EventTrigger.Entry { eventID = EventTriggerType.PointerDown };
-        pointerDown.callback.AddListener((data) => OnSlotPointerDown(slotData));
+        pointerDown.callback.AddListener(_ => OnSlotPointerDown(slotData));
         trigger.triggers.Add(pointerDown);
 
         EventTrigger.Entry pointerUp = new EventTrigger.Entry { eventID = EventTriggerType.PointerUp };
-        pointerUp.callback.AddListener((data) => OnSlotPointerUp(slotData));
+        pointerUp.callback.AddListener(_ => OnSlotPointerUp(slotData));
         trigger.triggers.Add(pointerUp);
     }
 
     private void OnSlotPointerDown(InventorySlotData slotData)
     {
-        if (slotData.itemType == null || slotData.itemIcon == null) return;
+        if (slotData.itemType == null || slotData.itemIcon == null)
+        {
+            return;
+        }
 
         draggedItemType = slotData.itemType;
         draggedFromSlotIndex = slotData.slotIndex;
         isDraggingFromHotbar = false;
-        CreateDraggedIcon(slotData);
+        CreateDraggedIcon(slotData.itemIcon.sprite);
     }
 
     private void OnSlotPointerUp(InventorySlotData slotData)
     {
-        if (draggedIcon == null || draggedItemType == null || isDraggingFromHotbar) return;
+        if (draggedIcon == null || draggedItemType == null || isDraggingFromHotbar)
+        {
+            return;
+        }
 
-        TryMoveToHotbar();
+        bool handled = TryMoveToHotbar(draggedFromSlotIndex);
+        if (!handled)
+        {
+            int targetInventorySlot = GetInventorySlotFromMouse();
+            if (targetInventorySlot >= 0 && inventory != null)
+            {
+                handled = networkBridge != null && networkBridge.UseNetworkedInventory
+                    ? networkBridge.TryRequestMoveSlot(draggedFromSlotIndex, targetInventorySlot)
+                    : inventory.MoveOrSwapSlot(draggedFromSlotIndex, targetInventorySlot);
+            }
+        }
 
         DestroyDraggedIcon();
         draggedItemType = null;
         draggedFromSlotIndex = -1;
+        if (handled)
+        {
+            RefreshUI();
+        }
     }
 
     private int GetInventorySlotFromMouse()
     {
-        Vector2 mousePos = Input.mousePosition;
-        PointerEventData pointerData = new PointerEventData(EventSystem.current);
-        pointerData.position = mousePos;
+        PointerEventData pointerData = new PointerEventData(EventSystem.current)
+        {
+            position = Input.mousePosition
+        };
 
-        var results = new System.Collections.Generic.List<RaycastResult>();
+        List<RaycastResult> results = new List<RaycastResult>();
         EventSystem.current.RaycastAll(pointerData, results);
 
-        foreach (var result in results)
+        foreach (RaycastResult result in results)
         {
-            if (result.gameObject.name.StartsWith("Slot_"))
+            if (!result.gameObject.name.StartsWith("Slot_"))
             {
-                Transform parent = result.gameObject.transform.parent;
-                while (parent != null)
+                continue;
+            }
+
+            Transform parent = result.gameObject.transform.parent;
+            while (parent != null)
+            {
+                if (parent.name == "Items")
                 {
-                    if (parent.name == "Items")
+                    Transform grandParent = parent.parent;
+                    if (grandParent != null && grandParent.name.Contains("Inventory"))
                     {
-                        Transform grandParent = parent.parent;
-                        if (grandParent != null && grandParent.name.Contains("Inventory"))
-                        {
-                            return GetSlotIndexFromName(result.gameObject.name);
-                        }
-                        break;
+                        return GetSlotIndexFromName(result.gameObject.name);
                     }
-                    parent = parent.parent;
+                    break;
                 }
+                parent = parent.parent;
             }
         }
 
@@ -190,85 +242,59 @@ public class DraggableInventoryUI : MonoBehaviour
 
     private int GetSlotIndexFromName(string name)
     {
-        if (name.StartsWith("Slot_"))
+        if (!name.StartsWith("Slot_"))
         {
-            string indexStr = name.Substring(5);
-            if (int.TryParse(indexStr, out int index))
-            {
-                return index;
-            }
+            return -1;
         }
-        return -1;
+
+        return int.TryParse(name.Substring(5), out int index) ? index : -1;
     }
 
-    private void PerformInventorySwap(int sourceSlot, int targetSlot)
+    private bool TryMoveToHotbar(int sourceInventorySlot)
     {
-        if (sourceSlot < 0 || targetSlot < 0) return;
-        if (sourceSlot == targetSlot) return;
-        if (sourceSlot >= inventory.Entries.Count) return;
-
-        var sourceEntry = inventory.Entries[sourceSlot];
-        if (sourceEntry == null) return;
-
-        ItemType sourceType = sourceEntry.itemType;
-        int sourceAmount = sourceEntry.amount;
-
-        bool targetHasItem = targetSlot < inventory.Entries.Count && inventory.Entries[targetSlot] != null;
-
-        if (targetHasItem)
+        if (draggedItemType == null || hotbarUI == null)
         {
-            var targetEntry = inventory.Entries[targetSlot];
-            ItemType targetType = targetEntry.itemType;
-            int targetAmount = targetEntry.amount;
-
-            inventory.RemoveItem(sourceType, sourceAmount);
-            inventory.RemoveItem(targetType, targetAmount);
-            inventory.AddItem(targetType, sourceAmount);
-            inventory.AddItem(sourceType, targetAmount);
-        }
-        else
-        {
-            inventory.RemoveItem(sourceType, sourceAmount);
-            inventory.AddItem(sourceType, sourceAmount);
+            return false;
         }
 
-        RefreshUI();
-    }
+        PointerEventData pointerData = new PointerEventData(EventSystem.current)
+        {
+            position = Input.mousePosition
+        };
 
-    private bool TryMoveToHotbar()
-    {
-        if (draggedItemType == null || hotbarUI == null) return false;
-
-        Vector2 mousePos = Input.mousePosition;
-        PointerEventData pointerData = new PointerEventData(EventSystem.current);
-        pointerData.position = mousePos;
-
-        var results = new System.Collections.Generic.List<RaycastResult>();
+        List<RaycastResult> results = new List<RaycastResult>();
         EventSystem.current.RaycastAll(pointerData, results);
 
-        foreach (var result in results)
+        foreach (RaycastResult result in results)
         {
             Button button = result.gameObject.GetComponent<Button>();
-            if (button != null)
+            if (button == null)
             {
-                int slotIndex = hotbarUI.GetSlotIndex(button);
-                if (slotIndex >= 0)
-                {
-                    hotbarUI.AssignToSlot(slotIndex, draggedItemType.Value);
-                    return true;
-                }
+                continue;
+            }
+
+            int hotbarSlotIndex = hotbarUI.GetSlotIndex(button);
+            if (hotbarSlotIndex >= 0)
+            {
+                return hotbarUI.AssignInventorySlotToHotbar(sourceInventorySlot, hotbarSlotIndex);
             }
         }
 
         return false;
     }
 
-    private void CreateDraggedIcon(InventorySlotData slotData)
+    private void CreateDraggedIcon(Sprite sprite)
     {
-        if (draggedIcon != null) DestroyDraggedIcon();
+        if (draggedIcon != null)
+        {
+            DestroyDraggedIcon();
+        }
 
         Canvas canvas = FindObjectOfType<Canvas>();
-        if (canvas == null) return;
+        if (canvas == null || sprite == null)
+        {
+            return;
+        }
 
         draggedIcon = new GameObject("Dragged Icon", typeof(RectTransform), typeof(Image));
         draggedIcon.transform.SetParent(canvas.transform, false);
@@ -279,7 +305,7 @@ public class DraggableInventoryUI : MonoBehaviour
         rect.pivot = new Vector2(0.5f, 0.5f);
 
         draggedImage = draggedIcon.GetComponent<Image>();
-        draggedImage.sprite = slotData.itemIcon.sprite;
+        draggedImage.sprite = sprite;
         draggedImage.preserveAspect = true;
     }
 
@@ -295,30 +321,31 @@ public class DraggableInventoryUI : MonoBehaviour
 
     private void RefreshUI()
     {
-        if (!initialized || slotDataList.Count == 0) return;
-        if (inventory == null) return;
-
-        if (inventory.Entries == null) return;
+        if (!initialized || slotDataList.Count == 0 || inventory == null)
+        {
+            return;
+        }
 
         for (int i = 0; i < slotDataList.Count; i++)
         {
             InventorySlotData slotData = slotDataList[i];
-            if (slotData.itemIcon == null) continue;
-
-            if (i < inventory.Entries.Count)
+            if (slotData.itemIcon == null)
             {
-                var entry = inventory.Entries[i];
-                if (entry == null) continue;
+                continue;
+            }
 
-                Sprite icon = iconDatabase != null ? iconDatabase.GetIcon(entry.itemType) : null;
-
+            ItemType? itemType = inventory.GetSlotItemType(i);
+            int amount = inventory.GetSlotAmount(i);
+            if (itemType != null && amount > 0)
+            {
+                Sprite icon = iconDatabase != null ? iconDatabase.GetIcon(itemType.Value) : null;
                 slotData.itemIcon.sprite = icon;
                 slotData.itemIcon.enabled = icon != null;
-                slotData.itemType = entry.itemType;
+                slotData.itemType = itemType;
 
                 if (slotData.amountText != null)
                 {
-                    slotData.amountText.text = entry.amount.ToString();
+                    slotData.amountText.text = amount.ToString();
                     slotData.amountText.gameObject.SetActive(true);
                 }
             }
@@ -330,7 +357,7 @@ public class DraggableInventoryUI : MonoBehaviour
 
                 if (slotData.amountText != null)
                 {
-                    slotData.amountText.text = "";
+                    slotData.amountText.text = string.Empty;
                     slotData.amountText.gameObject.SetActive(false);
                 }
             }
@@ -339,8 +366,13 @@ public class DraggableInventoryUI : MonoBehaviour
 
     private void SetupHotbarDrag()
     {
-        if (hotbarUI == null) return;
+        if (hotbarUI == null)
+        {
+            return;
+        }
 
+        hotbarUI.OnSlotDragStart -= OnHotbarDragStart;
+        hotbarUI.OnSlotDragEnd -= OnHotbarDragEnd;
         hotbarUI.OnSlotDragStart += OnHotbarDragStart;
         hotbarUI.OnSlotDragEnd += OnHotbarDragEnd;
     }
@@ -348,131 +380,91 @@ public class DraggableInventoryUI : MonoBehaviour
     private void OnHotbarDragStart(int slotIndex, ItemType itemType)
     {
         draggedItemType = itemType;
+        draggedFromSlotIndex = slotIndex;
         isDraggingFromHotbar = true;
-        CreateHotbarDragIcon(itemType);
+        CreateDraggedIcon(iconDatabase != null ? iconDatabase.GetIcon(itemType) : null);
     }
 
-    private void OnHotbarDragEnd(ItemType itemType, int sourceSlot)
+    private void OnHotbarDragEnd(ItemType itemType, int sourceHotbarSlot)
     {
-        if (draggedIcon == null || draggedItemType == null) return;
-
-        bool droppedOnHotbar = TrySwapHotbarSlots(sourceSlot);
-
-        if (!droppedOnHotbar)
+        if (draggedIcon == null || draggedItemType == null || hotbarUI == null)
         {
-            bool droppedOnInventory = TryMoveToInventory(itemType);
-            if (droppedOnInventory && hotbarUI != null)
+            return;
+        }
+
+        bool handled = TrySwapHotbarSlots(sourceHotbarSlot);
+        if (!handled)
+        {
+            int inventoryTarget = GetInventorySlotFromMouse();
+            if (inventoryTarget >= 0)
             {
-                hotbarUI.SetItemToSkipFromAssignment(itemType);
-                hotbarUI.ClearSlot(sourceSlot);
+                handled = hotbarUI.MoveHotbarSlotToInventory(sourceHotbarSlot, inventoryTarget);
             }
         }
 
         DestroyDraggedIcon();
         draggedItemType = null;
         isDraggingFromHotbar = false;
+        draggedFromSlotIndex = -1;
+        if (handled)
+        {
+            RefreshUI();
+        }
     }
 
-    private bool TrySwapHotbarSlots(int sourceSlot)
+    private bool TrySwapHotbarSlots(int sourceHotbarSlot)
     {
-        if (hotbarUI == null) return false;
+        if (hotbarUI == null)
+        {
+            return false;
+        }
 
-        Vector2 mousePos = Input.mousePosition;
-        PointerEventData pointerData = new PointerEventData(EventSystem.current);
-        pointerData.position = mousePos;
+        PointerEventData pointerData = new PointerEventData(EventSystem.current)
+        {
+            position = Input.mousePosition
+        };
 
-        var results = new System.Collections.Generic.List<RaycastResult>();
+        List<RaycastResult> results = new List<RaycastResult>();
         EventSystem.current.RaycastAll(pointerData, results);
 
-        foreach (var result in results)
+        foreach (RaycastResult result in results)
         {
             Button button = result.gameObject.GetComponent<Button>();
-            if (button != null)
+            if (button == null)
             {
-                int targetSlot = hotbarUI.GetSlotIndex(button);
-                if (targetSlot >= 0 && targetSlot != sourceSlot)
-                {
-                    hotbarUI.SwapOrMoveSlot(sourceSlot, targetSlot);
-                    return true;
-                }
+                continue;
+            }
+
+            int targetHotbarSlot = hotbarUI.GetSlotIndex(button);
+            if (targetHotbarSlot >= 0 && targetHotbarSlot != sourceHotbarSlot)
+            {
+                hotbarUI.SwapOrMoveSlot(sourceHotbarSlot, targetHotbarSlot);
+                return true;
             }
         }
 
         return false;
-    }
-
-    private bool TryMoveToInventory(ItemType itemType)
-    {
-        if (inventory == null) return false;
-
-        Vector2 mousePos = Input.mousePosition;
-        PointerEventData pointerData = new PointerEventData(EventSystem.current);
-        pointerData.position = mousePos;
-
-        var results = new System.Collections.Generic.List<RaycastResult>();
-        EventSystem.current.RaycastAll(pointerData, results);
-
-        foreach (var result in results)
-        {
-            if (result.gameObject.name.StartsWith("Slot_"))
-            {
-                Transform parent = result.gameObject.transform.parent;
-                while (parent != null)
-                {
-                    if (parent.name == "Items")
-                    {
-                        Transform grandParent = parent.parent;
-                        if (grandParent != null && grandParent.name.Contains("Inventory"))
-                        {
-                            int currentAmount = inventory.GetAmount(itemType);
-                            if (currentAmount <= 0)
-                            {
-                                inventory.AddItem(itemType, 1);
-                            }
-                            return true;
-                        }
-                        break;
-                    }
-                    parent = parent.parent;
-                }
-            }
-        }
-        return false;
-    }
-
-    private void CreateHotbarDragIcon(ItemType itemType)
-    {
-        if (draggedIcon != null) DestroyDraggedIcon();
-
-        Canvas canvas = FindObjectOfType<Canvas>();
-        if (canvas == null) return;
-
-        Sprite icon = iconDatabase != null ? iconDatabase.GetIcon(itemType) : null;
-        if (icon == null) return;
-
-        draggedIcon = new GameObject("Hotbar Dragged Icon", typeof(RectTransform), typeof(Image));
-        draggedIcon.transform.SetParent(canvas.transform, false);
-        draggedIcon.transform.SetAsLastSibling();
-
-        RectTransform rect = draggedIcon.GetComponent<RectTransform>();
-        rect.sizeDelta = new Vector2(50f, 50f);
-        rect.pivot = new Vector2(0.5f, 0.5f);
-
-        draggedImage = draggedIcon.GetComponent<Image>();
-        draggedImage.sprite = icon;
-        draggedImage.preserveAspect = true;
     }
 
     private Transform FindDeepChild(Transform parent, string childName)
     {
-        if (parent == null || string.IsNullOrEmpty(childName)) return null;
+        if (parent == null || string.IsNullOrEmpty(childName))
+        {
+            return null;
+        }
 
         foreach (Transform child in parent)
         {
-            if (child.name == childName) return child;
+            if (child.name == childName)
+            {
+                return child;
+            }
 
             Transform found = FindDeepChild(child, childName);
-            if (found != null) return found;
+            if (found != null)
+            {
+                return found;
+            }
         }
 
         return null;
@@ -483,23 +475,26 @@ public class DraggableInventoryUI : MonoBehaviour
         Canvas[] canvases = FindObjectsOfType<Canvas>(true);
         foreach (Canvas canvas in canvases)
         {
-            Transform invUI = FindDeepChild(canvas.transform, "Inventory UI");
-            if (invUI != null)
+            Transform inventoryUI = FindDeepChild(canvas.transform, "Inventory UI");
+            if (inventoryUI != null)
             {
-                Transform items = FindDeepChild(invUI, "Items");
-                if (items != null) return items;
+                Transform items = FindDeepChild(inventoryUI, "Items");
+                if (items != null)
+                {
+                    return items;
+                }
             }
         }
 
         Transform[] allTransforms = FindObjectsOfType<Transform>(true);
-        foreach (Transform t in allTransforms)
+        foreach (Transform current in allTransforms)
         {
-            if (t.name == "Items")
+            if (current.name == "Items")
             {
-                Transform parent = t.parent;
+                Transform parent = current.parent;
                 if (parent != null && parent.name.Contains("Inventory"))
                 {
-                    return t;
+                    return current;
                 }
             }
         }

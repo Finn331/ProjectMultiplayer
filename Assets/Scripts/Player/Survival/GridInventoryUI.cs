@@ -151,16 +151,30 @@ public class GridInventoryUI : MonoBehaviour
         {
             if (slotItemImages[i] == null) continue;
 
-            if (i < inventory.Entries.Count)
+            if (inventory != null && i < inventory.InventorySlotCount)
             {
-                var entry = inventory.Entries[i];
-                Sprite icon = iconDatabase != null ? iconDatabase.GetIcon(entry.itemType) : null;
-                slotItemImages[i].sprite = icon;
-                slotItemImages[i].enabled = icon != null;
-
-                if (slotAmountTexts[i] != null)
+                ItemType? itemType = inventory.GetSlotItemType(i);
+                int amount = inventory.GetSlotAmount(i);
+                if (itemType != null && amount > 0)
                 {
-                    slotAmountTexts[i].text = entry.amount > 1 ? entry.amount.ToString() : "";
+                    Sprite icon = iconDatabase != null ? iconDatabase.GetIcon(itemType.Value) : null;
+                    slotItemImages[i].sprite = icon;
+                    slotItemImages[i].enabled = icon != null;
+
+                    if (slotAmountTexts[i] != null)
+                    {
+                        slotAmountTexts[i].text = amount.ToString();
+                    }
+                }
+                else
+                {
+                    slotItemImages[i].sprite = null;
+                    slotItemImages[i].enabled = false;
+
+                    if (slotAmountTexts[i] != null)
+                    {
+                        slotAmountTexts[i].text = "";
+                    }
                 }
             }
             else
