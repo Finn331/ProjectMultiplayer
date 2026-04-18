@@ -15,7 +15,7 @@ public class PlayerAxeCombat : NetworkBehaviour
 
     [Header("Axe Equip")]
     [SerializeField] private bool requireAxeEquipped = true;
-    [SerializeField] private bool startAxeEquipped = true;
+    [SerializeField] private bool startAxeEquipped = false;
     [SerializeField] private bool autoDetectAxeRootByName = true;
     [SerializeField] private string axeNameContains = "axe";
     [SerializeField] private string axeTipNameContains = "tip";
@@ -113,9 +113,9 @@ public class PlayerAxeCombat : NetworkBehaviour
             playerCamera = GetComponentInChildren<Camera>(true);
         }
 
-        axeEquipped = startAxeEquipped;
         this.TryAutoDetectAxeReferences();
         this.EnsureAxeVisualSetup();
+        this.SetAxeEquipped(startAxeEquipped);
         this.CacheAnimationHashes();
     }
 
@@ -171,6 +171,10 @@ public class PlayerAxeCombat : NetworkBehaviour
     public void SetAxeEquipped(bool equipped)
     {
         axeEquipped = equipped;
+        if (axeRoot != null && axeRoot.gameObject.activeSelf != equipped)
+        {
+            axeRoot.gameObject.SetActive(equipped);
+        }
         this.UpdateAttackButtonVisibility();
     }
 

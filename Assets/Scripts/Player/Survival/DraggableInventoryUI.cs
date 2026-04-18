@@ -178,7 +178,7 @@ public class DraggableInventoryUI : MonoBehaviour
 
     private void OnSlotPointerUp(InventorySlotData slotData)
     {
-        if (draggedIcon == null || draggedItemType == null || isDraggingFromHotbar)
+        if (draggedItemType == null || isDraggingFromHotbar || draggedFromSlotIndex < 0)
         {
             return;
         }
@@ -206,6 +206,11 @@ public class DraggableInventoryUI : MonoBehaviour
 
     private int GetInventorySlotFromMouse()
     {
+        if (EventSystem.current == null)
+        {
+            return -1;
+        }
+
         PointerEventData pointerData = new PointerEventData(EventSystem.current)
         {
             position = Input.mousePosition
@@ -216,12 +221,23 @@ public class DraggableInventoryUI : MonoBehaviour
 
         foreach (RaycastResult result in results)
         {
-            if (!result.gameObject.name.StartsWith("Slot_"))
+            if (result.gameObject == null)
             {
                 continue;
             }
 
-            Transform parent = result.gameObject.transform.parent;
+            Transform current = result.gameObject.transform;
+            while (current != null && !current.name.StartsWith("Slot_"))
+            {
+                current = current.parent;
+            }
+
+            if (current == null)
+            {
+                continue;
+            }
+
+            Transform parent = current.parent;
             while (parent != null)
             {
                 if (parent.name == "Items")
@@ -229,7 +245,7 @@ public class DraggableInventoryUI : MonoBehaviour
                     Transform grandParent = parent.parent;
                     if (grandParent != null && grandParent.name.Contains("Inventory"))
                     {
-                        return GetSlotIndexFromName(result.gameObject.name);
+                        return GetSlotIndexFromName(current.name);
                     }
                     break;
                 }
@@ -257,6 +273,11 @@ public class DraggableInventoryUI : MonoBehaviour
             return false;
         }
 
+        if (EventSystem.current == null)
+        {
+            return false;
+        }
+
         PointerEventData pointerData = new PointerEventData(EventSystem.current)
         {
             position = Input.mousePosition
@@ -267,7 +288,12 @@ public class DraggableInventoryUI : MonoBehaviour
 
         foreach (RaycastResult result in results)
         {
-            Button button = result.gameObject.GetComponent<Button>();
+            if (result.gameObject == null)
+            {
+                continue;
+            }
+
+            Button button = result.gameObject.GetComponentInParent<Button>();
             if (button == null)
             {
                 continue;
@@ -290,8 +316,14 @@ public class DraggableInventoryUI : MonoBehaviour
             DestroyDraggedIcon();
         }
 
+        if (sprite == null)
+        {
+            // Tetap izinkan drag logic berjalan untuk item tanpa icon.
+            return;
+        }
+
         Canvas canvas = FindObjectOfType<Canvas>();
-        if (canvas == null || sprite == null)
+        if (canvas == null)
         {
             return;
         }
@@ -387,7 +419,7 @@ public class DraggableInventoryUI : MonoBehaviour
 
     private void OnHotbarDragEnd(ItemType itemType, int sourceHotbarSlot)
     {
-        if (draggedIcon == null || draggedItemType == null || hotbarUI == null)
+        if (draggedItemType == null || hotbarUI == null || sourceHotbarSlot < 0)
         {
             return;
         }
@@ -419,6 +451,11 @@ public class DraggableInventoryUI : MonoBehaviour
             return false;
         }
 
+        if (EventSystem.current == null)
+        {
+            return false;
+        }
+
         PointerEventData pointerData = new PointerEventData(EventSystem.current)
         {
             position = Input.mousePosition
@@ -429,7 +466,12 @@ public class DraggableInventoryUI : MonoBehaviour
 
         foreach (RaycastResult result in results)
         {
-            Button button = result.gameObject.GetComponent<Button>();
+            if (result.gameObject == null)
+            {
+                continue;
+            }
+
+            Button button = result.gameObject.GetComponentInParent<Button>();
             if (button == null)
             {
                 continue;

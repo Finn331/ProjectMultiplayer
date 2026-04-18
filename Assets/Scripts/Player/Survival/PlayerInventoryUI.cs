@@ -102,6 +102,11 @@ public class PlayerInventoryUI : MonoBehaviour
             inventory.InventoryChanged += this.Refresh;
         }
 
+        if (Application.isPlaying && hotbarUI != null)
+        {
+            hotbarUI.SelectedSlotChanged += this.OnHotbarSelectionChanged;
+        }
+
         this.Refresh();
     }
 
@@ -144,6 +149,11 @@ public class PlayerInventoryUI : MonoBehaviour
         if (inventory != null)
         {
             inventory.InventoryChanged -= this.Refresh;
+        }
+
+        if (hotbarUI != null)
+        {
+            hotbarUI.SelectedSlotChanged -= this.OnHotbarSelectionChanged;
         }
 
         if (Application.isPlaying)
@@ -225,40 +235,28 @@ public class PlayerInventoryUI : MonoBehaviour
         this.Refresh();
     }
 
+    public int GetSelectedInventorySlotIndex()
+    {
+        return this.GetVisibleInventorySlotIndexAt(selectedIndex);
+    }
+
+    public ItemType? GetSelectedInventoryItemType()
+    {
+        int slotIndex = this.GetSelectedInventorySlotIndex();
+        return slotIndex >= 0 && inventory != null ? inventory.GetSlotItemType(slotIndex) : (ItemType?)null;
+    }
+
     public void DropSelectedItem()
     {
-        if (hotbarUI != null && hotbarUI.SelectedItem != null)
+        if (this.CanDropSelectedHotbarItem())
         {
             hotbarUI.DropSelectedItem();
             return;
         }
 
-        int slotIndex = this.GetVisibleInventorySlotIndexAt(selectedIndex);
-        if (inventory == null || slotIndex < 0)
+        if (PickupUIManager.instance != null)
         {
-            return;
-        }
-        
-        ItemType? selectedType = inventory.GetSlotItemType(slotIndex);
-        if (selectedType == null)
-        {
-            return;
-        }
-
-        if (networkInventoryBridge != null && networkInventoryBridge.UseNetworkedInventory)
-        {
-            bool requested = networkInventoryBridge.TryRequestDropFromSlot(slotIndex, 1);
-            if (!requested && PickupUIManager.instance != null)
-            {
-                PickupUIManager.instance.ShowInfo("Drop gagal: tidak punya otoritas.");
-            }
-            return;
-        }
-
-        bool dropped = inventory.DropItemFromSlot(slotIndex, 1);
-        if (!dropped && PickupUIManager.instance != null)
-        {
-            PickupUIManager.instance.ShowInfo("Drop gagal.");
+            PickupUIManager.instance.ShowInfo("Drag item ke hotbar bawah lalu pilih dulu untuk drop.");
         }
     }
 
@@ -634,6 +632,33 @@ public class PlayerInventoryUI : MonoBehaviour
         }
 
         itemsText.text = builder.ToString();
+        this.RefreshDropButtonState();
+    }
+
+    private void OnHotbarSelectionChanged(int slotIndex, ItemType? itemType)
+    {
+        this.Refresh();
+    }
+
+    private bool CanDropSelectedHotbarItem()
+    {
+        return hotbarUI != null && hotbarUI.SelectedSlotIndex >= 0 && hotbarUI.SelectedItem != null;
+    }
+
+    private void RefreshDropButtonState()
+    {
+        if (dropItemButton == null)
+        {
+            return;
+        }
+
+        bool canDrop = this.CanDropSelectedHotbarItem();
+        dropItemButton.interactable = canDrop;
+
+        if (dropItemButtonText != null)
+        {
+            dropItemButtonText.text = canDrop ? "Drop 1" : "Pilih Hotbar";
+        }
     }
 
     private int GetVisibleInventorySlotCount()

@@ -199,7 +199,6 @@ GameObject:
   - component: {fileID: 4417228228232811220}
   - component: {fileID: 4785656247688361288}
   - component: {fileID: 5881460033544063950}
-  - component: {fileID: 1186351504326561986}
   - component: {fileID: 2494538136560816848}
   m_Layer: 0
   m_Name: NetworkPlayer
@@ -768,7 +767,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  GlobalObjectIdHash: 3390129187
+  GlobalObjectIdHash: 1431040281
   InScenePlacedSourceGlobalObjectIdHash: 1431040281
   AlwaysReplicateAsRoot: 0
   SynchronizeTransform: 1
@@ -885,77 +884,7 @@ MonoBehaviour:
   axeTip: {fileID: 0}
   attackButton: {fileID: 0}
   requireAxeEquipped: 1
-  startAxeEquipped: 1
-  autoDetectAxeRootByName: 1
-  axeNameContains: axe
-  axeTipNameContains: tip
-  autoSpawnFallbackAxeIfMissing: 1
-  rightHandBone: {fileID: 0}
-  fallbackAxePrefab: {fileID: 0}
-  fallbackAxeResourcesPath: Prefabs/axe
-  fallbackAxeLocalPosition: {x: 0.0165, y: 0.1624, z: 0.0275}
-  fallbackAxeLocalEuler: {x: 84.63104, y: 270.00067, z: 90.00067}
-  fallbackAxeLocalScale: {x: 1, y: 1, z: 1}
-  attackCooldownSeconds: 0.6
-  hitDelaySeconds: 0.18
-  hitDistance: 1.8
-  hitRadius: 0.2
-  hittableLayers:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  debugDrawHitRay: 0
-  enableTreeMeleeAssist: 1
-  fallbackCameraHitDistance: 2.4
-  treeMeleeAssistRadius: 1.9
-  treeMeleeAssistForwardDot: -0.2
-  logHitDebug: 0
-  serverTreeResolveRadius: 3.5
-  serverHitValidationDistance: 8
-  clientTreeSyncResolveRadius: 3.5
-  logServerTreeHitDebug: 0
-  treeDamagePerHit: 1
-  playerDamagePerHit: 10
-  heavySwingStateName: Standing Melee Attack Downward
-  heavySwingTriggerName: HeavyWeaponSwing
-  swingCrossFadeSeconds: 0.08
-  forceLocomotionExitFromSwing: 1
-  swingExitNormalizedTime: 0.85
-  swingExitBlendSeconds: 0.1
-  locomotionIdleStateName: Idle
-  locomotionWalkStateName: Walk
-  locomotionRunStateName: Run
-  locomotionFallStateName: Fall
-  speedParamName: Speed
-  isRunningParamName: IsRunning
-  isGroundedParamName: IsGrounded
-  walkSpeedThreshold: 0.1
-  autoBindAttackButton: 1
-  autoCreateAttackButton: 1
-  attackButtonNameContains: attack
-  attackButtonLabel: ATTACK
-  attackButtonSize: {x: 150, y: 90}
-  attackButtonAnchorOffset: {x: -260, y: 120}
-  keyboardAttackKey: 102
-  allowKeyboardAttack: 1
---- !u!114 &1186351504326561986
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4472293491055181419}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e3d4f0db5747d074c82539a333af1331, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  animator: {fileID: 0}
-  playerCamera: {fileID: 0}
-  axeRoot: {fileID: 0}
-  axeTip: {fileID: 0}
-  attackButton: {fileID: 0}
-  requireAxeEquipped: 1
-  startAxeEquipped: 1
+  startAxeEquipped: 0
   autoDetectAxeRootByName: 1
   axeNameContains: axe
   axeTipNameContains: tip
@@ -1028,7 +957,7 @@ MonoBehaviour:
   defaultLocalPosition: {x: 0.04, y: 0.02, z: 0.02}
   defaultLocalEulerAngles: {x: 0, y: 90, z: 90}
   defaultLocalScale: {x: 1, y: 1, z: 1}
-  hideAxeWhileHoldingInventoryItem: 1
+  equipAxeOnlyWhenSelectedInHotbar: 1
 --- !u!1 &7516938604735521551
 GameObject:
   m_ObjectHideFlags: 0

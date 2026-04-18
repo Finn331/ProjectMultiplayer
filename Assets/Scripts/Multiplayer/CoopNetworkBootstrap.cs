@@ -39,6 +39,7 @@ public class CoopNetworkBootstrap : MonoBehaviour
     [SerializeField] private GameObject playerPrefab;
     [SerializeField] private List<GameObject> additionalNetworkPrefabs = new List<GameObject>();
     [SerializeField] private bool spawnScenePickablesOnServerStart = true;
+    [SerializeField] private bool spawnSceneStorageChestsOnServerStart = true;
     [SerializeField] private bool disableScenePlayerBeforeStart = true;
     [SerializeField] private GameObject scenePlayerObject;
 
@@ -457,12 +458,20 @@ public class CoopNetworkBootstrap : MonoBehaviour
 
     private void OnServerStarted()
     {
-        if (!spawnScenePickablesOnServerStart || networkManager == null || !networkManager.IsServer)
+        if (networkManager == null || !networkManager.IsServer)
         {
             return;
         }
 
-        this.SpawnScenePickablesForNetwork();
+        if (spawnScenePickablesOnServerStart)
+        {
+            this.SpawnScenePickablesForNetwork();
+        }
+
+        if (spawnSceneStorageChestsOnServerStart)
+        {
+            this.SpawnSceneStorageChestsForNetwork();
+        }
     }
 
     private void SpawnScenePickablesForNetwork()
@@ -482,7 +491,8 @@ public class CoopNetworkBootstrap : MonoBehaviour
                 continue;
             }
 
-            if (!this.IsPrefabAlreadyRegistered(pickable.gameObject))
+            bool isSceneObject = networkObject.IsSceneObject == true;
+            if (!isSceneObject && !this.IsPrefabAlreadyRegistered(pickable.gameObject))
             {
                 continue;
             }
@@ -494,6 +504,40 @@ public class CoopNetworkBootstrap : MonoBehaviour
             catch (System.Exception exception)
             {
                 Debug.LogWarning($"Failed to spawn scene pickable '{pickable.name}': {exception.Message}");
+            }
+        }
+    }
+
+    private void SpawnSceneStorageChestsForNetwork()
+    {
+        StorageChest[] chests = FindObjectsOfType<StorageChest>(true);
+        for (int i = 0; i < chests.Length; i++)
+        {
+            StorageChest chest = chests[i];
+            if (chest == null || chest.gameObject == null || !chest.gameObject.activeInHierarchy)
+            {
+                continue;
+            }
+
+            NetworkObject networkObject = chest.GetComponent<NetworkObject>();
+            if (networkObject == null || networkObject.IsSpawned)
+            {
+                continue;
+            }
+
+            bool isSceneObject = networkObject.IsSceneObject == true;
+            if (!isSceneObject && !this.IsPrefabAlreadyRegistered(chest.gameObject))
+            {
+                continue;
+            }
+
+            try
+            {
+                networkObject.Spawn(true);
+            }
+            catch (System.Exception exception)
+            {
+                Debug.LogWarning($"Failed to spawn scene chest '{chest.name}': {exception.Message}");
             }
         }
     }

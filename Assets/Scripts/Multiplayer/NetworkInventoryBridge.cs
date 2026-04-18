@@ -137,8 +137,12 @@ public class NetworkInventoryBridge : NetworkBehaviour
             return false;
         }
 
-        bool movedLocally = inventory.MoveOrSwapSlot(sourceSlotIndex, targetSlotIndex);
-        if (!movedLocally)
+        if (sourceSlotIndex == targetSlotIndex)
+        {
+            return false;
+        }
+
+        if (inventory.GetSlotItemType(sourceSlotIndex) == null)
         {
             return false;
         }
@@ -193,6 +197,13 @@ public class NetworkInventoryBridge : NetworkBehaviour
         PickableItem item = itemNetworkObject.GetComponent<PickableItem>();
         if (item == null)
         {
+            return;
+        }
+
+        float ownerDistanceSqr = (item.transform.position - transform.position).sqrMagnitude;
+        if (ownerDistanceSqr > PickupOwnerDistanceMax * PickupOwnerDistanceMax)
+        {
+            this.SendDropFeedbackClientRpc("Pickup gagal: item terlalu jauh.", this.BuildOwnerRpcTarget());
             return;
         }
 
@@ -286,10 +297,14 @@ public class NetworkInventoryBridge : NetworkBehaviour
             return;
         }
 
-        if (inventory.MoveOrSwapSlot(sourceSlotIndex, targetSlotIndex))
+        if (!inventory.MoveOrSwapSlot(sourceSlotIndex, targetSlotIndex))
         {
+            this.SendDropFeedbackClientRpc("Pindah slot gagal di server.", this.BuildOwnerRpcTarget());
             this.PushInventoryToNetworkVariables();
+            return;
         }
+
+        this.PushInventoryToNetworkVariables();
     }
 
     private bool SpawnDropFromRegisteredPrefabs(ItemType itemType, int amount, out PickableItem droppedItem)

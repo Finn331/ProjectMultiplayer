@@ -163,6 +163,40 @@ public class PlayerInventory : MonoBehaviour
         return true;
     }
 
+    public int AddItemToSlot(ItemType itemType, int amount, int slotIndex)
+    {
+        this.EnsureSlotSetup();
+        if (!this.IsValidSlot(slotIndex))
+        {
+            return 0;
+        }
+
+        InventoryEntry entry = itemEntries[slotIndex];
+        if (entry == null)
+        {
+            entry = new InventoryEntry();
+            itemEntries[slotIndex] = entry;
+        }
+
+        if (!entry.IsEmpty && entry.itemType != itemType)
+        {
+            return 0;
+        }
+
+        int currentAmount = entry.IsEmpty ? 0 : entry.amount;
+        int acceptedAmount = Mathf.Clamp(amount, 0, MaxStackPerSlot - currentAmount);
+        if (acceptedAmount <= 0)
+        {
+            return 0;
+        }
+
+        entry.itemType = itemType;
+        entry.amount = currentAmount + acceptedAmount;
+        this.SyncInspectorEntries();
+        InventoryChanged?.Invoke();
+        return acceptedAmount;
+    }
+
     public bool MoveOrSwapSlot(int sourceSlotIndex, int targetSlotIndex)
     {
         if (!this.IsValidSlot(sourceSlotIndex) || !this.IsValidSlot(targetSlotIndex) || sourceSlotIndex == targetSlotIndex)
@@ -357,6 +391,48 @@ public class PlayerInventory : MonoBehaviour
     {
         this.EnsureSlotSetup();
         return this.IsValidSlot(slotIndex) && slotIndex >= HotbarStartIndex;
+    }
+
+    public int FindPreferredInventorySlot(ItemType itemType, int preferredSlotIndex = -1, bool includeHotbar = false)
+    {
+        this.EnsureSlotSetup();
+
+        int startIndex = 0;
+        int endIndex = includeHotbar ? TotalSlotCount : InventorySlotCount;
+
+        if (preferredSlotIndex >= startIndex && preferredSlotIndex < endIndex)
+        {
+            InventoryEntry preferredEntry = itemEntries[preferredSlotIndex];
+            if (preferredEntry == null || preferredEntry.IsEmpty)
+            {
+                return preferredSlotIndex;
+            }
+
+            if (preferredEntry.itemType == itemType && preferredEntry.amount < MaxStackPerSlot)
+            {
+                return preferredSlotIndex;
+            }
+        }
+
+        for (int i = startIndex; i < endIndex; i++)
+        {
+            InventoryEntry entry = itemEntries[i];
+            if (entry != null && !entry.IsEmpty && entry.itemType == itemType && entry.amount < MaxStackPerSlot)
+            {
+                return i;
+            }
+        }
+
+        for (int i = startIndex; i < endIndex; i++)
+        {
+            InventoryEntry entry = itemEntries[i];
+            if (entry == null || entry.IsEmpty)
+            {
+                return i;
+            }
+        }
+
+        return -1;
     }
 
     public int FindFirstSlotWithItemType(ItemType itemType)

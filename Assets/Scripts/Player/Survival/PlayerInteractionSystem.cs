@@ -167,6 +167,32 @@ public class PlayerInteractionSystem : MonoBehaviour
         }
 
         PickableItem item = currentTarget.GetComponent<PickableItem>();
+        if (item != null)
+        {
+            this.TryPickupItem(item);
+            return;
+        }
+
+        StorageChest chest = currentTarget.GetComponent<StorageChest>();
+        if (chest != null)
+        {
+            if (chest.TryInteract(this) && pickButton != null)
+            {
+                pickButton.SetActive(false);
+            }
+
+            return;
+        }
+
+        currentTarget.Interact();
+        if (pickButton != null)
+        {
+            pickButton.SetActive(false);
+        }
+    }
+
+    private void TryPickupItem(PickableItem item)
+    {
         if (item == null)
         {
             return;
@@ -179,6 +205,7 @@ public class PlayerInteractionSystem : MonoBehaviour
             {
                 pickButton.SetActive(false);
             }
+
             return;
         }
 
@@ -195,7 +222,7 @@ public class PlayerInteractionSystem : MonoBehaviour
 
         if (addedAmount >= item.amount)
         {
-            Destroy(currentTarget.gameObject);
+            Destroy(item.gameObject);
         }
         else
         {

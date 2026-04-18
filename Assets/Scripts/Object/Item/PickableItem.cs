@@ -4,7 +4,8 @@ public enum ItemType
 {
     Wood,
     Stone,
-    Food
+    Food,
+    Axe
 }
 
 public class PickableItem : MonoBehaviour

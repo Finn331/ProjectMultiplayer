@@ -27,19 +27,17 @@ public class HotbarHeldItemPresenter : NetworkBehaviour
     [SerializeField] private Vector3 defaultLocalPosition = new Vector3(0.04f, 0.02f, 0.02f);
     [SerializeField] private Vector3 defaultLocalEulerAngles = new Vector3(0f, 90f, 90f);
     [SerializeField] private Vector3 defaultLocalScale = Vector3.one;
-    [SerializeField] private bool hideAxeWhileHoldingInventoryItem = true;
+    [SerializeField] private bool equipAxeOnlyWhenSelectedInHotbar = true;
 
     private readonly NetworkVariable<int> selectedHeldItemValue =
         new NetworkVariable<int>(-1, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
 
     private GameObject currentHeldVisualInstance;
     private int currentAppliedValue = int.MinValue;
-    private bool defaultAxeEquippedState = true;
 
     private void Awake()
     {
         ResolveReferences();
-        defaultAxeEquippedState = axeCombat == null || axeCombat.IsAxeEquipped();
     }
 
     private void OnEnable()
@@ -173,17 +171,23 @@ public class HotbarHeldItemPresenter : NetworkBehaviour
     private void ApplyHeldItemSelection(ItemType? selectedItem)
     {
         int appliedValue = selectedItem.HasValue ? (int)selectedItem.Value : -1;
-        if (currentAppliedValue == appliedValue && currentHeldVisualInstance != null)
+        bool wantsAxeEquipped = this.ShouldEquipAxeForSelection(selectedItem);
+        if (currentAppliedValue == appliedValue && !wantsAxeEquipped && currentHeldVisualInstance != null)
         {
-            UpdateAxeVisibility(selectedItem.HasValue);
+            UpdateAxeVisibility(selectedItem);
             return;
         }
 
         currentAppliedValue = appliedValue;
         DestroyHeldVisual();
-        UpdateAxeVisibility(selectedItem.HasValue);
+        UpdateAxeVisibility(selectedItem);
 
         if (!selectedItem.HasValue)
+        {
+            return;
+        }
+
+        if (wantsAxeEquipped)
         {
             return;
         }
@@ -205,14 +209,34 @@ public class HotbarHeldItemPresenter : NetworkBehaviour
         currentHeldVisualInstance = spawnedVisual;
     }
 
-    private void UpdateAxeVisibility(bool isHoldingInventoryItem)
+    private bool ShouldEquipAxeForSelection(ItemType? selectedItem)
     {
-        if (axeCombat == null || !hideAxeWhileHoldingInventoryItem)
+        if (axeCombat == null)
+        {
+            return false;
+        }
+
+        if (!selectedItem.HasValue)
+        {
+            return false;
+        }
+
+        if (!equipAxeOnlyWhenSelectedInHotbar)
+        {
+            return false;
+        }
+
+        return selectedItem.Value == ItemType.Axe;
+    }
+
+    private void UpdateAxeVisibility(ItemType? selectedItem)
+    {
+        if (axeCombat == null)
         {
             return;
         }
 
-        axeCombat.SetAxeEquipped(!isHoldingInventoryItem && defaultAxeEquippedState);
+        axeCombat.SetAxeEquipped(this.ShouldEquipAxeForSelection(selectedItem));
     }
 
     private bool TryResolveHeldVisualPrefab(ItemType itemType, out PickableItem prefab)
