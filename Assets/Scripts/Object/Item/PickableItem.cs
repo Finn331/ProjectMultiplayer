@@ -5,7 +5,10 @@ public enum ItemType
     Wood,
     Stone,
     Food,
-    Axe
+    Axe,
+    HealthConsumable,
+    HungerConsumable,
+    ThirstConsumable
 }
 
 public class PickableItem : MonoBehaviour

@@ -14,6 +14,14 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   icons:
   - itemType: 0
-    icon: {fileID: 21300000, guid: 7ff192ce1ee339f4abf12fa50c843480, type: 3}
+    icon: {fileID: 21300000, guid: 69fe0f62f1ef7da44939477c5a636ebd, type: 3}
   - itemType: 1
-    icon: {fileID: 21300000, guid: f40cad8c6e30d064fbbfa4f9f35c6c20, type: 3}
+    icon: {fileID: 21300000, guid: 8617d6942d1beff4085dee490b7a5180, type: 3}
+  - itemType: 3
+    icon: {fileID: 21300000, guid: cd32c035bb7a30f4ab25f518bbe51ed1, type: 3}
+  - itemType: 4
+    icon: {fileID: 21300000, guid: f8e4ba97cb1cb9742a005e5f36f0fc04, type: 3}
+  - itemType: 5
+    icon: {fileID: 21300000, guid: 237dd87e52e17db428ff555980f9dbde, type: 3}
+  - itemType: 6
+    icon: {fileID: 21300000, guid: a660a53a1fec49b40852cc66385a7b5b, type: 3}

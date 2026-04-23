@@ -14,10 +14,36 @@ public class ItemIconDatabase : ScriptableObject
 
     public Sprite GetIcon(ItemType type)
     {
-        foreach (var item in icons)
+        Sprite resolvedIcon = this.FindIcon(type);
+        if (resolvedIcon != null)
         {
-            if (item.itemType == type)
+            return resolvedIcon;
+        }
+
+        if (type == ItemType.HealthConsumable ||
+            type == ItemType.HungerConsumable ||
+            type == ItemType.ThirstConsumable)
+        {
+            return this.FindIcon(ItemType.Food);
+        }
+
+        return null;
+    }
+
+    private Sprite FindIcon(ItemType type)
+    {
+        if (icons == null)
+        {
+            return null;
+        }
+
+        for (int i = 0; i < icons.Length; i++)
+        {
+            ItemIcon item = icons[i];
+            if (item != null && item.itemType == type)
+            {
                 return item.icon;
+            }
         }
 
         return null;

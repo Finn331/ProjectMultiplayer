@@ -9,6 +9,7 @@ public class NetworkInventoryBridge : NetworkBehaviour
 
     [Header("References")]
     [SerializeField] private PlayerInventory inventory;
+    [SerializeField] private PlayerSurvivalSystem survivalSystem;
 
     private readonly NetworkVariable<FixedString512Bytes> inventorySnapshot =
         new NetworkVariable<FixedString512Bytes>(
@@ -24,6 +25,11 @@ public class NetworkInventoryBridge : NetworkBehaviour
         if (inventory == null)
         {
             inventory = GetComponent<PlayerInventory>();
+        }
+
+        if (survivalSystem == null)
+        {
+            survivalSystem = GetComponent<PlayerSurvivalSystem>();
         }
     }
 
@@ -148,6 +154,28 @@ public class NetworkInventoryBridge : NetworkBehaviour
         }
 
         this.RequestMoveSlotServerRpc(sourceSlotIndex, targetSlotIndex);
+        return true;
+    }
+
+    public bool TryRequestConsumeFromSlot(int slotIndex)
+    {
+        if (!UseNetworkedInventory)
+        {
+            return this.TryConsumeLocalFromSlot(slotIndex);
+        }
+
+        if (!IsOwner || inventory == null)
+        {
+            return false;
+        }
+
+        ItemType? slotItemType = inventory.GetSlotItemType(slotIndex);
+        if (slotItemType == null || !ConsumableItemCatalog.TryGetEffect(slotItemType.Value, out _))
+        {
+            return false;
+        }
+
+        this.RequestConsumeFromSlotServerRpc(slotIndex, (int)slotItemType.Value);
         return true;
     }
 
@@ -307,6 +335,63 @@ public class NetworkInventoryBridge : NetworkBehaviour
         this.PushInventoryToNetworkVariables();
     }
 
+    [ServerRpc(RequireOwnership = false)]
+    private void RequestConsumeFromSlotServerRpc(int slotIndex, int expectedItemTypeValue, ServerRpcParams serverRpcParams = default)
+    {
+        if (inventory == null || serverRpcParams.Receive.SenderClientId != OwnerClientId)
+        {
+            return;
+        }
+
+        if (survivalSystem == null)
+        {
+            survivalSystem = GetComponent<PlayerSurvivalSystem>();
+        }
+
+        if (survivalSystem == null)
+        {
+            this.SendDropFeedbackClientRpc("Consume gagal: komponen survival tidak ditemukan.", this.BuildOwnerRpcTarget());
+            return;
+        }
+
+        ItemType? slotItemType = inventory.GetSlotItemType(slotIndex);
+        if (slotItemType == null)
+        {
+            this.SendDropFeedbackClientRpc("Consume gagal: slot kosong.", this.BuildOwnerRpcTarget());
+            return;
+        }
+
+        if (System.Enum.IsDefined(typeof(ItemType), expectedItemTypeValue) && slotItemType.Value != (ItemType)expectedItemTypeValue)
+        {
+            this.SendDropFeedbackClientRpc("Consume gagal: slot berubah sebelum server memproses.", this.BuildOwnerRpcTarget());
+            this.PushInventoryToNetworkVariables();
+            return;
+        }
+
+        if (!ConsumableItemCatalog.TryGetEffect(slotItemType.Value, out _))
+        {
+            this.SendDropFeedbackClientRpc("Consume gagal: item ini tidak bisa dimakan/diminum.", this.BuildOwnerRpcTarget());
+            return;
+        }
+
+        if (!inventory.RemoveItemFromSlot(slotIndex, 1, out ItemType removedItemType))
+        {
+            this.SendDropFeedbackClientRpc("Consume gagal: item tidak tersedia.", this.BuildOwnerRpcTarget());
+            this.PushInventoryToNetworkVariables();
+            return;
+        }
+
+        if (!ConsumableItemCatalog.TryApply(survivalSystem, removedItemType))
+        {
+            inventory.AddItemToSlot(removedItemType, 1, slotIndex);
+            this.SendDropFeedbackClientRpc("Consume gagal: efek item tidak valid.", this.BuildOwnerRpcTarget());
+            this.PushInventoryToNetworkVariables();
+            return;
+        }
+
+        this.PushInventoryToNetworkVariables();
+    }
+
     private bool SpawnDropFromRegisteredPrefabs(ItemType itemType, int amount, out PickableItem droppedItem)
     {
         droppedItem = null;
@@ -436,6 +521,43 @@ public class NetworkInventoryBridge : NetworkBehaviour
         else
         {
             item.amount -= acceptedAmount;
+        }
+
+        return true;
+    }
+
+    private bool TryConsumeLocalFromSlot(int slotIndex)
+    {
+        if (inventory == null)
+        {
+            return false;
+        }
+
+        if (survivalSystem == null)
+        {
+            survivalSystem = GetComponent<PlayerSurvivalSystem>();
+        }
+
+        if (survivalSystem == null)
+        {
+            return false;
+        }
+
+        ItemType? slotItemType = inventory.GetSlotItemType(slotIndex);
+        if (slotItemType == null || !ConsumableItemCatalog.TryGetEffect(slotItemType.Value, out _))
+        {
+            return false;
+        }
+
+        if (!inventory.RemoveItemFromSlot(slotIndex, 1, out ItemType removedItemType))
+        {
+            return false;
+        }
+
+        if (!ConsumableItemCatalog.TryApply(survivalSystem, removedItemType))
+        {
+            inventory.AddItemToSlot(removedItemType, 1, slotIndex);
+            return false;
         }
 
         return true;
