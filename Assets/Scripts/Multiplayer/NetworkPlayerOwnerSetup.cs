@@ -8,6 +8,7 @@ public class NetworkPlayerOwnerSetup : NetworkBehaviour
     [SerializeField] private PlayerInteractionSystem interactionSystem;
     [SerializeField] private PlayerInventoryUI inventoryUI;
     [SerializeField] private PlayerAxeCombat axeCombat;
+    [SerializeField] private PlayerClassSystem playerClassSystem;
     [SerializeField] private LookArea lookArea;
     [SerializeField] private HeadLookRigAutoSetup headLookRigSetup;
 
@@ -40,6 +41,16 @@ public class NetworkPlayerOwnerSetup : NetworkBehaviour
         if (axeCombat == null)
         {
             axeCombat = gameObject.AddComponent<PlayerAxeCombat>();
+        }
+
+        if (playerClassSystem == null)
+        {
+            playerClassSystem = GetComponent<PlayerClassSystem>();
+        }
+
+        if (playerClassSystem == null)
+        {
+            playerClassSystem = gameObject.AddComponent<PlayerClassSystem>();
         }
 
         if (headLookRigSetup == null)

@@ -1,12 +1,23 @@
+using System;
 using System.Collections.Generic;
+using System.Text;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 public class CoopNetworkBootstrap : MonoBehaviour
 {
     private const string DefaultPlayerPrefabPath = "Assets/Assets/Prefabs/NetworkPlayer.prefab";
+
+    [Serializable]
+    private struct RoomJoinPayload
+    {
+        public string roomCode;
+        public string password;
+        public string playerName;
+    }
 
     public enum AutoStartMode
     {
@@ -33,6 +44,17 @@ public class CoopNetworkBootstrap : MonoBehaviour
     [SerializeField] private int maxPayloadSize = 6 * 1024;
     [SerializeField] private int heartbeatTimeoutMs = 1500;
 
+    [Header("Room Settings")]
+    [SerializeField] private string activeRoomName = "New Room";
+    [SerializeField] private string activeRoomCode = "ROOM";
+    [SerializeField] private string activeRoomPassword = string.Empty;
+    [SerializeField] private bool activeRoomIsPrivate;
+    [SerializeField, Range(1, 4)] private int roomMaxPlayers = 4;
+    [SerializeField] private string roomLobbySceneName = "Gameplay";
+    [SerializeField] private string forestSceneName = "Environment";
+    [SerializeField] private bool enableRoomConnectionApproval = true;
+    [SerializeField] private bool requireRoomCodeForClients = false;
+
     [Header("Networking")]
     [SerializeField] private NetworkManager networkManager;
     [SerializeField] private UnityTransport unityTransport;
@@ -52,9 +74,13 @@ public class CoopNetworkBootstrap : MonoBehaviour
     private readonly HashSet<int> runtimeRegisteredPrefabIds = new HashSet<int>();
     private bool callbacksBound;
     private bool waitingClientConnect;
+    private bool approvalCallbackBound;
     private float connectDeadline;
+    private string pendingJoinRoomCode = string.Empty;
+    private string pendingJoinPassword = string.Empty;
+    private string pendingJoinPlayerName = "Player";
 
-    public event System.Action<string> StatusChanged;
+    public event Action<string> StatusChanged;
 
     public string ServerAddress
     {
@@ -68,9 +94,16 @@ public class CoopNetworkBootstrap : MonoBehaviour
         set => serverPort = value;
     }
 
+    public int RoomMaxPlayers => Mathf.Clamp(roomMaxPlayers, 1, 4);
     public string CurrentEndpoint => $"{serverAddress}:{serverPort}";
     public string VpsEndpoint => $"{vpsAddress}:{vpsPort}";
     public string LastStatusMessage { get; private set; } = "Offline";
+    public bool IsSessionListening => networkManager != null && networkManager.IsListening;
+    public bool IsHostActive => networkManager != null && networkManager.IsHost;
+    public bool IsClientActive => networkManager != null && networkManager.IsClient;
+
+    public string ActiveRoomSummary =>
+        $"{activeRoomName} | Code: {activeRoomCode} | {(activeRoomIsPrivate ? "Private" : "Public")} | {RoomMaxPlayers}p";
 
     private void Awake()
     {
@@ -142,7 +175,7 @@ public class CoopNetworkBootstrap : MonoBehaviour
         if (Time.unscaledTime >= connectDeadline)
         {
             waitingClientConnect = false;
-            this.SetStatus($"Join timeout ke {CurrentEndpoint}. Pastikan dedicated server VPS aktif dan UDP {serverPort} terbuka.");
+            this.SetStatus($"Join timeout ke {CurrentEndpoint}. Pastikan host/server aktif dan UDP {serverPort} terbuka.");
         }
     }
 
@@ -154,8 +187,9 @@ public class CoopNetworkBootstrap : MonoBehaviour
             return;
         }
 
+        this.ApplyClientConnectionPayload(activeRoomCode, activeRoomPassword, pendingJoinPlayerName);
         bool started = networkManager.StartHost();
-        this.SetStatus(started ? $"Host aktif di {CurrentEndpoint}" : "Gagal start Host");
+        this.SetStatus(started ? $"Room host aktif: {ActiveRoomSummary} @ {CurrentEndpoint}" : "Gagal start Host");
     }
 
     [ContextMenu("Start Client")]
@@ -166,6 +200,7 @@ public class CoopNetworkBootstrap : MonoBehaviour
             return;
         }
 
+        this.ApplyClientConnectionPayload(pendingJoinRoomCode, pendingJoinPassword, pendingJoinPlayerName);
         bool started = networkManager.StartClient();
         this.SetStatus(started ? $"Mencoba join {CurrentEndpoint}..." : $"Gagal mulai koneksi ke {CurrentEndpoint}");
         if (started)
@@ -199,6 +234,85 @@ public class CoopNetworkBootstrap : MonoBehaviour
     {
         this.SetEndpoint(vpsAddress, vpsPort);
         this.StartClient();
+    }
+
+    public void ConfigureRoom(string roomName, string roomCode, string roomPassword, bool isPrivate, int maxPlayers, string lobbySceneName)
+    {
+        activeRoomName = string.IsNullOrWhiteSpace(roomName) ? "New Room" : roomName.Trim();
+        activeRoomCode = this.NormalizeRoomCode(roomCode);
+        activeRoomPassword = roomPassword ?? string.Empty;
+        activeRoomIsPrivate = isPrivate;
+        roomMaxPlayers = Mathf.Clamp(maxPlayers, 1, 4);
+        if (!string.IsNullOrWhiteSpace(lobbySceneName))
+        {
+            roomLobbySceneName = lobbySceneName.Trim();
+        }
+
+        requireRoomCodeForClients = true;
+    }
+
+    public void ConfigureJoinCredentials(string roomCode, string roomPassword, string playerName)
+    {
+        pendingJoinRoomCode = this.NormalizeRoomCode(roomCode);
+        pendingJoinPassword = roomPassword ?? string.Empty;
+        pendingJoinPlayerName = string.IsNullOrWhiteSpace(playerName) ? "Player" : playerName.Trim();
+    }
+
+    public void StartHostRoom(string hostAddress, ushort hostPort)
+    {
+        this.SetEndpoint(hostAddress, hostPort);
+        this.StartHost();
+    }
+
+    public void JoinRoom(string hostAddress, ushort hostPort, string roomCode, string roomPassword, string playerName)
+    {
+        this.SetEndpoint(hostAddress, hostPort);
+        this.ConfigureJoinCredentials(roomCode, roomPassword, playerName);
+        this.StartClient();
+    }
+
+    public void StartLobbySceneAsHost()
+    {
+        this.StartOfficeLobbySceneAsHost();
+    }
+
+    [ContextMenu("Start Office Lobby Scene As Host")]
+    public void StartOfficeLobbySceneAsHost()
+    {
+        string targetScene = string.IsNullOrWhiteSpace(roomLobbySceneName) ? "Gameplay" : roomLobbySceneName.Trim();
+        this.StartSceneAsHostInternal(targetScene, "office lobby");
+    }
+
+    [ContextMenu("Start Forest Scene As Host")]
+    public void StartForestSceneAsHost()
+    {
+        string targetScene = string.IsNullOrWhiteSpace(forestSceneName) ? "Environment" : forestSceneName.Trim();
+        this.StartSceneAsHostInternal(targetScene, "forest");
+    }
+
+    private void StartSceneAsHostInternal(string targetScene, string stageLabel)
+    {
+        if (networkManager == null || !networkManager.IsHost)
+        {
+            this.SetStatus($"Hanya host yang bisa Start ke {stageLabel}.");
+            return;
+        }
+
+        if (networkManager.SceneManager != null && networkManager.NetworkConfig != null && networkManager.NetworkConfig.EnableSceneManagement)
+        {
+            var status = networkManager.SceneManager.LoadScene(targetScene, LoadSceneMode.Single);
+            if (status == SceneEventProgressStatus.Started)
+            {
+                this.SetStatus($"Host memulai {stageLabel}: pindah ke scene '{targetScene}'.");
+                return;
+            }
+
+            this.SetStatus($"Gagal load scene network '{targetScene}' ({status}). Cek Build Settings / nama scene.");
+            return;
+        }
+
+        SceneManager.LoadScene(targetScene, LoadSceneMode.Single);
+        this.SetStatus($"Scene management NGO nonaktif, fallback local load '{targetScene}' untuk {stageLabel}.");
     }
 
     public void SetEndpoint(string address, ushort port)
@@ -237,6 +351,7 @@ public class CoopNetworkBootstrap : MonoBehaviour
         this.DisableScenePlayerIfNeeded();
         this.ConfigureTransport();
         this.RegisterNetworkPrefabs();
+        this.ConfigureConnectionApproval();
         return true;
     }
 
@@ -274,6 +389,7 @@ public class CoopNetworkBootstrap : MonoBehaviour
             {
                 networkManager.NetworkConfig.Prefabs = new NetworkPrefabs();
             }
+
             networkManager.NetworkConfig.NetworkTransport = unityTransport;
             this.BindNetworkCallbacks();
         }
@@ -295,6 +411,135 @@ public class CoopNetworkBootstrap : MonoBehaviour
         unityTransport.DisconnectTimeoutMS = Mathf.Max(1000, disconnectTimeoutMs);
         unityTransport.MaxConnectAttempts = Mathf.Max(1, maxConnectAttempts);
         unityTransport.SetConnectionData(targetAddress, serverPort, listenAddress);
+    }
+
+    private void ConfigureConnectionApproval()
+    {
+        if (networkManager == null || networkManager.NetworkConfig == null)
+        {
+            return;
+        }
+
+        networkManager.NetworkConfig.ConnectionApproval = enableRoomConnectionApproval;
+        if (!enableRoomConnectionApproval)
+        {
+            if (approvalCallbackBound)
+            {
+                networkManager.ConnectionApprovalCallback = null;
+                approvalCallbackBound = false;
+            }
+
+            return;
+        }
+
+        networkManager.ConnectionApprovalCallback = this.HandleConnectionApproval;
+        approvalCallbackBound = true;
+    }
+
+    private void HandleConnectionApproval(NetworkManager.ConnectionApprovalRequest request, NetworkManager.ConnectionApprovalResponse response)
+    {
+        response.CreatePlayerObject = true;
+        response.Position = null;
+        response.Rotation = null;
+        response.Pending = false;
+
+        if (networkManager == null)
+        {
+            response.Approved = false;
+            response.Reason = "NetworkManager null.";
+            return;
+        }
+
+        if (request.ClientNetworkId == NetworkManager.ServerClientId)
+        {
+            response.Approved = true;
+            return;
+        }
+
+        int currentPlayers = networkManager.ConnectedClientsList != null
+            ? networkManager.ConnectedClientsList.Count
+            : networkManager.ConnectedClientsIds.Count;
+
+        if (currentPlayers >= this.RoomMaxPlayers)
+        {
+            response.Approved = false;
+            response.Reason = $"Room penuh ({RoomMaxPlayers} pemain).";
+            return;
+        }
+
+        RoomJoinPayload payload = this.DecodeJoinPayload(request.Payload);
+        string incomingRoomCode = this.NormalizeRoomCode(payload.roomCode);
+
+        if (requireRoomCodeForClients && !string.Equals(incomingRoomCode, this.NormalizeRoomCode(activeRoomCode), StringComparison.OrdinalIgnoreCase))
+        {
+            response.Approved = false;
+            response.Reason = "Room code salah.";
+            return;
+        }
+
+        if (activeRoomIsPrivate)
+        {
+            string incomingPassword = payload.password ?? string.Empty;
+            if (!string.Equals(incomingPassword, activeRoomPassword ?? string.Empty, StringComparison.Ordinal))
+            {
+                response.Approved = false;
+                response.Reason = "Password room salah.";
+                return;
+            }
+        }
+
+        response.Approved = true;
+    }
+
+    private RoomJoinPayload DecodeJoinPayload(byte[] payloadBytes)
+    {
+        if (payloadBytes == null || payloadBytes.Length == 0)
+        {
+            return default;
+        }
+
+        try
+        {
+            string json = Encoding.UTF8.GetString(payloadBytes);
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return default;
+            }
+
+            return JsonUtility.FromJson<RoomJoinPayload>(json);
+        }
+        catch
+        {
+            return default;
+        }
+    }
+
+    private void ApplyClientConnectionPayload(string roomCode, string password, string playerName)
+    {
+        if (networkManager == null || networkManager.NetworkConfig == null)
+        {
+            return;
+        }
+
+        RoomJoinPayload payload = new RoomJoinPayload
+        {
+            roomCode = this.NormalizeRoomCode(roomCode),
+            password = password ?? string.Empty,
+            playerName = string.IsNullOrWhiteSpace(playerName) ? "Player" : playerName.Trim()
+        };
+
+        string json = JsonUtility.ToJson(payload);
+        networkManager.NetworkConfig.ConnectionData = Encoding.UTF8.GetBytes(json);
+    }
+
+    private string NormalizeRoomCode(string source)
+    {
+        if (string.IsNullOrWhiteSpace(source))
+        {
+            return string.Empty;
+        }
+
+        return source.Trim().ToUpperInvariant();
     }
 
     private void RegisterNetworkPrefabs()
@@ -347,7 +592,7 @@ public class CoopNetworkBootstrap : MonoBehaviour
         {
             networkManager.AddNetworkPrefab(prefab);
         }
-        catch (System.Exception exception)
+        catch (Exception exception)
         {
             Debug.LogWarning($"Skip registering prefab '{prefab.name}' for network: {exception.Message}");
         }
@@ -501,7 +746,7 @@ public class CoopNetworkBootstrap : MonoBehaviour
             {
                 networkObject.Spawn(true);
             }
-            catch (System.Exception exception)
+            catch (Exception exception)
             {
                 Debug.LogWarning($"Failed to spawn scene pickable '{pickable.name}': {exception.Message}");
             }
@@ -535,7 +780,7 @@ public class CoopNetworkBootstrap : MonoBehaviour
             {
                 networkObject.Spawn(true);
             }
-            catch (System.Exception exception)
+            catch (Exception exception)
             {
                 Debug.LogWarning($"Failed to spawn scene chest '{chest.name}': {exception.Message}");
             }
@@ -551,14 +796,14 @@ public class CoopNetworkBootstrap : MonoBehaviour
 
         if (networkManager.IsHost)
         {
-            this.SetStatus($"Host aktif ({networkManager.ConnectedClientsIds.Count} klien)");
+            this.SetStatus($"Host aktif ({networkManager.ConnectedClientsIds.Count}/{RoomMaxPlayers})");
             return;
         }
 
         if (networkManager.IsClient && clientId == networkManager.LocalClientId)
         {
             waitingClientConnect = false;
-            this.SetStatus($"Berhasil join ke {CurrentEndpoint}");
+            this.SetStatus($"Berhasil join room di {CurrentEndpoint}");
         }
     }
 
@@ -581,14 +826,14 @@ public class CoopNetworkBootstrap : MonoBehaviour
 
         if (networkManager.IsHost)
         {
-            this.SetStatus($"Host aktif ({networkManager.ConnectedClientsIds.Count} klien)");
+            this.SetStatus($"Host aktif ({networkManager.ConnectedClientsIds.Count}/{RoomMaxPlayers})");
         }
     }
 
     private void OnTransportFailure()
     {
         waitingClientConnect = false;
-        this.SetStatus($"Transport gagal ke {CurrentEndpoint}. Pastikan dedicated server Unity aktif di VPS dan UDP {serverPort} terbuka.");
+        this.SetStatus($"Transport gagal ke {CurrentEndpoint}. Pastikan server aktif dan UDP {serverPort} terbuka.");
     }
 
     private void SetStatus(string message)
@@ -648,6 +893,8 @@ public class CoopNetworkBootstrap : MonoBehaviour
         {
             playerPrefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(DefaultPlayerPrefabPath);
         }
+
+        roomMaxPlayers = Mathf.Clamp(roomMaxPlayers, 1, 4);
     }
 #endif
 }

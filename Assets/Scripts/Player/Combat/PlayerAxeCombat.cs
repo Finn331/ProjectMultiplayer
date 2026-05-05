@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using TMPro;
 using Unity.Netcode;
 using UnityEngine;
@@ -50,6 +51,13 @@ public class PlayerAxeCombat : NetworkBehaviour
     [SerializeField] private float clientTreeSyncResolveRadius = 3.5f;
     [SerializeField] private bool logServerTreeHitDebug;
 
+    [Header("Server Anti-Spam")]
+    [SerializeField] private bool enforceServerHitCooldown = true;
+    [SerializeField] private float serverPlayerHitCooldownSeconds = 0.35f;
+    [SerializeField] private float serverTreeHitCooldownSeconds = 0.28f;
+    [SerializeField] private float serverMaxPlayerDamagePerHit = 35f;
+    [SerializeField] private float serverMaxTreeDamagePerHit = 5f;
+
     [Header("Damage")]
     [SerializeField] private float treeDamagePerHit = 1f;
     [SerializeField] private float playerDamagePerHit = 10f;
@@ -100,6 +108,11 @@ public class PlayerAxeCombat : NetworkBehaviour
     private bool hasIsGroundedParam;
     private Coroutine swingRecoveryRoutine;
     private int swingSequenceId;
+    private readonly Dictionary<ulong, float> serverLastPlayerHitByTarget = new Dictionary<ulong, float>();
+    private float serverLastTreeHitTime = -999f;
+    private float runtimeAttackCooldownMultiplier = 1f;
+    private float runtimeTreeDamageMultiplier = 1f;
+    private float runtimePlayerDamageMultiplier = 1f;
 
     private void Awake()
     {
@@ -214,10 +227,18 @@ public class PlayerAxeCombat : NetworkBehaviour
             return;
         }
 
-        nextAttackTime = Time.time + Mathf.Max(0.05f, attackCooldownSeconds);
+        float runtimeCooldown = Mathf.Max(0.05f, attackCooldownSeconds * Mathf.Max(0.1f, runtimeAttackCooldownMultiplier));
+        nextAttackTime = Time.time + runtimeCooldown;
         this.PlaySwingAndScheduleRecovery();
         this.NotifySwingToRemoteClients();
         StartCoroutine(this.ResolveHitAfterDelay());
+    }
+
+    public void SetRuntimeCombatModifiers(float attackCooldownMultiplier, float treeDamageMultiplier, float playerDamageMultiplier)
+    {
+        runtimeAttackCooldownMultiplier = Mathf.Clamp(attackCooldownMultiplier, 0.1f, 5f);
+        runtimeTreeDamageMultiplier = Mathf.Clamp(treeDamageMultiplier, 0.1f, 10f);
+        runtimePlayerDamageMultiplier = Mathf.Clamp(playerDamageMultiplier, 0.1f, 10f);
     }
 
     private IEnumerator ResolveHitAfterDelay()
@@ -273,14 +294,15 @@ public class PlayerAxeCombat : NetworkBehaviour
         PlayerSurvivalSystem targetSurvival = hit.collider.GetComponentInParent<PlayerSurvivalSystem>();
         if (targetSurvival != null && targetSurvival.gameObject != gameObject)
         {
+            float appliedPlayerDamage = Mathf.Max(0f, playerDamagePerHit * runtimePlayerDamageMultiplier);
             NetworkObject targetNetworkObject = targetSurvival.GetComponent<NetworkObject>();
             if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && IsSpawned && IsOwner && targetNetworkObject != null)
             {
-                this.RequestPlayerDamageServerRpc(targetNetworkObject.NetworkObjectId, playerDamagePerHit);
+                this.RequestPlayerDamageServerRpc(targetNetworkObject.NetworkObjectId, appliedPlayerDamage);
             }
             else
             {
-                targetSurvival.ApplyDamage(playerDamagePerHit);
+                targetSurvival.ApplyDamage(appliedPlayerDamage);
             }
         }
     }
@@ -292,13 +314,14 @@ public class PlayerAxeCombat : NetworkBehaviour
             return;
         }
 
+        float appliedTreeDamage = Mathf.Max(0f, treeDamagePerHit * runtimeTreeDamageMultiplier);
         if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && IsSpawned && IsOwner)
         {
-            this.RequestTreeHitServerRpc(hitPoint, treeDamagePerHit);
+            this.RequestTreeHitServerRpc(hitPoint, appliedTreeDamage);
             return;
         }
 
-        tree.ApplyAxeHit(treeDamagePerHit, gameObject);
+        tree.ApplyAxeHit(appliedTreeDamage, gameObject);
     }
 
     [ServerRpc(RequireOwnership = false)]
@@ -331,7 +354,26 @@ public class PlayerAxeCombat : NetworkBehaviour
             return;
         }
 
-        targetSurvival.ApplyDamage(Mathf.Max(0f, damage));
+        if (enforceServerHitCooldown)
+        {
+            float now = Time.unscaledTime;
+            float minCooldown = Mathf.Max(0.01f, serverPlayerHitCooldownSeconds);
+            if (serverLastPlayerHitByTarget.TryGetValue(targetNetworkObjectId, out float previousTime) &&
+                (now - previousTime) < minCooldown)
+            {
+                return;
+            }
+
+            serverLastPlayerHitByTarget[targetNetworkObjectId] = now;
+        }
+
+        float clampedDamage = Mathf.Clamp(damage, 0f, Mathf.Max(0.1f, serverMaxPlayerDamagePerHit));
+        if (clampedDamage <= 0f)
+        {
+            return;
+        }
+
+        targetSurvival.ApplyDamage(clampedDamage);
     }
 
     [ServerRpc(RequireOwnership = false)]
@@ -340,6 +382,18 @@ public class PlayerAxeCombat : NetworkBehaviour
         if (rpcParams.Receive.SenderClientId != OwnerClientId)
         {
             return;
+        }
+
+        if (enforceServerHitCooldown)
+        {
+            float now = Time.unscaledTime;
+            float minCooldown = Mathf.Max(0.01f, serverTreeHitCooldownSeconds);
+            if ((now - serverLastTreeHitTime) < minCooldown)
+            {
+                return;
+            }
+
+            serverLastTreeHitTime = now;
         }
 
         TreeChoppable[] trees = FindObjectsOfType<TreeChoppable>(true);
@@ -354,7 +408,11 @@ public class PlayerAxeCombat : NetworkBehaviour
 
         if (bestTree != null)
         {
-            float appliedDamage = Mathf.Max(0f, damage);
+            float appliedDamage = Mathf.Clamp(damage, 0f, Mathf.Max(0.1f, serverMaxTreeDamagePerHit));
+            if (appliedDamage <= 0f)
+            {
+                return;
+            }
             bool accepted = bestTree.ApplyAxeHit(appliedDamage, gameObject);
             if (accepted)
             {

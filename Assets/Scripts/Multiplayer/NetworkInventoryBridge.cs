@@ -10,6 +10,7 @@ public class NetworkInventoryBridge : NetworkBehaviour
     [Header("References")]
     [SerializeField] private PlayerInventory inventory;
     [SerializeField] private PlayerSurvivalSystem survivalSystem;
+    [SerializeField] private float runtimeConsumeEffectMultiplier = 1f;
 
     private readonly NetworkVariable<FixedString512Bytes> inventorySnapshot =
         new NetworkVariable<FixedString512Bytes>(
@@ -19,6 +20,11 @@ public class NetworkInventoryBridge : NetworkBehaviour
 
     public bool UseNetworkedInventory => NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && IsSpawned;
     public bool HasInputAuthority => !UseNetworkedInventory || IsOwner;
+
+    public void SetConsumeEffectMultiplier(float multiplier)
+    {
+        runtimeConsumeEffectMultiplier = Mathf.Clamp(multiplier, 0.1f, 5f);
+    }
 
     private void Awake()
     {
@@ -381,7 +387,7 @@ public class NetworkInventoryBridge : NetworkBehaviour
             return;
         }
 
-        if (!ConsumableItemCatalog.TryApply(survivalSystem, removedItemType))
+        if (!ConsumableItemCatalog.TryApply(survivalSystem, removedItemType, runtimeConsumeEffectMultiplier))
         {
             inventory.AddItemToSlot(removedItemType, 1, slotIndex);
             this.SendDropFeedbackClientRpc("Consume gagal: efek item tidak valid.", this.BuildOwnerRpcTarget());
@@ -554,7 +560,7 @@ public class NetworkInventoryBridge : NetworkBehaviour
             return false;
         }
 
-        if (!ConsumableItemCatalog.TryApply(survivalSystem, removedItemType))
+        if (!ConsumableItemCatalog.TryApply(survivalSystem, removedItemType, runtimeConsumeEffectMultiplier))
         {
             inventory.AddItemToSlot(removedItemType, 1, slotIndex);
             return false;

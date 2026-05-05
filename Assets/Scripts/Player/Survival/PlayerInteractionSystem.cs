@@ -29,9 +29,13 @@ public class PlayerInteractionSystem : MonoBehaviour
     private Button pickButtonComponent;
     private bool pickButtonBound;
     private float nextInteractTime;
+    private float baseDetectionRadius = -1f;
+    private float baseInteractDistance = -1f;
 
     private void Start()
     {
+        this.CacheBaseInteractionRange();
+
         if (inventory == null)
         {
             inventory = GetComponent<PlayerInventory>();
@@ -49,6 +53,15 @@ public class PlayerInteractionSystem : MonoBehaviour
         {
             pickButton.SetActive(false);
         }
+    }
+
+    public void SetInteractionRangeMultipliers(float detectionMultiplier, float interactMultiplier)
+    {
+        this.CacheBaseInteractionRange();
+        float clampedDetection = Mathf.Clamp(detectionMultiplier, 0.1f, 5f);
+        float clampedInteract = Mathf.Clamp(interactMultiplier, 0.1f, 5f);
+        detectionRadius = baseDetectionRadius * clampedDetection;
+        interactDistance = baseInteractDistance * clampedInteract;
     }
 
     private void Update()
@@ -339,5 +352,18 @@ public class PlayerInteractionSystem : MonoBehaviour
         }
 
         pickButtonBound = false;
+    }
+
+    private void CacheBaseInteractionRange()
+    {
+        if (baseDetectionRadius < 0f)
+        {
+            baseDetectionRadius = Mathf.Max(0.1f, detectionRadius);
+        }
+
+        if (baseInteractDistance < 0f)
+        {
+            baseInteractDistance = Mathf.Max(0.1f, interactDistance);
+        }
     }
 }

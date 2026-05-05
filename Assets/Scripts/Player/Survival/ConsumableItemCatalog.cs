@@ -45,24 +45,34 @@ public static class ConsumableItemCatalog
 
     public static bool TryApply(PlayerSurvivalSystem survivalSystem, ItemType itemType)
     {
+        return TryApply(survivalSystem, itemType, 1f);
+    }
+
+    public static bool TryApply(PlayerSurvivalSystem survivalSystem, ItemType itemType, float multiplier)
+    {
         if (survivalSystem == null || !TryGetEffect(itemType, out ConsumableItemEffect effect))
         {
             return false;
         }
 
-        if (effect.HealthAmount > 0f)
+        float clampedMultiplier = Mathf.Clamp(multiplier, 0.1f, 5f);
+        float healthAmount = effect.HealthAmount * clampedMultiplier;
+        float hungerAmount = effect.HungerAmount * clampedMultiplier;
+        float thirstAmount = effect.ThirstAmount * clampedMultiplier;
+
+        if (healthAmount > 0f)
         {
-            survivalSystem.Heal(effect.HealthAmount);
+            survivalSystem.Heal(healthAmount);
         }
 
-        if (effect.HungerAmount > 0f)
+        if (hungerAmount > 0f)
         {
-            survivalSystem.ConsumeFood(effect.HungerAmount);
+            survivalSystem.ConsumeFood(hungerAmount);
         }
 
-        if (effect.ThirstAmount > 0f)
+        if (thirstAmount > 0f)
         {
-            survivalSystem.Drink(effect.ThirstAmount);
+            survivalSystem.Drink(thirstAmount);
         }
 
         return true;
