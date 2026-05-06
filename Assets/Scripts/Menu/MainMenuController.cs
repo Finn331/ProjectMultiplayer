@@ -305,6 +305,7 @@ public class MainMenuController : MonoBehaviour
         bootstrap.ConfigureRoom(roomName, roomCode, password, isPrivate, maxPlayers, officeLobbySceneName);
         bootstrap.ConfigureJoinCredentials(roomCode, password, playerName);
         bootstrap.StartHostRoom(hostAddress, hostPort);
+        this.SetHostControlMode(bootstrap.IsHostActive);
 
         MainMenuSessionState.Set(new MainMenuSessionState.SessionConfig
         {
@@ -350,7 +351,7 @@ public class MainMenuController : MonoBehaviour
         }
         else
         {
-            this.SetHostControlMode(true);
+            this.SetHostControlMode(bootstrap.IsHostActive);
             this.RefreshRoomInfo();
             this.SetStatus("Room dibuat (tanpa room directory API).");
         }
@@ -709,7 +710,7 @@ public class MainMenuController : MonoBehaviour
         label.fontSize = 15f;
         label.alignment = TextAlignmentOptions.Left;
         label.color = Color.white;
-        label.text = "Client " + clientId;
+        label.text = bootstrap != null ? bootstrap.GetClientDisplayName(clientId) : ("Client " + clientId);
         LayoutElement labelLayout = labelObj.AddComponent<LayoutElement>();
         labelLayout.flexibleWidth = 1f;
 

@@ -72,6 +72,8 @@ public class CoopNetworkBootstrap : MonoBehaviour
     [SerializeField] private Button stopButton;
 
     private readonly HashSet<int> runtimeRegisteredPrefabIds = new HashSet<int>();
+    private readonly Dictionary<ulong, string> approvedClientNames = new Dictionary<ulong, string>();
+    private readonly Dictionary<ulong, string> connectedClientNames = new Dictionary<ulong, string>();
     private bool callbacksBound;
     private bool waitingClientConnect;
     private bool approvalCallbackBound;
@@ -122,6 +124,21 @@ public class CoopNetworkBootstrap : MonoBehaviour
 
     public string ActiveRoomSummary =>
         $"{activeRoomName} | Code: {activeRoomCode} | {(activeRoomIsPrivate ? "Private" : "Public")} | {RoomMaxPlayers}p";
+
+    public string GetClientDisplayName(ulong clientId)
+    {
+        if (connectedClientNames.TryGetValue(clientId, out string playerName) && !string.IsNullOrWhiteSpace(playerName))
+        {
+            return playerName;
+        }
+
+        if (clientId == NetworkManager.ServerClientId)
+        {
+            return "Host";
+        }
+
+        return $"Client {clientId}";
+    }
 
     public IReadOnlyList<ulong> GetKickableClientIds()
     {
@@ -190,6 +207,15 @@ public class CoopNetworkBootstrap : MonoBehaviour
     private void Awake()
     {
         this.EnsureNetworkStack();
+        if (Application.isPlaying)
+        {
+            DontDestroyOnLoad(gameObject);
+            if (networkManager != null)
+            {
+                DontDestroyOnLoad(networkManager.gameObject);
+            }
+        }
+
         this.BindButtons();
         this.SetStatus("Offline");
     }
@@ -269,8 +295,15 @@ public class CoopNetworkBootstrap : MonoBehaviour
             return;
         }
 
+        approvedClientNames.Clear();
+        connectedClientNames.Clear();
         this.ApplyClientConnectionPayload(activeRoomCode, activeRoomPassword, pendingJoinPlayerName);
         bool started = networkManager.StartHost();
+        if (started)
+        {
+            connectedClientNames[NetworkManager.ServerClientId] = string.IsNullOrWhiteSpace(pendingJoinPlayerName) ? "Host" : pendingJoinPlayerName;
+        }
+
         this.SetStatus(started ? $"Room host aktif: {ActiveRoomSummary} @ {CurrentEndpoint}" : "Gagal start Host");
     }
 
@@ -300,6 +333,8 @@ public class CoopNetworkBootstrap : MonoBehaviour
             return;
         }
 
+        approvedClientNames.Clear();
+        connectedClientNames.Clear();
         bool started = networkManager.StartServer();
         this.SetStatus(started ? $"Server aktif di {CurrentEndpoint}" : "Gagal start Server");
     }
@@ -380,6 +415,18 @@ public class CoopNetworkBootstrap : MonoBehaviour
             return;
         }
 
+        if (string.IsNullOrWhiteSpace(targetScene))
+        {
+            this.SetStatus($"Scene untuk {stageLabel} belum diisi.");
+            return;
+        }
+
+        if (!this.IsSceneInBuildSettings(targetScene))
+        {
+            this.SetStatus($"Scene '{targetScene}' belum ada di Build Settings, jadi client tidak bisa ikut pindah.");
+            return;
+        }
+
         if (networkManager.SceneManager != null && networkManager.NetworkConfig != null && networkManager.NetworkConfig.EnableSceneManagement)
         {
             var status = networkManager.SceneManager.LoadScene(targetScene, LoadSceneMode.Single);
@@ -412,6 +459,8 @@ public class CoopNetworkBootstrap : MonoBehaviour
         }
 
         networkManager.Shutdown();
+        approvedClientNames.Clear();
+        connectedClientNames.Clear();
         waitingClientConnect = false;
         this.SetStatus("Offline");
     }
@@ -472,6 +521,7 @@ public class CoopNetworkBootstrap : MonoBehaviour
                 networkManager.NetworkConfig.Prefabs = new NetworkPrefabs();
             }
 
+            networkManager.NetworkConfig.EnableSceneManagement = true;
             networkManager.NetworkConfig.NetworkTransport = unityTransport;
             this.BindNetworkCallbacks();
         }
@@ -550,12 +600,15 @@ public class CoopNetworkBootstrap : MonoBehaviour
         }
 
         RoomJoinPayload payload = this.DecodeJoinPayload(request.Payload);
+        string requestedPlayerName = string.IsNullOrWhiteSpace(payload.playerName) ? $"Client {request.ClientNetworkId}" : payload.playerName.Trim();
+        approvedClientNames[request.ClientNetworkId] = requestedPlayerName;
         string incomingRoomCode = this.NormalizeRoomCode(payload.roomCode);
 
         if (requireRoomCodeForClients && !string.Equals(incomingRoomCode, this.NormalizeRoomCode(activeRoomCode), StringComparison.OrdinalIgnoreCase))
         {
             response.Approved = false;
             response.Reason = "Room code salah.";
+            approvedClientNames.Remove(request.ClientNetworkId);
             return;
         }
 
@@ -566,6 +619,7 @@ public class CoopNetworkBootstrap : MonoBehaviour
             {
                 response.Approved = false;
                 response.Reason = "Password room salah.";
+                approvedClientNames.Remove(request.ClientNetworkId);
                 return;
             }
         }
@@ -622,6 +676,43 @@ public class CoopNetworkBootstrap : MonoBehaviour
         }
 
         return source.Trim().ToUpperInvariant();
+    }
+
+    private bool IsSceneInBuildSettings(string sceneNameOrPath)
+    {
+        if (string.IsNullOrWhiteSpace(sceneNameOrPath))
+        {
+            return false;
+        }
+
+        string normalized = sceneNameOrPath.Trim();
+        if (normalized.EndsWith(".unity", StringComparison.OrdinalIgnoreCase))
+        {
+            return SceneUtility.GetBuildIndexByScenePath(normalized) >= 0;
+        }
+
+        int total = SceneManager.sceneCountInBuildSettings;
+        for (int i = 0; i < total; i++)
+        {
+            string path = SceneUtility.GetScenePathByBuildIndex(i);
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                continue;
+            }
+
+            string byFileName = System.IO.Path.GetFileNameWithoutExtension(path);
+            if (string.Equals(byFileName, normalized, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (string.Equals(path, normalized, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private void RegisterNetworkPrefabs()
@@ -878,6 +969,20 @@ public class CoopNetworkBootstrap : MonoBehaviour
 
         if (networkManager.IsHost)
         {
+            if (clientId == NetworkManager.ServerClientId)
+            {
+                connectedClientNames[clientId] = "Host";
+            }
+            else if (approvedClientNames.TryGetValue(clientId, out string approvedName))
+            {
+                connectedClientNames[clientId] = string.IsNullOrWhiteSpace(approvedName) ? $"Client {clientId}" : approvedName;
+                approvedClientNames.Remove(clientId);
+            }
+            else
+            {
+                connectedClientNames[clientId] = $"Client {clientId}";
+            }
+
             this.SetStatus($"Host aktif ({networkManager.ConnectedClientsIds.Count}/{RoomMaxPlayers})");
             return;
         }
@@ -895,6 +1000,9 @@ public class CoopNetworkBootstrap : MonoBehaviour
         {
             return;
         }
+
+        approvedClientNames.Remove(clientId);
+        connectedClientNames.Remove(clientId);
 
         if (networkManager.IsClient && clientId == networkManager.LocalClientId)
         {
