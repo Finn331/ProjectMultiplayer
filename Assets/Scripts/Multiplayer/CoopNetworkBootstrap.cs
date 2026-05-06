@@ -10,6 +10,7 @@ using UnityEngine.UI;
 public class CoopNetworkBootstrap : MonoBehaviour
 {
     private const string DefaultPlayerPrefabPath = "Assets/Assets/Prefabs/NetworkPlayer.prefab";
+    private static CoopNetworkBootstrap instance;
 
     [Serializable]
     private struct RoomJoinPayload
@@ -206,6 +207,13 @@ public class CoopNetworkBootstrap : MonoBehaviour
 
     private void Awake()
     {
+        if (instance != null && instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+
+        instance = this;
         this.EnsureNetworkStack();
         if (Application.isPlaying)
         {
@@ -488,6 +496,11 @@ public class CoopNetworkBootstrap : MonoBehaviour
 
     private void EnsureNetworkStack()
     {
+        if (NetworkManager.Singleton != null)
+        {
+            networkManager = NetworkManager.Singleton;
+        }
+
         if (networkManager == null)
         {
             networkManager = FindObjectOfType<NetworkManager>(true);
@@ -862,6 +875,11 @@ public class CoopNetworkBootstrap : MonoBehaviour
 
     private void OnDestroy()
     {
+        if (instance == this)
+        {
+            instance = null;
+        }
+
         if (networkManager == null || !callbacksBound)
         {
             return;

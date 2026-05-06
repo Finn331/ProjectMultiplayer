@@ -496,14 +496,6 @@ public class MainMenuController : MonoBehaviour
             RoomPublicInfo roomCapture = room;
             button.onClick.AddListener(() => this.JoinRoomFromPublicRow(roomCapture));
 
-            bool fullRoom = shownPlayers >= shownMaxPlayers;
-            button.interactable = !fullRoom;
-            if (fullRoom)
-            {
-                btnImage.color = new Color(0.5f, 0.5f, 0.5f, 1f);
-                btnLabel.text = "FULL";
-            }
-
             roomEntryRows.Add(row);
         }
     }
@@ -570,41 +562,19 @@ public class MainMenuController : MonoBehaviour
         string playerName = this.ReadPlayerName();
         string password = joinPasswordInput != null ? joinPasswordInput.text : string.Empty;
 
-        if (!useRoomDirectoryApi)
-        {
-            this.SetStatus("Room Directory API nonaktif.");
-            return;
-        }
+        string joinCode = string.IsNullOrWhiteSpace(cachedPublicRoom.roomCode)
+            ? this.ReadOrDefault(joinRoomCodeInput, "ROOM01")
+            : cachedPublicRoom.roomCode;
+        string joinAddress = this.ReadOrDefault(joinAddressInput, defaultJoinAddress);
+        ushort joinPort = this.ReadPort(joinPortInput, defaultJoinPort);
 
-        RoomJoinRequest request = new RoomJoinRequest
-        {
-            roomName = cachedPublicRoom.roomName,
-            roomCode = cachedPublicRoom.roomCode,
-            password = password,
-            playerName = playerName
-        };
+        if (joinRoomCodeInput != null) joinRoomCodeInput.text = joinCode;
+        if (joinAddressInput != null) joinAddressInput.text = joinAddress;
+        if (joinPortInput != null) joinPortInput.text = joinPort.ToString();
 
-        roomDirectoryClient.JoinRoom(request, (response, error) =>
-        {
-            if (!string.IsNullOrWhiteSpace(error) || response == null || !response.success)
-            {
-                this.SetStatus("Join public room gagal: " + (response != null ? response.message : error));
-                return;
-            }
-
-            activeRoomId = response.roomId ?? string.Empty;
-            string joinAddress = string.IsNullOrWhiteSpace(response.hostAddress) ? defaultJoinAddress : response.hostAddress;
-            ushort joinPort = response.hostPort > 0 ? (ushort)response.hostPort : defaultJoinPort;
-            string joinCode = string.IsNullOrWhiteSpace(response.roomCode) ? cachedPublicRoom.roomCode : response.roomCode;
-
-            if (joinAddressInput != null) joinAddressInput.text = joinAddress;
-            if (joinPortInput != null) joinPortInput.text = joinPort.ToString();
-            if (joinRoomCodeInput != null) joinRoomCodeInput.text = joinCode;
-
-            bootstrap.JoinRoom(joinAddress, joinPort, joinCode, password, playerName);
-            this.SetHostControlMode(false);
-            this.SetStatus("Mencoba join public room '" + response.roomName + "'...");
-        });
+        bootstrap.JoinRoom(joinAddress, joinPort, joinCode, password, playerName);
+        this.SetHostControlMode(false);
+        this.SetStatus("Mencoba join public room '" + cachedPublicRoom.roomName + "'...");
     }
 
     private void HostStartLobby()
@@ -837,6 +807,19 @@ public class MainMenuController : MonoBehaviour
     {
         this.SetStatus(message);
         this.RefreshRoomInfo();
+
+        if (bootstrap != null)
+        {
+            if (bootstrap.IsHostActive && !hostControlMode)
+            {
+                this.SetHostControlMode(true);
+            }
+            else if (!bootstrap.IsHostActive && hostControlMode)
+            {
+                this.SetHostControlMode(false);
+            }
+        }
+
         if (hostControlMode)
         {
             this.RefreshKickList();
