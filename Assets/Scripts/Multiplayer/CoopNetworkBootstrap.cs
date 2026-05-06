@@ -95,6 +95,24 @@ public class CoopNetworkBootstrap : MonoBehaviour
     }
 
     public int RoomMaxPlayers => Mathf.Clamp(roomMaxPlayers, 1, 4);
+    public string ActiveRoomCode => this.NormalizeRoomCode(activeRoomCode);
+    public int CurrentConnectedPlayers
+    {
+        get
+        {
+            if (networkManager == null || !networkManager.IsListening)
+            {
+                return 0;
+            }
+
+            if (networkManager.ConnectedClientsIds == null)
+            {
+                return networkManager.IsHost ? 1 : 0;
+            }
+
+            return networkManager.ConnectedClientsIds.Count;
+        }
+    }
     public string CurrentEndpoint => $"{serverAddress}:{serverPort}";
     public string VpsEndpoint => $"{vpsAddress}:{vpsPort}";
     public string LastStatusMessage { get; private set; } = "Offline";
@@ -104,6 +122,70 @@ public class CoopNetworkBootstrap : MonoBehaviour
 
     public string ActiveRoomSummary =>
         $"{activeRoomName} | Code: {activeRoomCode} | {(activeRoomIsPrivate ? "Private" : "Public")} | {RoomMaxPlayers}p";
+
+    public IReadOnlyList<ulong> GetKickableClientIds()
+    {
+        if (networkManager == null || !networkManager.IsHost || !networkManager.IsListening)
+        {
+            return Array.Empty<ulong>();
+        }
+
+        List<ulong> result = new List<ulong>();
+        if (networkManager.ConnectedClientsIds == null)
+        {
+            return result;
+        }
+
+        foreach (ulong clientId in networkManager.ConnectedClientsIds)
+        {
+            if (clientId == NetworkManager.ServerClientId)
+            {
+                continue;
+            }
+
+            result.Add(clientId);
+        }
+
+        return result;
+    }
+
+    public bool TryKickClient(ulong clientId, out string reason)
+    {
+        reason = string.Empty;
+        if (networkManager == null || !networkManager.IsHost || !networkManager.IsListening)
+        {
+            reason = "Host belum aktif.";
+            return false;
+        }
+
+        if (clientId == NetworkManager.ServerClientId)
+        {
+            reason = "Tidak bisa kick host.";
+            return false;
+        }
+
+        bool exists = false;
+        foreach (ulong connectedId in networkManager.ConnectedClientsIds)
+        {
+            if (connectedId != clientId)
+            {
+                continue;
+            }
+
+            exists = true;
+            break;
+        }
+
+        if (!exists)
+        {
+            reason = "Client tidak ditemukan.";
+            return false;
+        }
+
+        networkManager.DisconnectClient(clientId);
+        this.SetStatus($"Host kick client {clientId}.");
+        return true;
+    }
 
     private void Awake()
     {

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -15,6 +16,7 @@ public class MainMenuController : MonoBehaviour
     [Header("Flow Panels")]
     [SerializeField] private GameObject playGatePanel;
     [SerializeField] private GameObject roomFlowPanel;
+    [SerializeField] private GameObject hostControlPanel;
 
     [Header("Profile")]
     [SerializeField] private TMP_InputField playerNameInput;
@@ -36,6 +38,11 @@ public class MainMenuController : MonoBehaviour
     [SerializeField] private TMP_InputField joinPasswordInput;
     [SerializeField] private TMP_InputField publicRoomSearchInput;
     [SerializeField] private TMP_Text publicRoomResultText;
+    [SerializeField] private RectTransform publicRoomListContainer;
+
+    [Header("Host Controls")]
+    [SerializeField] private RectTransform kickListContainer;
+    [SerializeField] private Button hostLeaveButton;
 
     [Header("Buttons")]
     [SerializeField] private Button playButton;
@@ -62,8 +69,13 @@ public class MainMenuController : MonoBehaviour
     [SerializeField] private bool useRoomDirectoryApi = true;
     [SerializeField] private string roomDirectoryBaseUrl = "http://31.56.56.8:9010";
 
+    private readonly List<GameObject> roomEntryRows = new List<GameObject>();
+    private readonly List<GameObject> kickEntryRows = new List<GameObject>();
+
     private string activeRoomId = string.Empty;
     private RoomPublicInfo cachedPublicRoom;
+    private bool hostControlMode;
+    private float nextHostUiRefreshTime;
 
     private void Awake()
     {
@@ -72,6 +84,7 @@ public class MainMenuController : MonoBehaviour
         this.BindButtons();
         this.SetupDefaults();
         this.ApplyFlowStep(isInPlayGate: true);
+        this.SetHostControlMode(false);
         this.RefreshCurrency();
         this.RefreshRoomInfo();
         this.SetStatus("Siap. Tekan Play untuk mulai.");
@@ -93,6 +106,22 @@ public class MainMenuController : MonoBehaviour
         {
             bootstrap.StatusChanged -= this.OnBootstrapStatus;
         }
+    }
+
+    private void Update()
+    {
+        if (!hostControlMode)
+        {
+            return;
+        }
+
+        if (Time.unscaledTime < nextHostUiRefreshTime)
+        {
+            return;
+        }
+
+        nextHostUiRefreshTime = Time.unscaledTime + 0.7f;
+        this.RefreshKickList();
     }
 
     private void ResolveBootstrap()
@@ -129,6 +158,7 @@ public class MainMenuController : MonoBehaviour
         this.BindButton(startLobbyButton, this.HostStartLobby);
         this.BindButton(startForestButton, this.HostStartForest);
         this.BindButton(stopButton, this.StopSession);
+        this.BindButton(hostLeaveButton, this.StopSession);
 
         if (privateRoomToggle != null)
         {
@@ -167,11 +197,7 @@ public class MainMenuController : MonoBehaviour
         {
             maxPlayersSlider.minValue = 1f;
             maxPlayersSlider.maxValue = 4f;
-            if (!maxPlayersSlider.wholeNumbers)
-            {
-                maxPlayersSlider.wholeNumbers = true;
-            }
-
+            maxPlayersSlider.wholeNumbers = true;
             if (maxPlayersSlider.value < 1f || maxPlayersSlider.value > 4f)
             {
                 maxPlayersSlider.value = 4f;
@@ -205,10 +231,28 @@ public class MainMenuController : MonoBehaviour
         }
     }
 
+    private void SetHostControlMode(bool enabled)
+    {
+        hostControlMode = enabled;
+        if (hostControlPanel != null)
+        {
+            hostControlPanel.SetActive(enabled);
+        }
+
+        if (!enabled)
+        {
+            this.ClearKickRows();
+            return;
+        }
+
+        this.RefreshKickList();
+    }
+
     private void OpenRoomFlow()
     {
         this.ApplyFlowStep(isInPlayGate: false);
         this.SetStatus("Pilih Solo atau Multiplayer.");
+        this.SetHostControlMode(false);
     }
 
     private void PlaySolo()
@@ -238,6 +282,14 @@ public class MainMenuController : MonoBehaviour
         if (bootstrap == null)
         {
             this.SetStatus("CoopNetworkBootstrap belum ada di scene MainMenu.");
+            return;
+        }
+
+        if (bootstrap.IsHostActive)
+        {
+            this.SetHostControlMode(true);
+            this.SetStatus("Host sudah aktif. Gunakan panel host untuk Start/Leave/Kick.");
+            this.RefreshRoomInfo();
             return;
         }
 
@@ -284,15 +336,24 @@ public class MainMenuController : MonoBehaviour
 
             roomDirectoryClient.CreateRoom(createRequest, (response, error) =>
             {
-                if (string.IsNullOrWhiteSpace(error) && response != null && response.success)
+                if (!string.IsNullOrWhiteSpace(error) || response == null || !response.success)
                 {
-                    activeRoomId = response.roomId ?? string.Empty;
+                    this.SetStatus("Room local jadi, tapi gagal daftar room ke server directory: " + (string.IsNullOrWhiteSpace(error) ? response?.message : error));
+                    return;
                 }
+
+                activeRoomId = response.roomId ?? string.Empty;
+                this.RefreshRoomInfo();
+                this.SetStatus("Room dibuat. Sekarang host bisa Start/Leave/Kick dari panel host.");
+                this.SetHostControlMode(true);
             });
         }
-
-        this.RefreshRoomInfo();
-        this.SetStatus("Room dibuat. Bagikan Room Name/Code/Password ke teman.");
+        else
+        {
+            this.SetHostControlMode(true);
+            this.RefreshRoomInfo();
+            this.SetStatus("Room dibuat (tanpa room directory API).");
+        }
     }
 
     private void JoinRoom()
@@ -326,6 +387,7 @@ public class MainMenuController : MonoBehaviour
             lobbySceneName = officeLobbySceneName
         });
 
+        this.SetHostControlMode(false);
         this.SetStatus("Mencoba join room...");
     }
 
@@ -342,6 +404,7 @@ public class MainMenuController : MonoBehaviour
         {
             if (!string.IsNullOrWhiteSpace(error) || response == null)
             {
+                this.ClearPublicRoomRows();
                 this.SetPublicRoomResult("Search gagal: " + (string.IsNullOrWhiteSpace(error) ? "unknown" : error));
                 return;
             }
@@ -349,20 +412,157 @@ public class MainMenuController : MonoBehaviour
             if (response.rooms == null || response.rooms.Count == 0)
             {
                 cachedPublicRoom = null;
+                this.ClearPublicRoomRows();
                 this.SetPublicRoomResult("Room public tidak ditemukan.");
                 return;
             }
 
             cachedPublicRoom = response.rooms[0];
-            this.SetPublicRoomResult($"Ditemukan: {cachedPublicRoom.roomName} ({cachedPublicRoom.currentPlayers}/{cachedPublicRoom.maxPlayers})");
+            this.RebuildPublicRoomRows(response.rooms);
+            this.SetPublicRoomResult("Pilih room dari list, lalu tekan Join.");
         });
+    }
+
+    private void RebuildPublicRoomRows(List<RoomPublicInfo> rooms)
+    {
+        this.ClearPublicRoomRows();
+        if (publicRoomListContainer == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < rooms.Count; i++)
+        {
+            RoomPublicInfo room = rooms[i];
+            if (room == null)
+            {
+                continue;
+            }
+
+            GameObject row = new GameObject("RoomRow_" + i, typeof(RectTransform), typeof(Image));
+            RectTransform rowRect = row.GetComponent<RectTransform>();
+            rowRect.SetParent(publicRoomListContainer, false);
+            LayoutElement layoutElement = row.AddComponent<LayoutElement>();
+            layoutElement.preferredHeight = 38f;
+
+            Image rowImage = row.GetComponent<Image>();
+            rowImage.color = new Color(1f, 1f, 1f, 0.06f);
+
+            HorizontalLayoutGroup rowLayout = row.AddComponent<HorizontalLayoutGroup>();
+            rowLayout.padding = new RectOffset(10, 10, 4, 4);
+            rowLayout.spacing = 8f;
+            rowLayout.childAlignment = TextAnchor.MiddleLeft;
+            rowLayout.childControlHeight = true;
+            rowLayout.childControlWidth = true;
+            rowLayout.childForceExpandWidth = false;
+
+            GameObject labelObj = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
+            labelObj.transform.SetParent(rowRect, false);
+            TextMeshProUGUI label = labelObj.GetComponent<TextMeshProUGUI>();
+            label.fontSize = 16f;
+            label.color = new Color(0.94f, 0.97f, 1f, 1f);
+            label.alignment = TextAlignmentOptions.Left;
+            string privacy = room.isPrivate ? "Private" : "Public";
+            int shownPlayers = this.ResolveDisplayPlayerCount(room);
+            int shownMaxPlayers = Mathf.Max(1, room.maxPlayers);
+            label.text = room.roomName + " | " + room.roomCode + " | " + privacy + " | " + shownPlayers + "/" + shownMaxPlayers;
+            LayoutElement labelLayout = labelObj.AddComponent<LayoutElement>();
+            labelLayout.flexibleWidth = 1f;
+            labelLayout.minWidth = 200f;
+
+            GameObject btnObj = new GameObject("JoinButton", typeof(RectTransform), typeof(Image), typeof(Button));
+            btnObj.transform.SetParent(rowRect, false);
+            Image btnImage = btnObj.GetComponent<Image>();
+            btnImage.color = new Color(0.15f, 0.8f, 0.65f, 1f);
+            LayoutElement btnLayout = btnObj.AddComponent<LayoutElement>();
+            btnLayout.preferredWidth = 80f;
+            btnLayout.minWidth = 80f;
+
+            GameObject btnLabelObj = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
+            RectTransform btnLabelRect = btnLabelObj.GetComponent<RectTransform>();
+            btnLabelRect.SetParent(btnObj.transform, false);
+            btnLabelRect.anchorMin = Vector2.zero;
+            btnLabelRect.anchorMax = Vector2.one;
+            btnLabelRect.offsetMin = Vector2.zero;
+            btnLabelRect.offsetMax = Vector2.zero;
+            TextMeshProUGUI btnLabel = btnLabelObj.GetComponent<TextMeshProUGUI>();
+            btnLabel.text = "JOIN";
+            btnLabel.fontSize = 16f;
+            btnLabel.alignment = TextAlignmentOptions.Center;
+            btnLabel.color = Color.white;
+
+            Button button = btnObj.GetComponent<Button>();
+            RoomPublicInfo roomCapture = room;
+            button.onClick.AddListener(() => this.JoinRoomFromPublicRow(roomCapture));
+
+            bool fullRoom = shownPlayers >= shownMaxPlayers;
+            button.interactable = !fullRoom;
+            if (fullRoom)
+            {
+                btnImage.color = new Color(0.5f, 0.5f, 0.5f, 1f);
+                btnLabel.text = "FULL";
+            }
+
+            roomEntryRows.Add(row);
+        }
+    }
+
+    private int ResolveDisplayPlayerCount(RoomPublicInfo room)
+    {
+        int maxPlayers = Mathf.Max(1, room.maxPlayers);
+        int serverReported = Mathf.Clamp(room.currentPlayers, 0, maxPlayers);
+
+        this.ResolveBootstrap();
+        if (bootstrap == null || !bootstrap.IsHostActive)
+        {
+            return serverReported;
+        }
+
+        string roomCode = room != null ? room.roomCode : string.Empty;
+        if (!string.Equals((roomCode ?? string.Empty).Trim().ToUpperInvariant(), bootstrap.ActiveRoomCode, System.StringComparison.Ordinal))
+        {
+            return serverReported;
+        }
+
+        int realtimeCount = Mathf.Clamp(bootstrap.CurrentConnectedPlayers, 0, maxPlayers);
+        return realtimeCount;
+    }
+
+    private void JoinRoomFromPublicRow(RoomPublicInfo room)
+    {
+        if (room == null)
+        {
+            this.SetStatus("Data room tidak valid.");
+            return;
+        }
+
+        cachedPublicRoom = room;
+        if (joinRoomCodeInput != null)
+        {
+            joinRoomCodeInput.text = room.roomCode;
+        }
+
+        this.JoinFoundPublicRoom();
+    }
+
+    private void ClearPublicRoomRows()
+    {
+        for (int i = 0; i < roomEntryRows.Count; i++)
+        {
+            if (roomEntryRows[i] != null)
+            {
+                Destroy(roomEntryRows[i]);
+            }
+        }
+
+        roomEntryRows.Clear();
     }
 
     private void JoinFoundPublicRoom()
     {
         if (cachedPublicRoom == null)
         {
-            this.SetStatus("Belum ada hasil search room.");
+            this.SetStatus("Belum ada room public yang dipilih.");
             return;
         }
 
@@ -401,7 +601,8 @@ public class MainMenuController : MonoBehaviour
             if (joinRoomCodeInput != null) joinRoomCodeInput.text = joinCode;
 
             bootstrap.JoinRoom(joinAddress, joinPort, joinCode, password, playerName);
-            this.SetStatus($"Mencoba join public room '{response.roomName}'...");
+            this.SetHostControlMode(false);
+            this.SetStatus("Mencoba join public room '" + response.roomName + "'...");
         });
     }
 
@@ -441,6 +642,136 @@ public class MainMenuController : MonoBehaviour
         roomDirectoryClient.UpdateRoomStage(activeRoomId, stage, (_, _) => { });
     }
 
+    private void RefreshKickList()
+    {
+        this.ResolveBootstrap();
+        if (!hostControlMode || bootstrap == null || kickListContainer == null)
+        {
+            return;
+        }
+
+        this.ClearKickRows();
+
+        IReadOnlyList<ulong> clientIds = bootstrap.GetKickableClientIds();
+        if (clientIds == null || clientIds.Count == 0)
+        {
+            this.CreateKickInfoRow("Belum ada player lain di room.");
+            return;
+        }
+
+        for (int i = 0; i < clientIds.Count; i++)
+        {
+            ulong clientId = clientIds[i];
+            this.CreateKickRow(clientId);
+        }
+    }
+
+    private void CreateKickInfoRow(string text)
+    {
+        GameObject row = new GameObject("KickInfo", typeof(RectTransform), typeof(TextMeshProUGUI));
+        RectTransform rowRect = row.GetComponent<RectTransform>();
+        rowRect.SetParent(kickListContainer, false);
+
+        LayoutElement layout = row.AddComponent<LayoutElement>();
+        layout.preferredHeight = 28f;
+
+        TextMeshProUGUI label = row.GetComponent<TextMeshProUGUI>();
+        label.fontSize = 15f;
+        label.alignment = TextAlignmentOptions.Left;
+        label.color = new Color(0.9f, 0.95f, 1f, 1f);
+        label.text = text;
+
+        kickEntryRows.Add(row);
+    }
+
+    private void CreateKickRow(ulong clientId)
+    {
+        GameObject row = new GameObject("KickRow_" + clientId, typeof(RectTransform), typeof(Image));
+        RectTransform rowRect = row.GetComponent<RectTransform>();
+        rowRect.SetParent(kickListContainer, false);
+
+        LayoutElement layout = row.AddComponent<LayoutElement>();
+        layout.preferredHeight = 34f;
+
+        Image bg = row.GetComponent<Image>();
+        bg.color = new Color(1f, 1f, 1f, 0.06f);
+
+        HorizontalLayoutGroup h = row.AddComponent<HorizontalLayoutGroup>();
+        h.padding = new RectOffset(10, 8, 4, 4);
+        h.spacing = 8f;
+        h.childAlignment = TextAnchor.MiddleLeft;
+        h.childControlWidth = true;
+        h.childForceExpandWidth = false;
+
+        GameObject labelObj = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
+        labelObj.transform.SetParent(rowRect, false);
+        TextMeshProUGUI label = labelObj.GetComponent<TextMeshProUGUI>();
+        label.fontSize = 15f;
+        label.alignment = TextAlignmentOptions.Left;
+        label.color = Color.white;
+        label.text = "Client " + clientId;
+        LayoutElement labelLayout = labelObj.AddComponent<LayoutElement>();
+        labelLayout.flexibleWidth = 1f;
+
+        GameObject btnObj = new GameObject("KickButton", typeof(RectTransform), typeof(Image), typeof(Button));
+        btnObj.transform.SetParent(rowRect, false);
+        Image btnImage = btnObj.GetComponent<Image>();
+        btnImage.color = new Color(0.72f, 0.24f, 0.24f, 1f);
+        LayoutElement btnLayout = btnObj.AddComponent<LayoutElement>();
+        btnLayout.preferredWidth = 72f;
+
+        GameObject btnLabelObj = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
+        RectTransform btnLabelRect = btnLabelObj.GetComponent<RectTransform>();
+        btnLabelRect.SetParent(btnObj.transform, false);
+        btnLabelRect.anchorMin = Vector2.zero;
+        btnLabelRect.anchorMax = Vector2.one;
+        btnLabelRect.offsetMin = Vector2.zero;
+        btnLabelRect.offsetMax = Vector2.zero;
+        TextMeshProUGUI btnLabel = btnLabelObj.GetComponent<TextMeshProUGUI>();
+        btnLabel.text = "KICK";
+        btnLabel.fontSize = 14f;
+        btnLabel.alignment = TextAlignmentOptions.Center;
+        btnLabel.color = Color.white;
+
+        Button button = btnObj.GetComponent<Button>();
+        ulong captureId = clientId;
+        button.onClick.AddListener(() => this.KickClient(captureId));
+
+        kickEntryRows.Add(row);
+    }
+
+    private void ClearKickRows()
+    {
+        for (int i = 0; i < kickEntryRows.Count; i++)
+        {
+            if (kickEntryRows[i] != null)
+            {
+                Destroy(kickEntryRows[i]);
+            }
+        }
+
+        kickEntryRows.Clear();
+    }
+
+    private void KickClient(ulong clientId)
+    {
+        this.ResolveBootstrap();
+        if (bootstrap == null)
+        {
+            this.SetStatus("Bootstrap tidak ditemukan.");
+            return;
+        }
+
+        if (bootstrap.TryKickClient(clientId, out string reason))
+        {
+            this.SetStatus("Client " + clientId + " dikeluarkan dari room.");
+            this.RefreshKickList();
+            return;
+        }
+
+        this.SetStatus("Gagal kick client " + clientId + ": " + reason);
+    }
+
     private void StopSession()
     {
         this.ResolveBootstrap();
@@ -451,6 +782,8 @@ public class MainMenuController : MonoBehaviour
 
         MainMenuSessionState.Clear();
         activeRoomId = string.Empty;
+        cachedPublicRoom = null;
+        this.SetHostControlMode(false);
         this.SetStatus("Session dihentikan.");
         this.RefreshRoomInfo();
     }
@@ -503,6 +836,10 @@ public class MainMenuController : MonoBehaviour
     {
         this.SetStatus(message);
         this.RefreshRoomInfo();
+        if (hostControlMode)
+        {
+            this.RefreshKickList();
+        }
     }
 
     private void SetStatus(string message)

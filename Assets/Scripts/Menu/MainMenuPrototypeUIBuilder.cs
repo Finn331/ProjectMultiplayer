@@ -175,8 +175,7 @@ public class MainMenuPrototypeUIBuilder : MonoBehaviour
         desc.color = new Color(0.85f, 0.92f, 1f, 1f);
         SetRect(desc.rectTransform, new Vector2(0f, 0.38f), new Vector2(1f, 0.55f), new Vector2(40f, 0f), new Vector2(-40f, 0f));
 
-        Button playButton = CreateButton(panel, "PlayButton", "PLAY", new Vector2(0.32f, 0.1f), new Vector2(0.68f, 0.3f), accentColor);
-        return playButton;
+        return CreateButton(panel, "PlayButton", "PLAY", new Vector2(0.32f, 0.1f), new Vector2(0.68f, 0.3f), accentColor);
     }
 
     private RoomFlowRefs BuildRoomFlow(RectTransform roomFlowPanel)
@@ -184,7 +183,9 @@ public class MainMenuPrototypeUIBuilder : MonoBehaviour
         RoomFlowRefs refs = new RoomFlowRefs();
 
         RectTransform leftCard = CreateCard("CreateCard", roomFlowPanel, new Vector2(0.01f, 0.02f), new Vector2(0.49f, 0.98f));
-        RectTransform rightCard = CreateCard("JoinCard", roomFlowPanel, new Vector2(0.51f, 0.02f), new Vector2(0.99f, 0.98f));
+        RectTransform rightCard = CreateCard("JoinCard", roomFlowPanel, new Vector2(0.51f, 0.30f), new Vector2(0.99f, 0.98f));
+        RectTransform hostPanel = CreateCard("HostControlPanel", roomFlowPanel, new Vector2(0.51f, 0.02f), new Vector2(0.99f, 0.28f));
+        refs.hostControlPanel = hostPanel.gameObject;
 
         refs.currencyText = CreateText(roomFlowPanel, "CurrencyText", "Currency: 0", 24f, FontStyles.Bold, TextAlignmentOptions.Left);
         SetRect(refs.currencyText.rectTransform, new Vector2(0.01f, 0.92f), new Vector2(0.45f, 0.99f), new Vector2(10f, 0f), new Vector2(-10f, 0f));
@@ -197,7 +198,9 @@ public class MainMenuPrototypeUIBuilder : MonoBehaviour
 
         BuildCreateRoomSection(leftCard, refs);
         BuildJoinRoomSection(rightCard, refs);
+        BuildHostControlSection(hostPanel, refs);
 
+        hostPanel.gameObject.SetActive(false);
         return refs;
     }
 
@@ -223,7 +226,7 @@ public class MainMenuPrototypeUIBuilder : MonoBehaviour
 
         refs.soloButton = CreateButton(parent, "SoloButton", "SOLO", new Vector2(0.03f, 0.03f), new Vector2(0.22f, 0.12f), buttonColor);
         refs.createRoomButton = CreateButton(parent, "CreateRoomButton", "CREATE ROOM", new Vector2(0.24f, 0.03f), new Vector2(0.60f, 0.12f), accentColor);
-        refs.stopButton = CreateButton(parent, "StopButton", "STOP", new Vector2(0.62f, 0.03f), new Vector2(0.82f, 0.12f), new Color(0.72f, 0.24f, 0.24f, 1f));
+        refs.stopButton = CreateButton(parent, "StopButton", "LEAVE", new Vector2(0.62f, 0.03f), new Vector2(0.82f, 0.12f), new Color(0.72f, 0.24f, 0.24f, 1f));
     }
 
     private void BuildJoinRoomSection(RectTransform parent, RoomFlowRefs refs)
@@ -238,20 +241,50 @@ public class MainMenuPrototypeUIBuilder : MonoBehaviour
         refs.publicRoomResultText.color = new Color(0.84f, 0.94f, 1f, 1f);
         SetRect(refs.publicRoomResultText.rectTransform, new Vector2(0.03f, 0.72f), new Vector2(0.97f, 0.79f), Vector2.zero, Vector2.zero);
 
+        RectTransform listViewport = CreateCard("PublicRoomList", parent, new Vector2(0.03f, 0.50f), new Vector2(0.97f, 0.70f));
+        listViewport.GetComponent<Image>().color = new Color(1f, 1f, 1f, 0.05f);
+        VerticalLayoutGroup listLayout = listViewport.gameObject.AddComponent<VerticalLayoutGroup>();
+        listLayout.padding = new RectOffset(6, 6, 6, 6);
+        listLayout.spacing = 6f;
+        listLayout.childControlWidth = true;
+        listLayout.childControlHeight = false;
+        listLayout.childForceExpandHeight = false;
+        refs.publicRoomListContainer = listViewport;
+
         refs.joinAddressInput = null;
         refs.joinPortInput = null;
-        refs.joinRoomCodeInput = CreateInput(parent, "JoinRoomCodeInput", "Room Code", "ROOM01", 0.60f);
-        refs.joinPasswordInput = CreateInput(parent, "JoinPasswordInput", "Password", "", 0.50f);
+        refs.joinRoomCodeInput = CreateInput(parent, "JoinRoomCodeInput", "Room Code", "ROOM01", 0.40f);
+        refs.joinPasswordInput = CreateInput(parent, "JoinPasswordInput", "Password", "", 0.30f);
 
         TMP_Text vpsInfo = CreateText(parent, "JoinFixedInfo", "Endpoint server sudah fixed ke VPS.", 16f, FontStyles.Italic, TextAlignmentOptions.Left);
         vpsInfo.color = new Color(0.84f, 0.94f, 1f, 1f);
-        SetRect(vpsInfo.rectTransform, new Vector2(0.03f, 0.42f), new Vector2(0.97f, 0.48f), Vector2.zero, Vector2.zero);
+        SetRect(vpsInfo.rectTransform, new Vector2(0.03f, 0.21f), new Vector2(0.97f, 0.27f), Vector2.zero, Vector2.zero);
 
-        refs.joinRoomButton = CreateButton(parent, "JoinRoomButton", "JOIN DIRECT", new Vector2(0.03f, 0.18f), new Vector2(0.32f, 0.27f), buttonColor);
-        refs.joinBySearchButton = CreateButton(parent, "JoinBySearchButton", "JOIN SEARCH RESULT", new Vector2(0.34f, 0.18f), new Vector2(0.74f, 0.27f), accentColor);
+        refs.joinRoomButton = CreateButton(parent, "JoinRoomButton", "JOIN DIRECT", new Vector2(0.03f, 0.05f), new Vector2(0.32f, 0.15f), buttonColor);
+        refs.joinBySearchButton = CreateButton(parent, "JoinBySearchButton", "JOIN SEARCH RESULT", new Vector2(0.34f, 0.05f), new Vector2(0.74f, 0.15f), accentColor);
+    }
 
-        refs.startLobbyButton = CreateButton(parent, "StartLobbyButton", "HOST START LOBBY", new Vector2(0.03f, 0.04f), new Vector2(0.45f, 0.13f), new Color(0.23f, 0.62f, 0.87f, 1f));
-        refs.startForestButton = CreateButton(parent, "StartForestButton", "HOST START FOREST", new Vector2(0.47f, 0.04f), new Vector2(0.97f, 0.13f), new Color(0.18f, 0.72f, 0.52f, 1f));
+    private void BuildHostControlSection(RectTransform parent, RoomFlowRefs refs)
+    {
+        TMP_Text header = CreateText(parent, "HostHeader", "HOST CONTROL PANEL", 20f, FontStyles.Bold, TextAlignmentOptions.Left);
+        SetRect(header.rectTransform, new Vector2(0.03f, 0.76f), new Vector2(0.97f, 0.97f), Vector2.zero, Vector2.zero);
+
+        refs.startLobbyButton = CreateButton(parent, "StartLobbyButton", "START LOBBY", new Vector2(0.03f, 0.48f), new Vector2(0.36f, 0.72f), new Color(0.23f, 0.62f, 0.87f, 1f));
+        refs.startForestButton = CreateButton(parent, "StartForestButton", "START FOREST", new Vector2(0.38f, 0.48f), new Vector2(0.71f, 0.72f), new Color(0.18f, 0.72f, 0.52f, 1f));
+        refs.hostLeaveButton = CreateButton(parent, "HostLeaveButton", "LEAVE", new Vector2(0.73f, 0.48f), new Vector2(0.97f, 0.72f), new Color(0.72f, 0.24f, 0.24f, 1f));
+
+        TMP_Text kickLabel = CreateText(parent, "KickLabel", "Kick Players", 16f, FontStyles.Bold, TextAlignmentOptions.Left);
+        SetRect(kickLabel.rectTransform, new Vector2(0.03f, 0.34f), new Vector2(0.97f, 0.46f), Vector2.zero, Vector2.zero);
+
+        RectTransform kickList = CreateCard("KickPlayerList", parent, new Vector2(0.03f, 0.05f), new Vector2(0.97f, 0.32f));
+        kickList.GetComponent<Image>().color = new Color(1f, 1f, 1f, 0.05f);
+        VerticalLayoutGroup kickLayout = kickList.gameObject.AddComponent<VerticalLayoutGroup>();
+        kickLayout.padding = new RectOffset(6, 6, 6, 6);
+        kickLayout.spacing = 6f;
+        kickLayout.childControlWidth = true;
+        kickLayout.childControlHeight = false;
+        kickLayout.childForceExpandHeight = false;
+        refs.kickListContainer = kickList;
     }
 
     private TMP_Text CreateText(RectTransform parent, string name, string value, float fontSize, FontStyles fontStyle, TextAlignmentOptions align)
@@ -448,6 +481,7 @@ public class MainMenuPrototypeUIBuilder : MonoBehaviour
 
         SetPrivateField(targetController, "playGatePanel", playGatePanel);
         SetPrivateField(targetController, "roomFlowPanel", roomFlowPanel);
+        SetPrivateField(targetController, "hostControlPanel", refs.hostControlPanel);
 
         SetPrivateField(targetController, "playerNameInput", refs.playerNameInput);
         SetPrivateField(targetController, "roomNameInput", refs.roomNameInput);
@@ -465,6 +499,9 @@ public class MainMenuPrototypeUIBuilder : MonoBehaviour
 
         SetPrivateField(targetController, "publicRoomSearchInput", refs.publicRoomSearchInput);
         SetPrivateField(targetController, "publicRoomResultText", refs.publicRoomResultText);
+        SetPrivateField(targetController, "publicRoomListContainer", refs.publicRoomListContainer);
+        SetPrivateField(targetController, "kickListContainer", refs.kickListContainer);
+        SetPrivateField(targetController, "hostLeaveButton", refs.hostLeaveButton);
 
         SetPrivateField(targetController, "playButton", playButton);
         SetPrivateField(targetController, "soloButton", refs.soloButton);
@@ -515,6 +552,11 @@ public class MainMenuPrototypeUIBuilder : MonoBehaviour
 
         public TMP_InputField publicRoomSearchInput;
         public TMP_Text publicRoomResultText;
+        public RectTransform publicRoomListContainer;
+
+        public GameObject hostControlPanel;
+        public RectTransform kickListContainer;
+        public Button hostLeaveButton;
 
         public Button soloButton;
         public Button createRoomButton;

@@ -6,6 +6,7 @@ using UnityEngine.Networking;
 public class RoomDirectoryClient : MonoBehaviour
 {
     [SerializeField] private string baseUrl = "http://31.56.56.8:9010";
+    [SerializeField] private string fallbackBaseUrl = "http://31.56.56.8:9010";
     [SerializeField] private float requestTimeoutSeconds = 8f;
     private const string DefaultBaseUrl = "http://31.56.56.8:9010";
 
@@ -47,78 +48,120 @@ public class RoomDirectoryClient : MonoBehaviour
 
     private IEnumerator GetJson<T>(string path, Action<T, string> callback) where T : class
     {
-        string endpoint = this.BuildEndpoint(path);
-        using UnityWebRequest request = UnityWebRequest.Get(endpoint);
-        request.timeout = Mathf.Max(2, Mathf.RoundToInt(requestTimeoutSeconds));
+        string[] endpoints = this.BuildEndpoints(path);
+        string lastError = "No endpoint available.";
 
-        UnityWebRequestAsyncOperation operation;
-        if (!TrySendRequest(request, endpoint, out operation, out string startError))
+        for (int i = 0; i < endpoints.Length; i++)
         {
-            callback?.Invoke(null, startError);
-            yield break;
+            string endpoint = endpoints[i];
+            using (UnityWebRequest request = UnityWebRequest.Get(endpoint))
+            {
+                request.timeout = Mathf.Max(2, Mathf.RoundToInt(requestTimeoutSeconds));
+
+                UnityWebRequestAsyncOperation operation;
+                string startError;
+                if (!TrySendRequest(request, endpoint, out operation, out startError))
+                {
+                    lastError = startError;
+                    continue;
+                }
+
+                yield return operation;
+
+                if (request.result != UnityWebRequest.Result.Success)
+                {
+                    lastError = request.error;
+                    continue;
+                }
+
+                try
+                {
+                    T result = JsonUtility.FromJson<T>(request.downloadHandler.text);
+                    callback?.Invoke(result, null);
+                    yield break;
+                }
+                catch (Exception exception)
+                {
+                    lastError = exception.Message;
+                }
+            }
         }
 
-        yield return operation;
-
-        if (request.result != UnityWebRequest.Result.Success)
-        {
-            callback?.Invoke(null, request.error);
-            yield break;
-        }
-
-        try
-        {
-            T result = JsonUtility.FromJson<T>(request.downloadHandler.text);
-            callback?.Invoke(result, null);
-        }
-        catch (Exception exception)
-        {
-            callback?.Invoke(null, exception.Message);
-        }
+        callback?.Invoke(null, lastError);
     }
 
     private IEnumerator PostJson<TRequest, TResponse>(string path, TRequest body, Action<TResponse, string> callback)
         where TResponse : class
     {
-        string endpoint = this.BuildEndpoint(path);
+        string[] endpoints = this.BuildEndpoints(path);
         string json = JsonUtility.ToJson(body);
 
-        using UnityWebRequest request = new UnityWebRequest(endpoint, UnityWebRequest.kHttpVerbPOST);
-        byte[] bodyRaw = System.Text.Encoding.UTF8.GetBytes(json);
-        request.uploadHandler = new UploadHandlerRaw(bodyRaw);
-        request.downloadHandler = new DownloadHandlerBuffer();
-        request.SetRequestHeader("Content-Type", "application/json");
-        request.timeout = Mathf.Max(2, Mathf.RoundToInt(requestTimeoutSeconds));
-
-        UnityWebRequestAsyncOperation operation;
-        if (!TrySendRequest(request, endpoint, out operation, out string startError))
+        string lastError = "No endpoint available.";
+        for (int i = 0; i < endpoints.Length; i++)
         {
-            callback?.Invoke(null, startError);
-            yield break;
+            string endpoint = endpoints[i];
+            using (UnityWebRequest request = new UnityWebRequest(endpoint, UnityWebRequest.kHttpVerbPOST))
+            {
+                byte[] bodyRaw = System.Text.Encoding.UTF8.GetBytes(json);
+                request.uploadHandler = new UploadHandlerRaw(bodyRaw);
+                request.downloadHandler = new DownloadHandlerBuffer();
+                request.SetRequestHeader("Content-Type", "application/json");
+                request.timeout = Mathf.Max(2, Mathf.RoundToInt(requestTimeoutSeconds));
+
+                UnityWebRequestAsyncOperation operation;
+                string startError;
+                if (!TrySendRequest(request, endpoint, out operation, out startError))
+                {
+                    lastError = startError;
+                    continue;
+                }
+
+                yield return operation;
+
+                if (request.result != UnityWebRequest.Result.Success)
+                {
+                    lastError = request.error;
+                    continue;
+                }
+
+                try
+                {
+                    TResponse result = JsonUtility.FromJson<TResponse>(request.downloadHandler.text);
+                    callback?.Invoke(result, null);
+                    yield break;
+                }
+                catch (Exception exception)
+                {
+                    lastError = exception.Message;
+                }
+            }
         }
 
-        yield return operation;
-
-        if (request.result != UnityWebRequest.Result.Success)
-        {
-            callback?.Invoke(null, request.error);
-            yield break;
-        }
-
-        try
-        {
-            TResponse result = JsonUtility.FromJson<TResponse>(request.downloadHandler.text);
-            callback?.Invoke(result, null);
-        }
-        catch (Exception exception)
-        {
-            callback?.Invoke(null, exception.Message);
-        }
+        callback?.Invoke(null, lastError);
     }
 
-    private string BuildEndpoint(string path)
+    private string[] BuildEndpoints(string path)
     {
         string root = string.IsNullOrWhiteSpace(baseUrl) ? DefaultBaseUrl : baseUrl.Trim();
+        string fallback = string.IsNullOrWhiteSpace(fallbackBaseUrl) ? string.Empty : fallbackBaseUrl.Trim();
+        string primaryEndpoint = this.CombineEndpoint(root, path);
+
+        if (string.IsNullOrWhiteSpace(fallback))
+        {
+            return new[] { primaryEndpoint };
+        }
+
+        string fallbackEndpoint = this.CombineEndpoint(fallback, path);
+        if (string.Equals(primaryEndpoint, fallbackEndpoint, StringComparison.OrdinalIgnoreCase))
+        {
+            return new[] { primaryEndpoint };
+        }
+
+        return new[] { primaryEndpoint, fallbackEndpoint };
+    }
+
+    private string CombineEndpoint(string root, string path)
+    {
         if (root.EndsWith("/"))
         {
             root = root.Substring(0, root.Length - 1);
