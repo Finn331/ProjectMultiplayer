@@ -53,7 +53,7 @@ public class MainMenuController : MonoBehaviour
     [SerializeField] private string forestSceneName = "Environment";
 
     [Header("Defaults")]
-    [SerializeField] private string defaultHostAddress = "0.0.0.0";
+    [SerializeField] private string defaultHostAddress = "31.56.56.8";
     [SerializeField] private ushort defaultHostPort = 9005;
     [SerializeField] private string defaultJoinAddress = "31.56.56.8";
     [SerializeField] private ushort defaultJoinPort = 9005;

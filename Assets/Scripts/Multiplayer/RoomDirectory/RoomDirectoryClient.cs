@@ -7,6 +7,7 @@ public class RoomDirectoryClient : MonoBehaviour
 {
     [SerializeField] private string baseUrl = "http://31.56.56.8:9010";
     [SerializeField] private float requestTimeoutSeconds = 8f;
+    private const string DefaultBaseUrl = "http://31.56.56.8:9010";
 
     public string BaseUrl
     {
@@ -50,7 +51,14 @@ public class RoomDirectoryClient : MonoBehaviour
         using UnityWebRequest request = UnityWebRequest.Get(endpoint);
         request.timeout = Mathf.Max(2, Mathf.RoundToInt(requestTimeoutSeconds));
 
-        yield return request.SendWebRequest();
+        UnityWebRequestAsyncOperation operation;
+        if (!TrySendRequest(request, endpoint, out operation, out string startError))
+        {
+            callback?.Invoke(null, startError);
+            yield break;
+        }
+
+        yield return operation;
 
         if (request.result != UnityWebRequest.Result.Success)
         {
@@ -82,7 +90,14 @@ public class RoomDirectoryClient : MonoBehaviour
         request.SetRequestHeader("Content-Type", "application/json");
         request.timeout = Mathf.Max(2, Mathf.RoundToInt(requestTimeoutSeconds));
 
-        yield return request.SendWebRequest();
+        UnityWebRequestAsyncOperation operation;
+        if (!TrySendRequest(request, endpoint, out operation, out string startError))
+        {
+            callback?.Invoke(null, startError);
+            yield break;
+        }
+
+        yield return operation;
 
         if (request.result != UnityWebRequest.Result.Success)
         {
@@ -103,7 +118,7 @@ public class RoomDirectoryClient : MonoBehaviour
 
     private string BuildEndpoint(string path)
     {
-        string root = string.IsNullOrWhiteSpace(baseUrl) ? "http://31.56.56.8:9010" : baseUrl.Trim();
+        string root = string.IsNullOrWhiteSpace(baseUrl) ? DefaultBaseUrl : baseUrl.Trim();
         if (root.EndsWith("/"))
         {
             root = root.Substring(0, root.Length - 1);
@@ -115,5 +130,41 @@ public class RoomDirectoryClient : MonoBehaviour
         }
 
         return root + path;
+    }
+
+    private static bool TrySendRequest(
+        UnityWebRequest request,
+        string endpoint,
+        out UnityWebRequestAsyncOperation operation,
+        out string error)
+    {
+        operation = null;
+        error = null;
+
+        try
+        {
+            operation = request.SendWebRequest();
+            return true;
+        }
+        catch (InvalidOperationException exception)
+        {
+            if (endpoint.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+            {
+                error =
+                    "HTTP diblokir oleh Player Settings (Allow downloads over HTTP = Not Allowed). " +
+                    "Ubah ke Development Only / Always Allowed atau pakai HTTPS. Detail: " + exception.Message;
+            }
+            else
+            {
+                error = exception.Message;
+            }
+
+            return false;
+        }
+        catch (Exception exception)
+        {
+            error = exception.Message;
+            return false;
+        }
     }
 }
