@@ -105,6 +105,8 @@ public class MainMenuController : MonoBehaviour
         {
             bootstrap.StatusChanged -= this.OnBootstrapStatus;
             bootstrap.StatusChanged += this.OnBootstrapStatus;
+            bootstrap.RoomStageAccepted -= this.OnBootstrapRoomStageAccepted;
+            bootstrap.RoomStageAccepted += this.OnBootstrapRoomStageAccepted;
         }
     }
 
@@ -113,6 +115,7 @@ public class MainMenuController : MonoBehaviour
         if (bootstrap != null)
         {
             bootstrap.StatusChanged -= this.OnBootstrapStatus;
+            bootstrap.RoomStageAccepted -= this.OnBootstrapRoomStageAccepted;
         }
     }
 
@@ -865,7 +868,6 @@ public class MainMenuController : MonoBehaviour
             return;
         }
 
-        this.TryNotifyRoomStage("office_lobby");
         bootstrap.RequestOfficeLobbySceneAsRoomOwner();
     }
 
@@ -878,7 +880,6 @@ public class MainMenuController : MonoBehaviour
             return;
         }
 
-        this.TryNotifyRoomStage("forest");
         bootstrap.RequestForestSceneAsRoomOwner();
     }
 
@@ -1206,6 +1207,26 @@ public class MainMenuController : MonoBehaviour
         if (hostControlMode)
         {
             this.RefreshKickList();
+        }
+    }
+
+    private void OnBootstrapRoomStageAccepted(string stage)
+    {
+        if (!isRoomHostSession)
+        {
+            return;
+        }
+
+        string normalizedStage = string.IsNullOrWhiteSpace(stage) ? string.Empty : stage.Trim().ToLowerInvariant();
+        if (normalizedStage.Contains("forest"))
+        {
+            this.TryNotifyRoomStage("forest");
+            return;
+        }
+
+        if (normalizedStage.Contains("office") || normalizedStage.Contains("lobby"))
+        {
+            this.TryNotifyRoomStage("office_lobby");
         }
     }
 

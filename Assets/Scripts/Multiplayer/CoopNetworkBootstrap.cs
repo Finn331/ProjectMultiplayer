@@ -12,7 +12,9 @@ public class CoopNetworkBootstrap : MonoBehaviour
 {
     private const string DefaultPlayerPrefabPath = "Assets/Assets/Prefabs/NetworkPlayer.prefab";
     private const string RoomRosterMessageName = "RoomRosterSync";
+    private const string RoomRosterRequestMessageName = "RoomRosterRequest";
     private const string RoomStageRequestMessageName = "RoomStageRequest";
+    private const string RoomStageResponseMessageName = "RoomStageResponse";
     private static CoopNetworkBootstrap instance;
 
     [Serializable]
@@ -37,11 +39,25 @@ public class CoopNetworkBootstrap : MonoBehaviour
     }
 
     [Serializable]
+    private struct RoomRosterRequestPayload
+    {
+        public string roomCode;
+    }
+
+    [Serializable]
     private struct RoomStageRequestPayload
     {
         public string roomCode;
         public string sceneName;
         public string stage;
+    }
+
+    [Serializable]
+    private struct RoomStageResponsePayload
+    {
+        public bool accepted;
+        public string stage;
+        public string message;
     }
 
     public enum AutoStartMode
@@ -112,11 +128,13 @@ public class CoopNetworkBootstrap : MonoBehaviour
     private bool approvalCallbackBound;
     private float connectDeadline;
     private float nextRosterBroadcastTime;
+    private float nextRosterRequestTime;
     private string pendingJoinRoomCode = string.Empty;
     private string pendingJoinPassword = string.Empty;
     private string pendingJoinPlayerName = "Player";
 
     public event Action<string> StatusChanged;
+    public event Action<string> RoomStageAccepted;
 
     public string ServerAddress
     {
@@ -353,6 +371,15 @@ public class CoopNetworkBootstrap : MonoBehaviour
                 nextRosterBroadcastTime = Time.unscaledTime + 1f;
                 this.BroadcastRoomRosterSnapshot();
             }
+
+            if (networkManager.IsClient &&
+                networkManager.IsConnectedClient &&
+                !networkManager.IsServer &&
+                Time.unscaledTime >= nextRosterRequestTime)
+            {
+                nextRosterRequestTime = Time.unscaledTime + 1f;
+                this.RequestRoomRosterFromServer();
+            }
         }
 
         if (!waitingClientConnect)
@@ -535,24 +562,24 @@ public class CoopNetworkBootstrap : MonoBehaviour
         this.StartSceneAsHostInternal(targetScene, "forest");
     }
 
-    private void StartSceneAsHostInternal(string targetScene, string stageLabel)
+    private bool StartSceneAsHostInternal(string targetScene, string stageLabel)
     {
         if (networkManager == null || !networkManager.IsServer)
         {
             this.SetStatus($"Hanya server/host yang bisa Start ke {stageLabel}.");
-            return;
+            return false;
         }
 
         if (string.IsNullOrWhiteSpace(targetScene))
         {
             this.SetStatus($"Scene untuk {stageLabel} belum diisi.");
-            return;
+            return false;
         }
 
         if (!this.IsSceneInBuildSettings(targetScene))
         {
             this.SetStatus($"Scene '{targetScene}' belum ada di Build Settings, jadi client tidak bisa ikut pindah.");
-            return;
+            return false;
         }
 
         if (networkManager.SceneManager != null && networkManager.NetworkConfig != null && networkManager.NetworkConfig.EnableSceneManagement)
@@ -561,15 +588,18 @@ public class CoopNetworkBootstrap : MonoBehaviour
             if (status == SceneEventProgressStatus.Started)
             {
                 this.SetStatus($"Host memulai {stageLabel}: pindah ke scene '{targetScene}'.");
-                return;
+                this.RoomStageAccepted?.Invoke(stageLabel);
+                return true;
             }
 
             this.SetStatus($"Gagal load scene network '{targetScene}' ({status}). Cek Build Settings / nama scene.");
-            return;
+            return false;
         }
 
+        this.RoomStageAccepted?.Invoke(stageLabel);
         SceneManager.LoadScene(targetScene, LoadSceneMode.Single);
         this.SetStatus($"Scene management NGO nonaktif, fallback local load '{targetScene}' untuk {stageLabel}.");
+        return true;
     }
 
     private void RequestSceneStageFromServer(string targetScene, string stage, string stageLabel)
@@ -1262,6 +1292,7 @@ public class CoopNetworkBootstrap : MonoBehaviour
             }
 
             this.EnsureLocalPlayerDoesNotDestroyWithScene();
+            this.RequestRoomRosterFromServer();
             this.SetStatus($"Berhasil join room di {CurrentEndpoint}");
         }
     }
@@ -1307,9 +1338,13 @@ public class CoopNetworkBootstrap : MonoBehaviour
         }
 
         networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(RoomRosterMessageName);
+        networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(RoomRosterRequestMessageName);
         networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(RoomStageRequestMessageName);
+        networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(RoomStageResponseMessageName);
         networkManager.CustomMessagingManager.RegisterNamedMessageHandler(RoomRosterMessageName, this.OnRoomRosterMessageReceived);
+        networkManager.CustomMessagingManager.RegisterNamedMessageHandler(RoomRosterRequestMessageName, this.OnRoomRosterRequestMessageReceived);
         networkManager.CustomMessagingManager.RegisterNamedMessageHandler(RoomStageRequestMessageName, this.OnRoomStageRequestMessageReceived);
+        networkManager.CustomMessagingManager.RegisterNamedMessageHandler(RoomStageResponseMessageName, this.OnRoomStageResponseMessageReceived);
     }
 
     private void UnbindRosterMessageHandler()
@@ -1320,7 +1355,9 @@ public class CoopNetworkBootstrap : MonoBehaviour
         }
 
         networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(RoomRosterMessageName);
+        networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(RoomRosterRequestMessageName);
         networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(RoomStageRequestMessageName);
+        networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(RoomStageResponseMessageName);
     }
 
     private void OnRoomRosterMessageReceived(ulong senderClientId, FastBufferReader messagePayload)
@@ -1339,6 +1376,48 @@ public class CoopNetworkBootstrap : MonoBehaviour
         catch
         {
         }
+    }
+
+    private void OnRoomRosterRequestMessageReceived(ulong senderClientId, FastBufferReader messagePayload)
+    {
+        if (networkManager == null || !networkManager.IsServer)
+        {
+            return;
+        }
+
+        string requestedRoomCode = string.Empty;
+        messagePayload.ReadValueSafe(out string json);
+        if (!string.IsNullOrWhiteSpace(json))
+        {
+            try
+            {
+                RoomRosterRequestPayload payload = JsonUtility.FromJson<RoomRosterRequestPayload>(json);
+                requestedRoomCode = this.NormalizeRoomCode(payload.roomCode);
+            }
+            catch
+            {
+                requestedRoomCode = string.Empty;
+            }
+        }
+
+        if (!connectedClientRoomCodes.TryGetValue(senderClientId, out string connectedRoomCode))
+        {
+            return;
+        }
+
+        string senderRoomCode = this.NormalizeRoomCode(connectedRoomCode);
+        if (string.IsNullOrWhiteSpace(senderRoomCode))
+        {
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(requestedRoomCode) &&
+            !string.Equals(requestedRoomCode, senderRoomCode, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        this.SendRoomRosterSnapshotToClient(senderClientId, senderRoomCode);
     }
 
     private void OnRoomStageRequestMessageReceived(ulong senderClientId, FastBufferReader messagePayload)
@@ -1367,13 +1446,51 @@ public class CoopNetworkBootstrap : MonoBehaviour
         string roomCode = this.NormalizeRoomCode(payload.roomCode);
         if (!this.IsRoomStageRequestAuthorized(senderClientId, roomCode))
         {
-            this.SetStatus($"Client {senderClientId} tidak punya izin start scene untuk room {roomCode}.");
+            string reason = $"Client {senderClientId} tidak punya izin start scene untuk room {roomCode}.";
+            this.SetStatus(reason);
+            this.SendRoomStageResponse(senderClientId, false, payload.stage, reason);
             return;
         }
 
         string sceneName = string.IsNullOrWhiteSpace(payload.sceneName) ? roomLobbySceneName : payload.sceneName.Trim();
         string stageLabel = string.IsNullOrWhiteSpace(payload.stage) ? "room stage" : payload.stage.Trim();
-        this.StartSceneAsHostInternal(sceneName, stageLabel);
+        bool started = this.StartSceneAsHostInternal(sceneName, stageLabel);
+        this.SendRoomStageResponse(
+            senderClientId,
+            started,
+            payload.stage,
+            started ? $"Server memulai {stageLabel}." : LastStatusMessage);
+    }
+
+    private void OnRoomStageResponseMessageReceived(ulong senderClientId, FastBufferReader messagePayload)
+    {
+        if (networkManager == null || networkManager.IsServer)
+        {
+            return;
+        }
+
+        messagePayload.ReadValueSafe(out string json);
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return;
+        }
+
+        try
+        {
+            RoomStageResponsePayload payload = JsonUtility.FromJson<RoomStageResponsePayload>(json);
+            if (!string.IsNullOrWhiteSpace(payload.message))
+            {
+                this.SetStatus(payload.message);
+            }
+
+            if (payload.accepted)
+            {
+                this.RoomStageAccepted?.Invoke(payload.stage);
+            }
+        }
+        catch
+        {
+        }
     }
 
     private void BroadcastRoomRosterSnapshot()
@@ -1400,14 +1517,116 @@ public class CoopNetworkBootstrap : MonoBehaviour
         }
     }
 
+    private void SendRoomRosterSnapshotToClient(ulong targetClientId, string roomCode)
+    {
+        if (networkManager == null ||
+            !networkManager.IsServer ||
+            !networkManager.IsListening ||
+            networkManager.CustomMessagingManager == null)
+        {
+            return;
+        }
+
+        RoomRosterSnapshot snapshot = this.BuildRoomRosterSnapshot(roomCode);
+        string json = JsonUtility.ToJson(snapshot);
+        int capacity = this.GetStringMessageCapacity(json);
+        using (FastBufferWriter writer = new FastBufferWriter(capacity, Allocator.Temp))
+        {
+            writer.WriteValueSafe(json);
+            networkManager.CustomMessagingManager.SendNamedMessage(
+                RoomRosterMessageName,
+                targetClientId,
+                writer,
+                NetworkDelivery.ReliableSequenced);
+        }
+    }
+
+    private void RequestRoomRosterFromServer()
+    {
+        if (networkManager == null ||
+            !networkManager.IsClient ||
+            !networkManager.IsConnectedClient ||
+            networkManager.IsServer ||
+            networkManager.CustomMessagingManager == null)
+        {
+            return;
+        }
+
+        string roomCode = this.GetLocalRoomCodeForUi();
+        if (string.IsNullOrWhiteSpace(roomCode))
+        {
+            return;
+        }
+
+        RoomRosterRequestPayload payload = new RoomRosterRequestPayload
+        {
+            roomCode = roomCode
+        };
+
+        string json = JsonUtility.ToJson(payload);
+        int capacity = this.GetStringMessageCapacity(json);
+        using (FastBufferWriter writer = new FastBufferWriter(capacity, Allocator.Temp))
+        {
+            writer.WriteValueSafe(json);
+            networkManager.CustomMessagingManager.SendNamedMessage(
+                RoomRosterRequestMessageName,
+                NetworkManager.ServerClientId,
+                writer,
+                NetworkDelivery.ReliableSequenced);
+        }
+    }
+
+    private void SendRoomStageResponse(ulong targetClientId, bool accepted, string stage, string message)
+    {
+        if (networkManager == null ||
+            !networkManager.IsServer ||
+            !networkManager.IsListening ||
+            networkManager.CustomMessagingManager == null ||
+            targetClientId == NetworkManager.ServerClientId)
+        {
+            return;
+        }
+
+        RoomStageResponsePayload payload = new RoomStageResponsePayload
+        {
+            accepted = accepted,
+            stage = string.IsNullOrWhiteSpace(stage) ? string.Empty : stage.Trim(),
+            message = message ?? string.Empty
+        };
+
+        string json = JsonUtility.ToJson(payload);
+        int capacity = this.GetStringMessageCapacity(json);
+        using (FastBufferWriter writer = new FastBufferWriter(capacity, Allocator.Temp))
+        {
+            writer.WriteValueSafe(json);
+            networkManager.CustomMessagingManager.SendNamedMessage(
+                RoomStageResponseMessageName,
+                targetClientId,
+                writer,
+                NetworkDelivery.ReliableSequenced);
+        }
+    }
+
     private RoomRosterSnapshot BuildRoomRosterSnapshot()
     {
+        return this.BuildRoomRosterSnapshot(string.Empty);
+    }
+
+    private RoomRosterSnapshot BuildRoomRosterSnapshot(string onlyRoomCode)
+    {
         List<RoomRosterEntry> entries = new List<RoomRosterEntry>();
+        string normalizedOnlyRoomCode = this.NormalizeRoomCode(onlyRoomCode);
         foreach (var pair in roomMembers)
         {
             string roomCode = pair.Key;
             HashSet<ulong> members = pair.Value;
             if (string.IsNullOrWhiteSpace(roomCode) || members == null)
+            {
+                continue;
+            }
+
+            if (!string.IsNullOrWhiteSpace(normalizedOnlyRoomCode) &&
+                !string.Equals(this.NormalizeRoomCode(roomCode), normalizedOnlyRoomCode, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
