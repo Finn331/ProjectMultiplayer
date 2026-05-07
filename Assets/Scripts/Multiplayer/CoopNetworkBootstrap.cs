@@ -55,6 +55,8 @@ public class CoopNetworkBootstrap : MonoBehaviour
     [SerializeField] private string forestSceneName = "Environment";
     [SerializeField] private bool enableRoomConnectionApproval = true;
     [SerializeField] private bool requireRoomCodeForClients = false;
+    [SerializeField] private bool dedicatedServerMultiRoom = true;
+    [SerializeField] private bool dedicatedServerEnforceRoomPassword = true;
 
     [Header("Networking")]
     [SerializeField] private NetworkManager networkManager;
@@ -75,6 +77,10 @@ public class CoopNetworkBootstrap : MonoBehaviour
     private readonly HashSet<int> runtimeRegisteredPrefabIds = new HashSet<int>();
     private readonly Dictionary<ulong, string> approvedClientNames = new Dictionary<ulong, string>();
     private readonly Dictionary<ulong, string> connectedClientNames = new Dictionary<ulong, string>();
+    private readonly Dictionary<ulong, string> approvedClientRoomCodes = new Dictionary<ulong, string>();
+    private readonly Dictionary<ulong, string> connectedClientRoomCodes = new Dictionary<ulong, string>();
+    private readonly Dictionary<string, HashSet<ulong>> roomMembers = new Dictionary<string, HashSet<ulong>>(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, string> roomPasswords = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     private bool callbacksBound;
     private bool waitingClientConnect;
     private bool approvalCallbackBound;
@@ -141,6 +147,16 @@ public class CoopNetworkBootstrap : MonoBehaviour
         return $"Client {clientId}";
     }
 
+    public string GetClientRoomCode(ulong clientId)
+    {
+        if (connectedClientRoomCodes.TryGetValue(clientId, out string roomCode))
+        {
+            return roomCode ?? string.Empty;
+        }
+
+        return string.Empty;
+    }
+
     public IReadOnlyList<ulong> GetKickableClientIds()
     {
         if (networkManager == null || !networkManager.IsHost || !networkManager.IsListening)
@@ -165,6 +181,22 @@ public class CoopNetworkBootstrap : MonoBehaviour
         }
 
         return result;
+    }
+
+    public int GetRoomMemberCount(string roomCode)
+    {
+        string normalized = this.NormalizeRoomCode(roomCode);
+        if (string.IsNullOrEmpty(normalized))
+        {
+            return 0;
+        }
+
+        if (!roomMembers.TryGetValue(normalized, out HashSet<ulong> members) || members == null)
+        {
+            return 0;
+        }
+
+        return members.Count;
     }
 
     public bool TryKickClient(ulong clientId, out string reason)
@@ -201,6 +233,9 @@ public class CoopNetworkBootstrap : MonoBehaviour
         }
 
         networkManager.DisconnectClient(clientId);
+        approvedClientRoomCodes.Remove(clientId);
+        connectedClientRoomCodes.Remove(clientId);
+        this.RemoveClientFromRooms(clientId);
         this.SetStatus($"Host kick client {clientId}.");
         return true;
     }
@@ -305,11 +340,19 @@ public class CoopNetworkBootstrap : MonoBehaviour
 
         approvedClientNames.Clear();
         connectedClientNames.Clear();
+        approvedClientRoomCodes.Clear();
+        connectedClientRoomCodes.Clear();
+        roomMembers.Clear();
+        roomPasswords.Clear();
         this.ApplyClientConnectionPayload(activeRoomCode, activeRoomPassword, pendingJoinPlayerName);
         bool started = networkManager.StartHost();
         if (started)
         {
             connectedClientNames[NetworkManager.ServerClientId] = string.IsNullOrWhiteSpace(pendingJoinPlayerName) ? "Host" : pendingJoinPlayerName;
+            string hostRoomCode = this.NormalizeRoomCode(activeRoomCode);
+            connectedClientRoomCodes[NetworkManager.ServerClientId] = hostRoomCode;
+            this.AddClientToRoom(hostRoomCode, NetworkManager.ServerClientId);
+            roomPasswords[hostRoomCode] = activeRoomPassword ?? string.Empty;
         }
 
         this.SetStatus(started ? $"Room host aktif: {ActiveRoomSummary} @ {CurrentEndpoint}" : "Gagal start Host");
@@ -343,6 +386,10 @@ public class CoopNetworkBootstrap : MonoBehaviour
 
         approvedClientNames.Clear();
         connectedClientNames.Clear();
+        approvedClientRoomCodes.Clear();
+        connectedClientRoomCodes.Clear();
+        roomMembers.Clear();
+        roomPasswords.Clear();
         bool started = networkManager.StartServer();
         this.SetStatus(started ? $"Server aktif di {CurrentEndpoint}" : "Gagal start Server");
     }
@@ -469,6 +516,10 @@ public class CoopNetworkBootstrap : MonoBehaviour
         networkManager.Shutdown();
         approvedClientNames.Clear();
         connectedClientNames.Clear();
+        approvedClientRoomCodes.Clear();
+        connectedClientRoomCodes.Clear();
+        roomMembers.Clear();
+        roomPasswords.Clear();
         waitingClientConnect = false;
         this.SetStatus("Offline");
     }
@@ -601,6 +652,54 @@ public class CoopNetworkBootstrap : MonoBehaviour
             return;
         }
 
+        RoomJoinPayload payload = this.DecodeJoinPayload(request.Payload);
+        string requestedPlayerName = string.IsNullOrWhiteSpace(payload.playerName) ? $"Client {request.ClientNetworkId}" : payload.playerName.Trim();
+        approvedClientNames[request.ClientNetworkId] = requestedPlayerName;
+        string incomingRoomCode = this.NormalizeRoomCode(payload.roomCode);
+        string incomingPassword = payload.password ?? string.Empty;
+
+        if (networkManager.IsServer && !networkManager.IsHost && dedicatedServerMultiRoom)
+        {
+            if (string.IsNullOrWhiteSpace(incomingRoomCode))
+            {
+                response.Approved = false;
+                response.Reason = "Room code wajib diisi.";
+                approvedClientNames.Remove(request.ClientNetworkId);
+                return;
+            }
+
+            if (dedicatedServerEnforceRoomPassword)
+            {
+                if (roomPasswords.TryGetValue(incomingRoomCode, out string expectedPassword))
+                {
+                    if (!string.Equals(expectedPassword ?? string.Empty, incomingPassword, StringComparison.Ordinal))
+                    {
+                        response.Approved = false;
+                        response.Reason = "Password room salah.";
+                        approvedClientNames.Remove(request.ClientNetworkId);
+                        return;
+                    }
+                }
+                else
+                {
+                    roomPasswords[incomingRoomCode] = incomingPassword;
+                }
+            }
+
+            int roomMemberCount = this.GetRoomMemberCount(incomingRoomCode);
+            if (roomMemberCount >= this.RoomMaxPlayers)
+            {
+                response.Approved = false;
+                response.Reason = $"Room {incomingRoomCode} penuh ({RoomMaxPlayers} pemain).";
+                approvedClientNames.Remove(request.ClientNetworkId);
+                return;
+            }
+
+            approvedClientRoomCodes[request.ClientNetworkId] = incomingRoomCode;
+            response.Approved = true;
+            return;
+        }
+
         int currentPlayers = networkManager.ConnectedClientsList != null
             ? networkManager.ConnectedClientsList.Count
             : networkManager.ConnectedClientsIds.Count;
@@ -609,13 +708,9 @@ public class CoopNetworkBootstrap : MonoBehaviour
         {
             response.Approved = false;
             response.Reason = $"Room penuh ({RoomMaxPlayers} pemain).";
+            approvedClientNames.Remove(request.ClientNetworkId);
             return;
         }
-
-        RoomJoinPayload payload = this.DecodeJoinPayload(request.Payload);
-        string requestedPlayerName = string.IsNullOrWhiteSpace(payload.playerName) ? $"Client {request.ClientNetworkId}" : payload.playerName.Trim();
-        approvedClientNames[request.ClientNetworkId] = requestedPlayerName;
-        string incomingRoomCode = this.NormalizeRoomCode(payload.roomCode);
 
         if (requireRoomCodeForClients && !string.Equals(incomingRoomCode, this.NormalizeRoomCode(activeRoomCode), StringComparison.OrdinalIgnoreCase))
         {
@@ -627,7 +722,6 @@ public class CoopNetworkBootstrap : MonoBehaviour
 
         if (activeRoomIsPrivate)
         {
-            string incomingPassword = payload.password ?? string.Empty;
             if (!string.Equals(incomingPassword, activeRoomPassword ?? string.Empty, StringComparison.Ordinal))
             {
                 response.Approved = false;
@@ -637,6 +731,7 @@ public class CoopNetworkBootstrap : MonoBehaviour
             }
         }
 
+        approvedClientRoomCodes[request.ClientNetworkId] = incomingRoomCode;
         response.Approved = true;
     }
 
@@ -985,6 +1080,32 @@ public class CoopNetworkBootstrap : MonoBehaviour
             return;
         }
 
+        if (networkManager.IsServer)
+        {
+            if (approvedClientNames.TryGetValue(clientId, out string approvedName))
+            {
+                connectedClientNames[clientId] = string.IsNullOrWhiteSpace(approvedName) ? $"Client {clientId}" : approvedName;
+                approvedClientNames.Remove(clientId);
+            }
+            else if (!connectedClientNames.ContainsKey(clientId))
+            {
+                connectedClientNames[clientId] = clientId == NetworkManager.ServerClientId ? "Host" : $"Client {clientId}";
+            }
+
+            string roomCode = string.Empty;
+            if (approvedClientRoomCodes.TryGetValue(clientId, out string approvedRoomCode))
+            {
+                roomCode = this.NormalizeRoomCode(approvedRoomCode);
+                approvedClientRoomCodes.Remove(clientId);
+            }
+
+            if (!string.IsNullOrWhiteSpace(roomCode))
+            {
+                connectedClientRoomCodes[clientId] = roomCode;
+                this.AddClientToRoom(roomCode, clientId);
+            }
+        }
+
         if (networkManager.IsHost)
         {
             if (clientId == NetworkManager.ServerClientId)
@@ -1020,7 +1141,10 @@ public class CoopNetworkBootstrap : MonoBehaviour
         }
 
         approvedClientNames.Remove(clientId);
+        approvedClientRoomCodes.Remove(clientId);
         connectedClientNames.Remove(clientId);
+        connectedClientRoomCodes.Remove(clientId);
+        this.RemoveClientFromRooms(clientId);
 
         if (networkManager.IsClient && clientId == networkManager.LocalClientId)
         {
@@ -1042,6 +1166,66 @@ public class CoopNetworkBootstrap : MonoBehaviour
     {
         waitingClientConnect = false;
         this.SetStatus($"Transport gagal ke {CurrentEndpoint}. Pastikan server aktif dan UDP {serverPort} terbuka.");
+    }
+
+    private void AddClientToRoom(string roomCode, ulong clientId)
+    {
+        string normalized = this.NormalizeRoomCode(roomCode);
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return;
+        }
+
+        if (!roomMembers.TryGetValue(normalized, out HashSet<ulong> members) || members == null)
+        {
+            members = new HashSet<ulong>();
+            roomMembers[normalized] = members;
+        }
+
+        members.Add(clientId);
+    }
+
+    private void RemoveClientFromRooms(ulong clientId)
+    {
+        if (roomMembers.Count == 0)
+        {
+            return;
+        }
+
+        List<string> emptyRooms = null;
+        foreach (var pair in roomMembers)
+        {
+            HashSet<ulong> members = pair.Value;
+            if (members == null)
+            {
+                continue;
+            }
+
+            members.Remove(clientId);
+            if (members.Count > 0)
+            {
+                continue;
+            }
+
+            if (emptyRooms == null)
+            {
+                emptyRooms = new List<string>();
+            }
+
+            emptyRooms.Add(pair.Key);
+        }
+
+        if (emptyRooms == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < emptyRooms.Count; i++)
+        {
+            string roomCode = emptyRooms[i];
+            roomMembers.Remove(roomCode);
+            roomPasswords.Remove(roomCode);
+        }
     }
 
     private void SetStatus(string message)

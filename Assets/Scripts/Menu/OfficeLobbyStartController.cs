@@ -1,5 +1,7 @@
+using System.Collections;
 using TMPro;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 public class OfficeLobbyStartController : MonoBehaviour
@@ -46,13 +48,14 @@ public class OfficeLobbyStartController : MonoBehaviour
             return;
         }
 
-        bool canStart = bootstrap != null && bootstrap.IsHostActive;
+        bool isRoomOwner = MainMenuSessionState.HasSession && MainMenuSessionState.Active.mode == SessionPlayMode.HostRoom;
+        bool canStart = bootstrap != null && bootstrap.IsClientActive && isRoomOwner;
         startForestButton.interactable = canStart;
         if (statusText != null)
         {
             statusText.text = canStart
                 ? "Host bisa start ke forest."
-                : "Menunggu host start ke forest.";
+                : "Menunggu room owner start ke forest.";
         }
     }
 
@@ -64,6 +67,40 @@ public class OfficeLobbyStartController : MonoBehaviour
             return;
         }
 
-        bootstrap.StartForestSceneAsHost();
+        if (!MainMenuSessionState.HasSession || MainMenuSessionState.Active.mode != SessionPlayMode.HostRoom)
+        {
+            return;
+        }
+
+        this.LoadSceneSafely("Environment");
+    }
+
+    private void LoadSceneSafely(string sceneName)
+    {
+        if (string.IsNullOrWhiteSpace(sceneName))
+        {
+            return;
+        }
+
+        this.ResolveBootstrap();
+        if (bootstrap != null && bootstrap.IsSessionListening)
+        {
+            bootstrap.StopSession();
+            StartCoroutine(this.LoadSceneAfterSessionStops(sceneName));
+            return;
+        }
+
+        SceneManager.LoadScene(sceneName, LoadSceneMode.Single);
+    }
+
+    private IEnumerator LoadSceneAfterSessionStops(string sceneName)
+    {
+        float timeoutAt = Time.unscaledTime + 2f;
+        while (bootstrap != null && bootstrap.IsSessionListening && Time.unscaledTime < timeoutAt)
+        {
+            yield return null;
+        }
+
+        SceneManager.LoadScene(sceneName, LoadSceneMode.Single);
     }
 }

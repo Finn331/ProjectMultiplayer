@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
@@ -67,7 +68,8 @@ public class MainMenuController : MonoBehaviour
 
     [Header("Room Directory (Optional API)")]
     [SerializeField] private bool useRoomDirectoryApi = true;
-    [SerializeField] private string roomDirectoryBaseUrl = "http://31.56.56.8:9010";
+    [SerializeField] private string roomDirectoryBaseUrl = "http://31.56.56.8:9011";
+    [SerializeField] private bool showAdvancedEndpointInputs = false;
 
     private readonly List<GameObject> roomEntryRows = new List<GameObject>();
     private readonly List<GameObject> kickEntryRows = new List<GameObject>();
@@ -75,7 +77,11 @@ public class MainMenuController : MonoBehaviour
     private string activeRoomId = string.Empty;
     private RoomPublicInfo cachedPublicRoom;
     private bool hostControlMode;
+    private bool isRoomHostSession;
     private float nextHostUiRefreshTime;
+    private float nextStagePollTime;
+    private bool stagePollInFlight;
+    private string lastObservedRoomStage = string.Empty;
 
     private void Awake()
     {
@@ -83,6 +89,7 @@ public class MainMenuController : MonoBehaviour
         this.ResolveRoomDirectoryClient();
         this.BindButtons();
         this.SetupDefaults();
+        this.ApplyEndpointFieldVisibility();
         this.ApplyFlowStep(isInPlayGate: true);
         this.SetHostControlMode(false);
         this.RefreshCurrency();
@@ -112,16 +119,17 @@ public class MainMenuController : MonoBehaviour
     {
         if (!hostControlMode)
         {
+            this.TryPollRoomStageFromDirectory();
             return;
         }
 
-        if (Time.unscaledTime < nextHostUiRefreshTime)
+        if (Time.unscaledTime >= nextHostUiRefreshTime)
         {
-            return;
+            nextHostUiRefreshTime = Time.unscaledTime + 0.7f;
+            this.RefreshKickList();
         }
 
-        nextHostUiRefreshTime = Time.unscaledTime + 0.7f;
-        this.RefreshKickList();
+        this.TryPollRoomStageFromDirectory();
     }
 
     private void ResolveBootstrap()
@@ -205,6 +213,27 @@ public class MainMenuController : MonoBehaviour
         }
     }
 
+    private void ApplyEndpointFieldVisibility()
+    {
+        bool show = showAdvancedEndpointInputs;
+        this.SetFieldVisible(hostAddressInput, show);
+        this.SetFieldVisible(hostPortInput, show);
+        this.SetFieldVisible(joinAddressInput, show);
+        this.SetFieldVisible(joinPortInput, show);
+    }
+
+    private void SetFieldVisible(TMP_InputField field, bool visible)
+    {
+        if (field == null)
+        {
+            return;
+        }
+
+        Transform parent = field.transform.parent;
+        GameObject target = parent != null ? parent.gameObject : field.gameObject;
+        target.SetActive(visible);
+    }
+
     private void SetInputIfEmpty(TMP_InputField input, string value)
     {
         if (input == null)
@@ -252,12 +281,14 @@ public class MainMenuController : MonoBehaviour
     {
         this.ApplyFlowStep(isInPlayGate: false);
         this.SetStatus("Pilih Solo atau Multiplayer.");
+        isRoomHostSession = false;
         this.SetHostControlMode(false);
     }
 
     private void PlaySolo()
     {
         string playerName = this.ReadPlayerName();
+        isRoomHostSession = false;
         MainMenuSessionState.Set(new MainMenuSessionState.SessionConfig
         {
             mode = SessionPlayMode.Solo,
@@ -273,7 +304,7 @@ public class MainMenuController : MonoBehaviour
         });
 
         this.SetStatus("Masuk Solo mode...");
-        SceneManager.LoadScene(officeLobbySceneName, LoadSceneMode.Single);
+        this.LoadSceneSafely(officeLobbySceneName);
     }
 
     private void CreateRoomAsHost()
@@ -285,10 +316,10 @@ public class MainMenuController : MonoBehaviour
             return;
         }
 
-        if (bootstrap.IsHostActive)
+        if (isRoomHostSession && bootstrap.IsClientActive)
         {
             this.SetHostControlMode(true);
-            this.SetStatus("Host sudah aktif. Gunakan panel host untuk Start/Leave/Kick.");
+            this.SetStatus("Host room sudah aktif. Gunakan panel host untuk Start/Leave/Kick.");
             this.RefreshRoomInfo();
             return;
         }
@@ -299,30 +330,23 @@ public class MainMenuController : MonoBehaviour
         string password = roomPasswordInput != null ? roomPasswordInput.text : string.Empty;
         bool isPrivate = privateRoomToggle != null && privateRoomToggle.isOn;
         int maxPlayers = this.ReadMaxPlayers();
-        string hostAddress = this.ReadOrDefault(hostAddressInput, defaultHostAddress);
-        ushort hostPort = this.ReadPort(hostPortInput, defaultHostPort);
+        string serverAddress = this.ReadOrDefault(joinAddressInput, defaultJoinAddress);
+        ushort serverPort = this.ReadPort(joinPortInput, defaultJoinPort);
 
-        bootstrap.ConfigureRoom(roomName, roomCode, password, isPrivate, maxPlayers, officeLobbySceneName);
-        bootstrap.ConfigureJoinCredentials(roomCode, password, playerName);
-        bootstrap.StartHostRoom(hostAddress, hostPort);
-        this.SetHostControlMode(bootstrap.IsHostActive);
-
-        MainMenuSessionState.Set(new MainMenuSessionState.SessionConfig
+        this.ResolveRoomDirectoryClient();
+        if (roomDirectoryClient != null)
         {
-            mode = SessionPlayMode.HostRoom,
-            playerName = playerName,
-            roomName = roomName,
-            roomCode = roomCode,
-            roomPassword = password,
-            roomPrivate = isPrivate,
-            maxPlayers = maxPlayers,
-            hostAddress = hostAddress,
-            hostPort = hostPort,
-            lobbySceneName = officeLobbySceneName
-        });
+            roomDirectoryClient.BaseUrl = roomDirectoryBaseUrl;
+        }
 
         if (useRoomDirectoryApi)
         {
+            if (roomDirectoryClient == null)
+            {
+                this.SetStatus("Room directory client tidak tersedia.");
+                return;
+            }
+
             RoomCreateRequest createRequest = new RoomCreateRequest
             {
                 roomName = roomName,
@@ -330,8 +354,8 @@ public class MainMenuController : MonoBehaviour
                 password = password,
                 isPrivate = isPrivate,
                 maxPlayers = maxPlayers,
-                hostAddress = hostAddress,
-                hostPort = hostPort,
+                hostAddress = serverAddress,
+                hostPort = serverPort,
                 hostPlayerName = playerName
             };
 
@@ -339,21 +363,51 @@ public class MainMenuController : MonoBehaviour
             {
                 if (!string.IsNullOrWhiteSpace(error) || response == null || !response.success)
                 {
-                    this.SetStatus("Room local jadi, tapi gagal daftar room ke server directory: " + (string.IsNullOrWhiteSpace(error) ? response?.message : error));
+                    this.SetStatus("Gagal buat room di server directory: " + (string.IsNullOrWhiteSpace(error) ? response?.message : error));
                     return;
                 }
 
                 activeRoomId = response.roomId ?? string.Empty;
+                string responseCode = string.IsNullOrWhiteSpace(response.roomCode) ? roomCode : response.roomCode;
+                string responseAddress = string.IsNullOrWhiteSpace(response.hostAddress) ? serverAddress : response.hostAddress;
+                ushort responsePort = response.hostPort <= 0 ? serverPort : (ushort)response.hostPort;
+
+                if (joinRoomCodeInput != null) joinRoomCodeInput.text = responseCode;
+                if (joinAddressInput != null) joinAddressInput.text = responseAddress;
+                if (joinPortInput != null) joinPortInput.text = responsePort.ToString();
+
+                this.StartDedicatedRoomSession(
+                    SessionPlayMode.HostRoom,
+                    playerName,
+                    roomName,
+                    responseCode,
+                    password,
+                    isPrivate,
+                    maxPlayers,
+                    responseAddress,
+                    responsePort,
+                    asRoomHost: true);
+
                 this.RefreshRoomInfo();
-                this.SetStatus("Room dibuat. Sekarang host bisa Start/Leave/Kick dari panel host.");
-                this.SetHostControlMode(true);
+                this.SetStatus("Room dibuat. Sekarang host tersambung sebagai client room owner di VPS.");
             });
         }
         else
         {
-            this.SetHostControlMode(bootstrap.IsHostActive);
+            activeRoomId = string.Empty;
+            this.StartDedicatedRoomSession(
+                SessionPlayMode.HostRoom,
+                playerName,
+                roomName,
+                roomCode,
+                password,
+                isPrivate,
+                maxPlayers,
+                serverAddress,
+                serverPort,
+                asRoomHost: true);
             this.RefreshRoomInfo();
-            this.SetStatus("Room dibuat (tanpa room directory API).");
+            this.SetStatus("Room dibuat (tanpa directory API) dan host tersambung ke dedicated server.");
         }
     }
 
@@ -372,24 +426,79 @@ public class MainMenuController : MonoBehaviour
         string joinCode = this.ReadOrDefault(joinRoomCodeInput, "ROOM01");
         string joinPassword = joinPasswordInput != null ? joinPasswordInput.text : string.Empty;
 
-        bootstrap.JoinRoom(joinAddress, joinPort, joinCode, joinPassword, playerName);
-
-        MainMenuSessionState.Set(new MainMenuSessionState.SessionConfig
+        if (!useRoomDirectoryApi)
         {
-            mode = SessionPlayMode.JoinRoom,
-            playerName = playerName,
-            roomName = "Joined Room",
-            roomCode = joinCode,
-            roomPassword = joinPassword,
-            roomPrivate = !string.IsNullOrEmpty(joinPassword),
-            maxPlayers = 4,
-            hostAddress = joinAddress,
-            hostPort = joinPort,
-            lobbySceneName = officeLobbySceneName
-        });
+            this.StartDedicatedRoomSession(
+                SessionPlayMode.JoinRoom,
+                playerName,
+                "Joined Room",
+                joinCode,
+                joinPassword,
+                !string.IsNullOrEmpty(joinPassword),
+                4,
+                joinAddress,
+                joinPort,
+                asRoomHost: false);
+            this.SetStatus("Mencoba join room...");
+            return;
+        }
 
-        this.SetHostControlMode(false);
-        this.SetStatus("Mencoba join room...");
+        this.ResolveRoomDirectoryClient();
+        if (roomDirectoryClient == null)
+        {
+            this.StartDedicatedRoomSession(
+                SessionPlayMode.JoinRoom,
+                playerName,
+                "Joined Room",
+                joinCode,
+                joinPassword,
+                !string.IsNullOrEmpty(joinPassword),
+                4,
+                joinAddress,
+                joinPort,
+                asRoomHost: false);
+            this.SetStatus("Room API tidak tersedia, fallback join langsung ke dedicated server.");
+            return;
+        }
+
+        RoomJoinRequest joinRequest = new RoomJoinRequest
+        {
+            roomName = this.ReadOrDefault(publicRoomSearchInput, string.Empty),
+            roomCode = joinCode,
+            password = joinPassword,
+            playerName = playerName
+        };
+
+        roomDirectoryClient.JoinRoom(joinRequest, (response, error) =>
+        {
+            if (!string.IsNullOrWhiteSpace(error) || response == null || !response.success)
+            {
+                this.SetStatus("Join room gagal: " + (string.IsNullOrWhiteSpace(error) ? response?.message : error));
+                return;
+            }
+
+            activeRoomId = response.roomId ?? activeRoomId;
+            string resolvedAddress = string.IsNullOrWhiteSpace(response.hostAddress) ? joinAddress : response.hostAddress;
+            ushort resolvedPort = response.hostPort <= 0 ? joinPort : (ushort)response.hostPort;
+            string resolvedCode = string.IsNullOrWhiteSpace(response.roomCode) ? joinCode : response.roomCode;
+
+            if (joinAddressInput != null) joinAddressInput.text = resolvedAddress;
+            if (joinPortInput != null) joinPortInput.text = resolvedPort.ToString();
+            if (joinRoomCodeInput != null) joinRoomCodeInput.text = resolvedCode;
+
+            this.StartDedicatedRoomSession(
+                SessionPlayMode.JoinRoom,
+                playerName,
+                string.IsNullOrWhiteSpace(response.roomName) ? "Joined Room" : response.roomName,
+                resolvedCode,
+                joinPassword,
+                response.isPrivate,
+                response.maxPlayers <= 0 ? 4 : response.maxPlayers,
+                resolvedAddress,
+                resolvedPort,
+                asRoomHost: false);
+            this.SetStatus("Mencoba join room...");
+        });
     }
 
     private void SearchPublicRoomsByName()
@@ -503,22 +612,7 @@ public class MainMenuController : MonoBehaviour
     private int ResolveDisplayPlayerCount(RoomPublicInfo room)
     {
         int maxPlayers = Mathf.Max(1, room.maxPlayers);
-        int serverReported = Mathf.Clamp(room.currentPlayers, 0, maxPlayers);
-
-        this.ResolveBootstrap();
-        if (bootstrap == null || !bootstrap.IsHostActive)
-        {
-            return serverReported;
-        }
-
-        string roomCode = room != null ? room.roomCode : string.Empty;
-        if (!string.Equals((roomCode ?? string.Empty).Trim().ToUpperInvariant(), bootstrap.ActiveRoomCode, System.StringComparison.Ordinal))
-        {
-            return serverReported;
-        }
-
-        int realtimeCount = Mathf.Clamp(bootstrap.CurrentConnectedPlayers, 0, maxPlayers);
-        return realtimeCount;
+        return Mathf.Clamp(room.currentPlayers, 0, maxPlayers);
     }
 
     private void JoinRoomFromPublicRow(RoomPublicInfo room)
@@ -559,9 +653,6 @@ public class MainMenuController : MonoBehaviour
             return;
         }
 
-        string playerName = this.ReadPlayerName();
-        string password = joinPasswordInput != null ? joinPasswordInput.text : string.Empty;
-
         string joinCode = string.IsNullOrWhiteSpace(cachedPublicRoom.roomCode)
             ? this.ReadOrDefault(joinRoomCodeInput, "ROOM01")
             : cachedPublicRoom.roomCode;
@@ -572,35 +663,33 @@ public class MainMenuController : MonoBehaviour
         if (joinAddressInput != null) joinAddressInput.text = joinAddress;
         if (joinPortInput != null) joinPortInput.text = joinPort.ToString();
 
-        bootstrap.JoinRoom(joinAddress, joinPort, joinCode, password, playerName);
-        this.SetHostControlMode(false);
-        this.SetStatus("Mencoba join public room '" + cachedPublicRoom.roomName + "'...");
+        this.JoinRoom();
     }
 
     private void HostStartLobby()
     {
         this.ResolveBootstrap();
-        if (bootstrap == null)
+        if (!isRoomHostSession || bootstrap == null || !bootstrap.IsClientActive)
         {
-            this.SetStatus("Bootstrap tidak ditemukan.");
+            this.SetStatus("Room owner belum terhubung ke dedicated server.");
             return;
         }
 
-        bootstrap.StartOfficeLobbySceneAsHost();
         this.TryNotifyRoomStage("office_lobby");
+        this.LoadSceneSafely(officeLobbySceneName);
     }
 
     private void HostStartForest()
     {
         this.ResolveBootstrap();
-        if (bootstrap == null)
+        if (!isRoomHostSession || bootstrap == null || !bootstrap.IsClientActive)
         {
-            this.SetStatus("Bootstrap tidak ditemukan.");
+            this.SetStatus("Room owner belum terhubung ke dedicated server.");
             return;
         }
 
-        bootstrap.StartForestSceneAsHost();
         this.TryNotifyRoomStage("forest");
+        this.LoadSceneSafely(forestSceneName);
     }
 
     private void TryNotifyRoomStage(string stage)
@@ -622,6 +711,12 @@ public class MainMenuController : MonoBehaviour
         }
 
         this.ClearKickRows();
+
+        if (!bootstrap.IsHostActive)
+        {
+            this.CreateKickInfoRow("Mode dedicated: daftar nama/kick akan ditangani room API server.");
+            return;
+        }
 
         IReadOnlyList<ulong> clientIds = bootstrap.GetKickableClientIds();
         if (clientIds == null || clientIds.Count == 0)
@@ -754,6 +849,9 @@ public class MainMenuController : MonoBehaviour
         MainMenuSessionState.Clear();
         activeRoomId = string.Empty;
         cachedPublicRoom = null;
+        isRoomHostSession = false;
+        lastObservedRoomStage = string.Empty;
+        stagePollInFlight = false;
         this.SetHostControlMode(false);
         this.SetStatus("Session dihentikan.");
         this.RefreshRoomInfo();
@@ -808,16 +906,20 @@ public class MainMenuController : MonoBehaviour
         this.SetStatus(message);
         this.RefreshRoomInfo();
 
-        if (bootstrap != null)
+        if (bootstrap != null && isRoomHostSession)
         {
-            if (bootstrap.IsHostActive && !hostControlMode)
+            if ((bootstrap.IsHostActive || bootstrap.IsClientActive) && !hostControlMode)
             {
                 this.SetHostControlMode(true);
             }
-            else if (!bootstrap.IsHostActive && hostControlMode)
+            else if (!bootstrap.IsSessionListening && hostControlMode)
             {
                 this.SetHostControlMode(false);
             }
+        }
+        else if (!isRoomHostSession && hostControlMode)
+        {
+            this.SetHostControlMode(false);
         }
 
         if (hostControlMode)
@@ -867,5 +969,168 @@ public class MainMenuController : MonoBehaviour
         {
             publicRoomResultText.text = text;
         }
+    }
+
+    private void TryPollRoomStageFromDirectory()
+    {
+        if (!useRoomDirectoryApi || roomDirectoryClient == null || stagePollInFlight)
+        {
+            return;
+        }
+
+        if (!MainMenuSessionState.HasSession || MainMenuSessionState.Active.mode == SessionPlayMode.Solo)
+        {
+            return;
+        }
+
+        if (Time.unscaledTime < nextStagePollTime)
+        {
+            return;
+        }
+
+        string activeSceneName = SceneManager.GetActiveScene().name;
+        if (!string.Equals(activeSceneName, "MainMenu", System.StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        string roomCode = MainMenuSessionState.Active.roomCode;
+        if (string.IsNullOrWhiteSpace(roomCode))
+        {
+            return;
+        }
+
+        stagePollInFlight = true;
+        nextStagePollTime = Time.unscaledTime + 1.25f;
+        roomDirectoryClient.SearchPublicRooms(roomCode, (response, error) =>
+        {
+            stagePollInFlight = false;
+            if (!string.IsNullOrWhiteSpace(error) || response == null || response.rooms == null || response.rooms.Count == 0)
+            {
+                return;
+            }
+
+            RoomPublicInfo matchedRoom = null;
+            for (int i = 0; i < response.rooms.Count; i++)
+            {
+                RoomPublicInfo candidate = response.rooms[i];
+                if (candidate == null)
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(activeRoomId) && string.Equals(candidate.roomId, activeRoomId, System.StringComparison.Ordinal))
+                {
+                    matchedRoom = candidate;
+                    break;
+                }
+
+                if (string.Equals(candidate.roomCode, roomCode, System.StringComparison.OrdinalIgnoreCase))
+                {
+                    matchedRoom = candidate;
+                }
+            }
+
+            if (matchedRoom == null)
+            {
+                return;
+            }
+
+            string stage = string.IsNullOrWhiteSpace(matchedRoom.status) ? string.Empty : matchedRoom.status.Trim().ToLowerInvariant();
+            if (string.IsNullOrEmpty(stage) || string.Equals(stage, lastObservedRoomStage, System.StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            lastObservedRoomStage = stage;
+            if (stage.Contains("office") || stage.Contains("lobby"))
+            {
+                this.LoadSceneSafely(officeLobbySceneName);
+                return;
+            }
+
+            if (stage.Contains("forest"))
+            {
+                this.LoadSceneSafely(forestSceneName);
+            }
+        });
+    }
+
+    private void LoadSceneSafely(string sceneName)
+    {
+        if (string.IsNullOrWhiteSpace(sceneName))
+        {
+            return;
+        }
+
+        this.ResolveBootstrap();
+        if (bootstrap != null && bootstrap.IsSessionListening)
+        {
+            bootstrap.StopSession();
+            StartCoroutine(this.LoadSceneAfterSessionStops(sceneName));
+            return;
+        }
+
+        SceneManager.LoadScene(sceneName, LoadSceneMode.Single);
+    }
+
+    private IEnumerator LoadSceneAfterSessionStops(string sceneName)
+    {
+        float timeoutAt = Time.unscaledTime + 2f;
+        while (bootstrap != null && bootstrap.IsSessionListening && Time.unscaledTime < timeoutAt)
+        {
+            yield return null;
+        }
+
+        SceneManager.LoadScene(sceneName, LoadSceneMode.Single);
+    }
+
+    private void StartDedicatedRoomSession(
+        SessionPlayMode sessionMode,
+        string playerName,
+        string roomName,
+        string roomCode,
+        string roomPassword,
+        bool roomPrivate,
+        int maxPlayers,
+        string serverAddress,
+        ushort serverPort,
+        bool asRoomHost)
+    {
+        this.ResolveBootstrap();
+        if (bootstrap == null)
+        {
+            this.SetStatus("Bootstrap tidak ditemukan.");
+            return;
+        }
+
+        if (bootstrap.IsSessionListening)
+        {
+            bootstrap.StopSession();
+        }
+
+        bootstrap.ConfigureRoom(roomName, roomCode, roomPassword, roomPrivate, maxPlayers, officeLobbySceneName);
+        bootstrap.JoinRoom(serverAddress, serverPort, roomCode, roomPassword, playerName);
+
+        MainMenuSessionState.Set(new MainMenuSessionState.SessionConfig
+        {
+            mode = sessionMode,
+            playerName = playerName,
+            roomName = roomName,
+            roomCode = roomCode,
+            roomPassword = roomPassword,
+            roomPrivate = roomPrivate,
+            maxPlayers = maxPlayers,
+            hostAddress = serverAddress,
+            hostPort = serverPort,
+            lobbySceneName = officeLobbySceneName
+        });
+
+        isRoomHostSession = asRoomHost;
+        lastObservedRoomStage = string.Empty;
+        stagePollInFlight = false;
+        nextStagePollTime = Time.unscaledTime + 0.5f;
+        this.SetHostControlMode(asRoomHost);
+        this.RefreshRoomInfo();
     }
 }

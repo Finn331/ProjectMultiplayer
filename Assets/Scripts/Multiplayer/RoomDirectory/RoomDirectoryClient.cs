@@ -5,10 +5,10 @@ using UnityEngine.Networking;
 
 public class RoomDirectoryClient : MonoBehaviour
 {
-    [SerializeField] private string baseUrl = "http://31.56.56.8:9010";
-    [SerializeField] private string fallbackBaseUrl = "http://31.56.56.8:9010";
+    [SerializeField] private string baseUrl = "http://31.56.56.8:9011";
+    [SerializeField] private string fallbackBaseUrl = "http://31.56.56.8:9011";
     [SerializeField] private float requestTimeoutSeconds = 8f;
-    private const string DefaultBaseUrl = "http://31.56.56.8:9010";
+    private const string DefaultBaseUrl = "http://31.56.56.8:9011";
 
     public string BaseUrl
     {
