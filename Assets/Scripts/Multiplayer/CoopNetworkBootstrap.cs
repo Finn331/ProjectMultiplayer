@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using Unity.Collections;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
 using UnityEngine;
@@ -10,6 +11,7 @@ using UnityEngine.UI;
 public class CoopNetworkBootstrap : MonoBehaviour
 {
     private const string DefaultPlayerPrefabPath = "Assets/Assets/Prefabs/NetworkPlayer.prefab";
+    private const string RoomRosterMessageName = "RoomRosterSync";
     private static CoopNetworkBootstrap instance;
 
     [Serializable]
@@ -18,6 +20,19 @@ public class CoopNetworkBootstrap : MonoBehaviour
         public string roomCode;
         public string password;
         public string playerName;
+    }
+
+    [Serializable]
+    private class RoomRosterEntry
+    {
+        public string roomCode;
+        public string[] playerNames;
+    }
+
+    [Serializable]
+    private class RoomRosterSnapshot
+    {
+        public RoomRosterEntry[] rooms;
     }
 
     public enum AutoStartMode
@@ -81,6 +96,7 @@ public class CoopNetworkBootstrap : MonoBehaviour
     private readonly Dictionary<ulong, string> connectedClientRoomCodes = new Dictionary<ulong, string>();
     private readonly Dictionary<string, HashSet<ulong>> roomMembers = new Dictionary<string, HashSet<ulong>>(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> roomPasswords = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, List<string>> knownRoomMemberNames = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
     private bool callbacksBound;
     private bool waitingClientConnect;
     private bool approvalCallbackBound;
@@ -181,6 +197,22 @@ public class CoopNetworkBootstrap : MonoBehaviour
         }
 
         return result;
+    }
+
+    public IReadOnlyList<string> GetKnownRoomMemberNames()
+    {
+        string roomCode = this.GetLocalRoomCodeForUi();
+        if (string.IsNullOrWhiteSpace(roomCode))
+        {
+            return Array.Empty<string>();
+        }
+
+        if (!knownRoomMemberNames.TryGetValue(roomCode, out List<string> names) || names == null || names.Count == 0)
+        {
+            return Array.Empty<string>();
+        }
+
+        return names;
     }
 
     public int GetRoomMemberCount(string roomCode)
@@ -344,6 +376,7 @@ public class CoopNetworkBootstrap : MonoBehaviour
         connectedClientRoomCodes.Clear();
         roomMembers.Clear();
         roomPasswords.Clear();
+        knownRoomMemberNames.Clear();
         this.ApplyClientConnectionPayload(activeRoomCode, activeRoomPassword, pendingJoinPlayerName);
         bool started = networkManager.StartHost();
         if (started)
@@ -390,6 +423,7 @@ public class CoopNetworkBootstrap : MonoBehaviour
         connectedClientRoomCodes.Clear();
         roomMembers.Clear();
         roomPasswords.Clear();
+        knownRoomMemberNames.Clear();
         bool started = networkManager.StartServer();
         this.SetStatus(started ? $"Server aktif di {CurrentEndpoint}" : "Gagal start Server");
     }
@@ -520,6 +554,7 @@ public class CoopNetworkBootstrap : MonoBehaviour
         connectedClientRoomCodes.Clear();
         roomMembers.Clear();
         roomPasswords.Clear();
+        knownRoomMemberNames.Clear();
         waitingClientConnect = false;
         this.SetStatus("Offline");
     }
@@ -965,6 +1000,7 @@ public class CoopNetworkBootstrap : MonoBehaviour
         networkManager.OnClientConnectedCallback += this.OnClientConnected;
         networkManager.OnClientDisconnectCallback += this.OnClientDisconnected;
         networkManager.OnTransportFailure += this.OnTransportFailure;
+        this.BindRosterMessageHandler();
         callbacksBound = true;
     }
 
@@ -984,6 +1020,7 @@ public class CoopNetworkBootstrap : MonoBehaviour
         networkManager.OnClientConnectedCallback -= this.OnClientConnected;
         networkManager.OnClientDisconnectCallback -= this.OnClientDisconnected;
         networkManager.OnTransportFailure -= this.OnTransportFailure;
+        this.UnbindRosterMessageHandler();
         callbacksBound = false;
     }
 
@@ -1003,6 +1040,8 @@ public class CoopNetworkBootstrap : MonoBehaviour
         {
             this.SpawnSceneStorageChestsForNetwork();
         }
+
+        this.BroadcastRoomRosterSnapshot();
     }
 
     private void SpawnScenePickablesForNetwork()
@@ -1104,6 +1143,9 @@ public class CoopNetworkBootstrap : MonoBehaviour
                 connectedClientRoomCodes[clientId] = roomCode;
                 this.AddClientToRoom(roomCode, clientId);
             }
+
+            this.EnsureConnectedPlayerDoesNotDestroyWithScene(clientId);
+            this.BroadcastRoomRosterSnapshot();
         }
 
         if (networkManager.IsHost)
@@ -1129,6 +1171,13 @@ public class CoopNetworkBootstrap : MonoBehaviour
         if (networkManager.IsClient && clientId == networkManager.LocalClientId)
         {
             waitingClientConnect = false;
+            string localRoomCode = this.NormalizeRoomCode(pendingJoinRoomCode);
+            if (!string.IsNullOrWhiteSpace(localRoomCode))
+            {
+                connectedClientRoomCodes[clientId] = localRoomCode;
+            }
+
+            this.EnsureConnectedPlayerDoesNotDestroyWithScene(clientId);
             this.SetStatus($"Berhasil join room di {CurrentEndpoint}");
         }
     }
@@ -1145,6 +1194,10 @@ public class CoopNetworkBootstrap : MonoBehaviour
         connectedClientNames.Remove(clientId);
         connectedClientRoomCodes.Remove(clientId);
         this.RemoveClientFromRooms(clientId);
+        if (networkManager.IsServer)
+        {
+            this.BroadcastRoomRosterSnapshot();
+        }
 
         if (networkManager.IsClient && clientId == networkManager.LocalClientId)
         {
@@ -1160,6 +1213,173 @@ public class CoopNetworkBootstrap : MonoBehaviour
         {
             this.SetStatus($"Host aktif ({networkManager.ConnectedClientsIds.Count}/{RoomMaxPlayers})");
         }
+    }
+
+    private void BindRosterMessageHandler()
+    {
+        if (networkManager == null || networkManager.CustomMessagingManager == null)
+        {
+            return;
+        }
+
+        networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(RoomRosterMessageName);
+        networkManager.CustomMessagingManager.RegisterNamedMessageHandler(RoomRosterMessageName, this.OnRoomRosterMessageReceived);
+    }
+
+    private void UnbindRosterMessageHandler()
+    {
+        if (networkManager == null || networkManager.CustomMessagingManager == null)
+        {
+            return;
+        }
+
+        networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(RoomRosterMessageName);
+    }
+
+    private void OnRoomRosterMessageReceived(ulong senderClientId, FastBufferReader messagePayload)
+    {
+        messagePayload.ReadValueSafe(out string json);
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return;
+        }
+
+        try
+        {
+            RoomRosterSnapshot snapshot = JsonUtility.FromJson<RoomRosterSnapshot>(json);
+            this.ApplyRoomRosterSnapshot(snapshot);
+        }
+        catch
+        {
+        }
+    }
+
+    private void BroadcastRoomRosterSnapshot()
+    {
+        if (networkManager == null || !networkManager.IsServer || !networkManager.IsListening)
+        {
+            return;
+        }
+
+        RoomRosterSnapshot snapshot = this.BuildRoomRosterSnapshot();
+        this.ApplyRoomRosterSnapshot(snapshot);
+
+        if (networkManager.CustomMessagingManager == null)
+        {
+            return;
+        }
+
+        string json = JsonUtility.ToJson(snapshot);
+        int capacity = Mathf.Max(256, Encoding.UTF8.GetByteCount(json) + 64);
+        using (FastBufferWriter writer = new FastBufferWriter(capacity, Allocator.Temp))
+        {
+            writer.WriteValueSafe(json);
+            networkManager.CustomMessagingManager.SendNamedMessageToAll(RoomRosterMessageName, writer, NetworkDelivery.ReliableSequenced);
+        }
+    }
+
+    private RoomRosterSnapshot BuildRoomRosterSnapshot()
+    {
+        List<RoomRosterEntry> entries = new List<RoomRosterEntry>();
+        foreach (var pair in roomMembers)
+        {
+            string roomCode = pair.Key;
+            HashSet<ulong> members = pair.Value;
+            if (string.IsNullOrWhiteSpace(roomCode) || members == null)
+            {
+                continue;
+            }
+
+            List<string> names = new List<string>();
+            foreach (ulong memberId in members)
+            {
+                names.Add(this.GetClientDisplayName(memberId));
+            }
+
+            entries.Add(new RoomRosterEntry
+            {
+                roomCode = roomCode,
+                playerNames = names.ToArray()
+            });
+        }
+
+        return new RoomRosterSnapshot
+        {
+            rooms = entries.ToArray()
+        };
+    }
+
+    private void ApplyRoomRosterSnapshot(RoomRosterSnapshot snapshot)
+    {
+        knownRoomMemberNames.Clear();
+        if (snapshot == null || snapshot.rooms == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < snapshot.rooms.Length; i++)
+        {
+            RoomRosterEntry entry = snapshot.rooms[i];
+            if (entry == null)
+            {
+                continue;
+            }
+
+            string roomCode = this.NormalizeRoomCode(entry.roomCode);
+            if (string.IsNullOrWhiteSpace(roomCode))
+            {
+                continue;
+            }
+
+            List<string> names = new List<string>();
+            if (entry.playerNames != null)
+            {
+                for (int j = 0; j < entry.playerNames.Length; j++)
+                {
+                    string name = entry.playerNames[j];
+                    if (!string.IsNullOrWhiteSpace(name))
+                    {
+                        names.Add(name);
+                    }
+                }
+            }
+
+            knownRoomMemberNames[roomCode] = names;
+        }
+    }
+
+    private string GetLocalRoomCodeForUi()
+    {
+        if (networkManager != null && networkManager.IsListening)
+        {
+            ulong localClientId = networkManager.LocalClientId;
+            if (connectedClientRoomCodes.TryGetValue(localClientId, out string connectedRoomCode) && !string.IsNullOrWhiteSpace(connectedRoomCode))
+            {
+                return this.NormalizeRoomCode(connectedRoomCode);
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(pendingJoinRoomCode))
+        {
+            return this.NormalizeRoomCode(pendingJoinRoomCode);
+        }
+
+        return this.NormalizeRoomCode(activeRoomCode);
+    }
+
+    private void EnsureConnectedPlayerDoesNotDestroyWithScene(ulong clientId)
+    {
+        if (networkManager == null || networkManager.ConnectedClients == null)
+        {
+            return;
+        }
+
+        if (!networkManager.ConnectedClients.TryGetValue(clientId, out NetworkClient networkClient) || networkClient == null || networkClient.PlayerObject == null)
+        {
+            return;
+        }
+
+        networkClient.PlayerObject.DestroyWithScene = false;
     }
 
     private void OnTransportFailure()

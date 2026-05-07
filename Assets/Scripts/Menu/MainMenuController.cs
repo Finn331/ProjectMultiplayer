@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
@@ -92,6 +91,7 @@ public class MainMenuController : MonoBehaviour
         this.ApplyEndpointFieldVisibility();
         this.ApplyFlowStep(isInPlayGate: true);
         this.SetHostControlMode(false);
+        this.RefreshHostActionButtons();
         this.RefreshCurrency();
         this.RefreshRoomInfo();
         this.SetStatus("Siap. Tekan Play untuk mulai.");
@@ -117,6 +117,8 @@ public class MainMenuController : MonoBehaviour
 
     private void Update()
     {
+        this.RefreshHostActionButtons();
+
         if (!hostControlMode)
         {
             this.TryPollRoomStageFromDirectory();
@@ -271,10 +273,12 @@ public class MainMenuController : MonoBehaviour
         if (!enabled)
         {
             this.ClearKickRows();
+            this.RefreshHostActionButtons();
             return;
         }
 
         this.RefreshKickList();
+        this.RefreshHostActionButtons();
     }
 
     private void OpenRoomFlow()
@@ -529,7 +533,7 @@ public class MainMenuController : MonoBehaviour
 
             cachedPublicRoom = response.rooms[0];
             this.RebuildPublicRoomRows(response.rooms);
-            this.SetPublicRoomResult("Pilih room dari list, lalu tekan Join.");
+            this.SetPublicRoomResult("Ditemukan " + response.rooms.Count + " room. Pilih room lalu tekan Join.");
         });
     }
 
@@ -553,10 +557,12 @@ public class MainMenuController : MonoBehaviour
             RectTransform rowRect = row.GetComponent<RectTransform>();
             rowRect.SetParent(publicRoomListContainer, false);
             LayoutElement layoutElement = row.AddComponent<LayoutElement>();
-            layoutElement.preferredHeight = 38f;
+            layoutElement.preferredHeight = 40f;
 
             Image rowImage = row.GetComponent<Image>();
-            rowImage.color = new Color(1f, 1f, 1f, 0.06f);
+            rowImage.color = i % 2 == 0
+                ? new Color(1f, 1f, 1f, 0.08f)
+                : new Color(1f, 1f, 1f, 0.03f);
 
             HorizontalLayoutGroup rowLayout = row.AddComponent<HorizontalLayoutGroup>();
             rowLayout.padding = new RectOffset(10, 10, 4, 4);
@@ -575,7 +581,7 @@ public class MainMenuController : MonoBehaviour
             string privacy = room.isPrivate ? "Private" : "Public";
             int shownPlayers = this.ResolveDisplayPlayerCount(room);
             int shownMaxPlayers = Mathf.Max(1, room.maxPlayers);
-            label.text = room.roomName + " | " + room.roomCode + " | " + privacy + " | " + shownPlayers + "/" + shownMaxPlayers;
+            label.text = room.roomName + " | " + room.roomCode + " | " + privacy + " | " + shownPlayers + "/" + shownMaxPlayers + " player";
             LayoutElement labelLayout = labelObj.AddComponent<LayoutElement>();
             labelLayout.flexibleWidth = 1f;
             labelLayout.minWidth = 200f;
@@ -714,11 +720,26 @@ public class MainMenuController : MonoBehaviour
 
         if (!bootstrap.IsHostActive)
         {
-            this.CreateKickInfoRow("Mode dedicated: daftar nama/kick akan ditangani room API server.");
+            IReadOnlyList<string> memberNames = bootstrap.GetKnownRoomMemberNames();
+            if (memberNames != null && memberNames.Count > 0)
+            {
+                this.CreateKickSectionHeader("Room Members (" + memberNames.Count + ")");
+                for (int i = 0; i < memberNames.Count; i++)
+                {
+                    string memberName = string.IsNullOrWhiteSpace(memberNames[i]) ? $"Player {i + 1}" : memberNames[i];
+                    this.CreateKickInfoRow((i + 1) + ". " + memberName);
+                }
+            }
+            else
+            {
+                this.CreateKickSectionHeader("Room Members");
+                this.CreateKickInfoRow("Menunggu data member room dari server...");
+            }
             return;
         }
 
         IReadOnlyList<ulong> clientIds = bootstrap.GetKickableClientIds();
+        this.CreateKickSectionHeader("Connected Players (" + (clientIds != null ? clientIds.Count : 0) + ")");
         if (clientIds == null || clientIds.Count == 0)
         {
             this.CreateKickInfoRow("Belum ada player lain di room.");
@@ -745,6 +766,24 @@ public class MainMenuController : MonoBehaviour
         label.fontSize = 15f;
         label.alignment = TextAlignmentOptions.Left;
         label.color = new Color(0.9f, 0.95f, 1f, 1f);
+        label.text = text;
+
+        kickEntryRows.Add(row);
+    }
+
+    private void CreateKickSectionHeader(string text)
+    {
+        GameObject row = new GameObject("KickHeader", typeof(RectTransform), typeof(TextMeshProUGUI));
+        RectTransform rowRect = row.GetComponent<RectTransform>();
+        rowRect.SetParent(kickListContainer, false);
+
+        LayoutElement layout = row.AddComponent<LayoutElement>();
+        layout.preferredHeight = 24f;
+
+        TextMeshProUGUI label = row.GetComponent<TextMeshProUGUI>();
+        label.fontSize = 14f;
+        label.alignment = TextAlignmentOptions.Left;
+        label.color = new Color(0.72f, 0.88f, 1f, 1f);
         label.text = text;
 
         kickEntryRows.Add(row);
@@ -905,6 +944,7 @@ public class MainMenuController : MonoBehaviour
     {
         this.SetStatus(message);
         this.RefreshRoomInfo();
+        this.RefreshHostActionButtons();
 
         if (bootstrap != null && isRoomHostSession)
         {
@@ -925,6 +965,28 @@ public class MainMenuController : MonoBehaviour
         if (hostControlMode)
         {
             this.RefreshKickList();
+        }
+    }
+
+    private void RefreshHostActionButtons()
+    {
+        this.ResolveBootstrap();
+        bool isOwnerConnected = isRoomHostSession && bootstrap != null && bootstrap.IsClientActive;
+        bool hasSession = bootstrap != null && bootstrap.IsSessionListening;
+
+        if (startLobbyButton != null)
+        {
+            startLobbyButton.interactable = isOwnerConnected;
+        }
+
+        if (startForestButton != null)
+        {
+            startForestButton.interactable = isOwnerConnected;
+        }
+
+        if (hostLeaveButton != null)
+        {
+            hostLeaveButton.interactable = hasSession;
         }
     }
 
@@ -995,14 +1057,16 @@ public class MainMenuController : MonoBehaviour
         }
 
         string roomCode = MainMenuSessionState.Active.roomCode;
-        if (string.IsNullOrWhiteSpace(roomCode))
+        string roomName = MainMenuSessionState.Active.roomName;
+        string searchTerm = !string.IsNullOrWhiteSpace(roomName) ? roomName : roomCode;
+        if (string.IsNullOrWhiteSpace(searchTerm))
         {
             return;
         }
 
         stagePollInFlight = true;
         nextStagePollTime = Time.unscaledTime + 1.25f;
-        roomDirectoryClient.SearchPublicRooms(roomCode, (response, error) =>
+        roomDirectoryClient.SearchPublicRooms(searchTerm, (response, error) =>
         {
             stagePollInFlight = false;
             if (!string.IsNullOrWhiteSpace(error) || response == null || response.rooms == null || response.rooms.Count == 0)
@@ -1063,23 +1127,10 @@ public class MainMenuController : MonoBehaviour
             return;
         }
 
-        this.ResolveBootstrap();
-        if (bootstrap != null && bootstrap.IsSessionListening)
+        Scene activeScene = SceneManager.GetActiveScene();
+        if (string.Equals(activeScene.name, sceneName, System.StringComparison.OrdinalIgnoreCase))
         {
-            bootstrap.StopSession();
-            StartCoroutine(this.LoadSceneAfterSessionStops(sceneName));
             return;
-        }
-
-        SceneManager.LoadScene(sceneName, LoadSceneMode.Single);
-    }
-
-    private IEnumerator LoadSceneAfterSessionStops(string sceneName)
-    {
-        float timeoutAt = Time.unscaledTime + 2f;
-        while (bootstrap != null && bootstrap.IsSessionListening && Time.unscaledTime < timeoutAt)
-        {
-            yield return null;
         }
 
         SceneManager.LoadScene(sceneName, LoadSceneMode.Single);

@@ -1,4 +1,3 @@
-using System.Collections;
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -53,9 +52,15 @@ public class OfficeLobbyStartController : MonoBehaviour
         startForestButton.interactable = canStart;
         if (statusText != null)
         {
+            int memberCount = 0;
+            if (bootstrap != null)
+            {
+                memberCount = bootstrap.GetKnownRoomMemberNames().Count;
+            }
+
             statusText.text = canStart
-                ? "Host bisa start ke forest."
-                : "Menunggu room owner start ke forest.";
+                ? $"Room siap ({Mathf.Max(1, memberCount)} player). Host bisa start ke forest."
+                : "Menunggu room owner terhubung dan start ke forest.";
         }
     }
 
@@ -82,23 +87,10 @@ public class OfficeLobbyStartController : MonoBehaviour
             return;
         }
 
-        this.ResolveBootstrap();
-        if (bootstrap != null && bootstrap.IsSessionListening)
+        Scene activeScene = SceneManager.GetActiveScene();
+        if (string.Equals(activeScene.name, sceneName, System.StringComparison.OrdinalIgnoreCase))
         {
-            bootstrap.StopSession();
-            StartCoroutine(this.LoadSceneAfterSessionStops(sceneName));
             return;
-        }
-
-        SceneManager.LoadScene(sceneName, LoadSceneMode.Single);
-    }
-
-    private IEnumerator LoadSceneAfterSessionStops(string sceneName)
-    {
-        float timeoutAt = Time.unscaledTime + 2f;
-        while (bootstrap != null && bootstrap.IsSessionListening && Time.unscaledTime < timeoutAt)
-        {
-            yield return null;
         }
 
         SceneManager.LoadScene(sceneName, LoadSceneMode.Single);
