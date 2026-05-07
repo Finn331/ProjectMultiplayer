@@ -111,6 +111,7 @@ public class CoopNetworkBootstrap : MonoBehaviour
     private bool waitingClientConnect;
     private bool approvalCallbackBound;
     private float connectDeadline;
+    private float nextRosterBroadcastTime;
     private string pendingJoinRoomCode = string.Empty;
     private string pendingJoinPassword = string.Empty;
     private string pendingJoinPlayerName = "Player";
@@ -347,6 +348,11 @@ public class CoopNetworkBootstrap : MonoBehaviour
         if (networkManager != null && networkManager.IsListening)
         {
             this.DisableScenePlayerIfNeeded();
+            if (networkManager.IsServer && Time.unscaledTime >= nextRosterBroadcastTime)
+            {
+                nextRosterBroadcastTime = Time.unscaledTime + 1f;
+                this.BroadcastRoomRosterSnapshot();
+            }
         }
 
         if (!waitingClientConnect)
@@ -393,11 +399,13 @@ public class CoopNetworkBootstrap : MonoBehaviour
         bool started = networkManager.StartHost();
         if (started)
         {
+            this.BindRosterMessageHandler();
             connectedClientNames[NetworkManager.ServerClientId] = string.IsNullOrWhiteSpace(pendingJoinPlayerName) ? "Host" : pendingJoinPlayerName;
             string hostRoomCode = this.NormalizeRoomCode(activeRoomCode);
             connectedClientRoomCodes[NetworkManager.ServerClientId] = hostRoomCode;
             this.AddClientToRoom(hostRoomCode, NetworkManager.ServerClientId);
             roomPasswords[hostRoomCode] = activeRoomPassword ?? string.Empty;
+            this.BroadcastRoomRosterSnapshot();
         }
 
         this.SetStatus(started ? $"Room host aktif: {ActiveRoomSummary} @ {CurrentEndpoint}" : "Gagal start Host");
@@ -416,6 +424,7 @@ public class CoopNetworkBootstrap : MonoBehaviour
         this.SetStatus(started ? $"Mencoba join {CurrentEndpoint}..." : $"Gagal mulai koneksi ke {CurrentEndpoint}");
         if (started)
         {
+            this.BindRosterMessageHandler();
             waitingClientConnect = true;
             connectDeadline = Time.unscaledTime + Mathf.Max(3f, clientConnectTimeoutSeconds);
         }
@@ -438,6 +447,11 @@ public class CoopNetworkBootstrap : MonoBehaviour
         roomOwners.Clear();
         knownRoomMemberNames.Clear();
         bool started = networkManager.StartServer();
+        if (started)
+        {
+            this.BindRosterMessageHandler();
+        }
+
         this.SetStatus(started ? $"Server aktif di {CurrentEndpoint}" : "Gagal start Server");
     }
 
@@ -586,7 +600,7 @@ public class CoopNetworkBootstrap : MonoBehaviour
         };
 
         string json = JsonUtility.ToJson(payload);
-        int capacity = Mathf.Max(128, Encoding.UTF8.GetByteCount(json) + 64);
+        int capacity = this.GetStringMessageCapacity(json);
         using (FastBufferWriter writer = new FastBufferWriter(capacity, Allocator.Temp))
         {
             writer.WriteValueSafe(json);
@@ -1238,11 +1252,13 @@ public class CoopNetworkBootstrap : MonoBehaviour
 
         if (networkManager.IsClient && clientId == networkManager.LocalClientId)
         {
+            this.BindRosterMessageHandler();
             waitingClientConnect = false;
             string localRoomCode = this.NormalizeRoomCode(pendingJoinRoomCode);
             if (!string.IsNullOrWhiteSpace(localRoomCode))
             {
                 connectedClientRoomCodes[clientId] = localRoomCode;
+                this.ApplyLocalRoomRosterFallback(localRoomCode);
             }
 
             this.EnsureLocalPlayerDoesNotDestroyWithScene();
@@ -1376,7 +1392,7 @@ public class CoopNetworkBootstrap : MonoBehaviour
         }
 
         string json = JsonUtility.ToJson(snapshot);
-        int capacity = Mathf.Max(256, Encoding.UTF8.GetByteCount(json) + 64);
+        int capacity = this.GetStringMessageCapacity(json);
         using (FastBufferWriter writer = new FastBufferWriter(capacity, Allocator.Temp))
         {
             writer.WriteValueSafe(json);
@@ -1415,6 +1431,13 @@ public class CoopNetworkBootstrap : MonoBehaviour
         };
     }
 
+    private int GetStringMessageCapacity(string value)
+    {
+        int charCount = string.IsNullOrEmpty(value) ? 0 : value.Length;
+        int utf8Bytes = string.IsNullOrEmpty(value) ? 0 : Encoding.UTF8.GetByteCount(value);
+        return Mathf.Max(1024, Mathf.Max(utf8Bytes, charCount * 4) + 256);
+    }
+
     private void ApplyRoomRosterSnapshot(RoomRosterSnapshot snapshot)
     {
         knownRoomMemberNames.Clear();
@@ -1451,6 +1474,27 @@ public class CoopNetworkBootstrap : MonoBehaviour
             }
 
             knownRoomMemberNames[roomCode] = names;
+        }
+    }
+
+    private void ApplyLocalRoomRosterFallback(string roomCode)
+    {
+        string normalizedRoomCode = this.NormalizeRoomCode(roomCode);
+        if (string.IsNullOrWhiteSpace(normalizedRoomCode))
+        {
+            return;
+        }
+
+        if (!knownRoomMemberNames.TryGetValue(normalizedRoomCode, out List<string> names) || names == null)
+        {
+            names = new List<string>();
+            knownRoomMemberNames[normalizedRoomCode] = names;
+        }
+
+        string localName = string.IsNullOrWhiteSpace(pendingJoinPlayerName) ? "Player" : pendingJoinPlayerName.Trim();
+        if (!names.Contains(localName))
+        {
+            names.Add(localName);
         }
     }
 

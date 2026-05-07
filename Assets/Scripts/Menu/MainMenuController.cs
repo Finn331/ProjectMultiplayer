@@ -73,6 +73,7 @@ public class MainMenuController : MonoBehaviour
     private readonly List<GameObject> roomEntryRows = new List<GameObject>();
     private readonly List<GameObject> kickEntryRows = new List<GameObject>();
 
+    private List<RoomPublicInfo> lastPublicRooms;
     private string activeRoomId = string.Empty;
     private RoomPublicInfo cachedPublicRoom;
     private bool hostControlMode;
@@ -129,6 +130,7 @@ public class MainMenuController : MonoBehaviour
         {
             nextHostUiRefreshTime = Time.unscaledTime + 0.7f;
             this.RefreshKickList();
+            this.RefreshCachedPublicRoomRows();
         }
 
         this.TryPollRoomStageFromDirectory();
@@ -616,6 +618,7 @@ public class MainMenuController : MonoBehaviour
             if (response.rooms == null || response.rooms.Count == 0)
             {
                 cachedPublicRoom = null;
+                lastPublicRooms = null;
                 this.ClearPublicRoomRows();
                 this.SetPublicRoomResult(string.IsNullOrWhiteSpace(searchName)
                     ? "Belum ada room public yang bisa di-join."
@@ -623,6 +626,7 @@ public class MainMenuController : MonoBehaviour
                 return;
             }
 
+            lastPublicRooms = response.rooms;
             cachedPublicRoom = this.FindFirstJoinablePublicRoom(response.rooms);
             this.RebuildPublicRoomRows(response.rooms);
             int joinableRoomCount = this.CountJoinablePublicRooms(response.rooms);
@@ -723,7 +727,19 @@ public class MainMenuController : MonoBehaviour
     private int ResolveDisplayPlayerCount(RoomPublicInfo room)
     {
         int maxPlayers = Mathf.Max(1, room.maxPlayers);
-        return Mathf.Clamp(room.currentPlayers, 0, maxPlayers);
+        int apiCount = Mathf.Clamp(room.currentPlayers, 0, maxPlayers);
+        if (room != null &&
+            MainMenuSessionState.HasSession &&
+            string.Equals(room.roomCode, MainMenuSessionState.Active.roomCode, System.StringComparison.OrdinalIgnoreCase))
+        {
+            this.ResolveBootstrap();
+            int knownRosterCount = bootstrap != null && bootstrap.GetKnownRoomMemberNames() != null
+                ? bootstrap.GetKnownRoomMemberNames().Count
+                : 0;
+            return Mathf.Clamp(Mathf.Max(apiCount, knownRosterCount), 0, maxPlayers);
+        }
+
+        return apiCount;
     }
 
     private bool IsJoinablePublicRoom(RoomPublicInfo room)
@@ -807,6 +823,16 @@ public class MainMenuController : MonoBehaviour
         }
 
         roomEntryRows.Clear();
+    }
+
+    private void RefreshCachedPublicRoomRows()
+    {
+        if (lastPublicRooms == null || lastPublicRooms.Count == 0 || publicRoomListContainer == null)
+        {
+            return;
+        }
+
+        this.RebuildPublicRoomRows(lastPublicRooms);
     }
 
     private void JoinFoundPublicRoom()
