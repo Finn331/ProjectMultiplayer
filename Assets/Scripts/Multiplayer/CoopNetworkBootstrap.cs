@@ -12,6 +12,7 @@ public class CoopNetworkBootstrap : MonoBehaviour
 {
     private const string DefaultPlayerPrefabPath = "Assets/Assets/Prefabs/NetworkPlayer.prefab";
     private const string RoomRosterMessageName = "RoomRosterSync";
+    private const string RoomStageRequestMessageName = "RoomStageRequest";
     private static CoopNetworkBootstrap instance;
 
     [Serializable]
@@ -33,6 +34,14 @@ public class CoopNetworkBootstrap : MonoBehaviour
     private class RoomRosterSnapshot
     {
         public RoomRosterEntry[] rooms;
+    }
+
+    [Serializable]
+    private struct RoomStageRequestPayload
+    {
+        public string roomCode;
+        public string sceneName;
+        public string stage;
     }
 
     public enum AutoStartMode
@@ -96,6 +105,7 @@ public class CoopNetworkBootstrap : MonoBehaviour
     private readonly Dictionary<ulong, string> connectedClientRoomCodes = new Dictionary<ulong, string>();
     private readonly Dictionary<string, HashSet<ulong>> roomMembers = new Dictionary<string, HashSet<ulong>>(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> roomPasswords = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, ulong> roomOwners = new Dictionary<string, ulong>(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, List<string>> knownRoomMemberNames = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
     private bool callbacksBound;
     private bool waitingClientConnect;
@@ -377,6 +387,7 @@ public class CoopNetworkBootstrap : MonoBehaviour
         connectedClientRoomCodes.Clear();
         roomMembers.Clear();
         roomPasswords.Clear();
+        roomOwners.Clear();
         knownRoomMemberNames.Clear();
         this.ApplyClientConnectionPayload(activeRoomCode, activeRoomPassword, pendingJoinPlayerName);
         bool started = networkManager.StartHost();
@@ -424,6 +435,7 @@ public class CoopNetworkBootstrap : MonoBehaviour
         connectedClientRoomCodes.Clear();
         roomMembers.Clear();
         roomPasswords.Clear();
+        roomOwners.Clear();
         knownRoomMemberNames.Clear();
         bool started = networkManager.StartServer();
         this.SetStatus(started ? $"Server aktif di {CurrentEndpoint}" : "Gagal start Server");
@@ -483,6 +495,18 @@ public class CoopNetworkBootstrap : MonoBehaviour
         this.StartOfficeLobbySceneAsHost();
     }
 
+    public void RequestOfficeLobbySceneAsRoomOwner()
+    {
+        string targetScene = string.IsNullOrWhiteSpace(roomLobbySceneName) ? "Gameplay" : roomLobbySceneName.Trim();
+        this.RequestSceneStageFromServer(targetScene, "office_lobby", "office lobby");
+    }
+
+    public void RequestForestSceneAsRoomOwner()
+    {
+        string targetScene = string.IsNullOrWhiteSpace(forestSceneName) ? "Environment" : forestSceneName.Trim();
+        this.RequestSceneStageFromServer(targetScene, "forest", "forest");
+    }
+
     [ContextMenu("Start Office Lobby Scene As Host")]
     public void StartOfficeLobbySceneAsHost()
     {
@@ -499,9 +523,9 @@ public class CoopNetworkBootstrap : MonoBehaviour
 
     private void StartSceneAsHostInternal(string targetScene, string stageLabel)
     {
-        if (networkManager == null || !networkManager.IsHost)
+        if (networkManager == null || !networkManager.IsServer)
         {
-            this.SetStatus($"Hanya host yang bisa Start ke {stageLabel}.");
+            this.SetStatus($"Hanya server/host yang bisa Start ke {stageLabel}.");
             return;
         }
 
@@ -534,6 +558,48 @@ public class CoopNetworkBootstrap : MonoBehaviour
         this.SetStatus($"Scene management NGO nonaktif, fallback local load '{targetScene}' untuk {stageLabel}.");
     }
 
+    private void RequestSceneStageFromServer(string targetScene, string stage, string stageLabel)
+    {
+        if (networkManager == null || !networkManager.IsClient || !networkManager.IsConnectedClient)
+        {
+            this.SetStatus($"Belum tersambung ke server untuk memulai {stageLabel}.");
+            return;
+        }
+
+        if (networkManager.IsServer)
+        {
+            this.StartSceneAsHostInternal(targetScene, stageLabel);
+            return;
+        }
+
+        if (networkManager.CustomMessagingManager == null)
+        {
+            this.SetStatus("Custom messaging belum siap.");
+            return;
+        }
+
+        RoomStageRequestPayload payload = new RoomStageRequestPayload
+        {
+            roomCode = this.GetLocalRoomCodeForUi(),
+            sceneName = targetScene,
+            stage = stage
+        };
+
+        string json = JsonUtility.ToJson(payload);
+        int capacity = Mathf.Max(128, Encoding.UTF8.GetByteCount(json) + 64);
+        using (FastBufferWriter writer = new FastBufferWriter(capacity, Allocator.Temp))
+        {
+            writer.WriteValueSafe(json);
+            networkManager.CustomMessagingManager.SendNamedMessage(
+                RoomStageRequestMessageName,
+                NetworkManager.ServerClientId,
+                writer,
+                NetworkDelivery.ReliableSequenced);
+        }
+
+        this.SetStatus($"Meminta server memulai {stageLabel}...");
+    }
+
     public void SetEndpoint(string address, ushort port)
     {
         serverAddress = string.IsNullOrWhiteSpace(address) ? "127.0.0.1" : address.Trim();
@@ -555,6 +621,7 @@ public class CoopNetworkBootstrap : MonoBehaviour
         connectedClientRoomCodes.Clear();
         roomMembers.Clear();
         roomPasswords.Clear();
+        roomOwners.Clear();
         knownRoomMemberNames.Clear();
         waitingClientConnect = false;
         this.SetStatus("Offline");
@@ -1224,7 +1291,9 @@ public class CoopNetworkBootstrap : MonoBehaviour
         }
 
         networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(RoomRosterMessageName);
+        networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(RoomStageRequestMessageName);
         networkManager.CustomMessagingManager.RegisterNamedMessageHandler(RoomRosterMessageName, this.OnRoomRosterMessageReceived);
+        networkManager.CustomMessagingManager.RegisterNamedMessageHandler(RoomStageRequestMessageName, this.OnRoomStageRequestMessageReceived);
     }
 
     private void UnbindRosterMessageHandler()
@@ -1235,6 +1304,7 @@ public class CoopNetworkBootstrap : MonoBehaviour
         }
 
         networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(RoomRosterMessageName);
+        networkManager.CustomMessagingManager.UnregisterNamedMessageHandler(RoomStageRequestMessageName);
     }
 
     private void OnRoomRosterMessageReceived(ulong senderClientId, FastBufferReader messagePayload)
@@ -1253,6 +1323,41 @@ public class CoopNetworkBootstrap : MonoBehaviour
         catch
         {
         }
+    }
+
+    private void OnRoomStageRequestMessageReceived(ulong senderClientId, FastBufferReader messagePayload)
+    {
+        if (networkManager == null || !networkManager.IsServer)
+        {
+            return;
+        }
+
+        messagePayload.ReadValueSafe(out string json);
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return;
+        }
+
+        RoomStageRequestPayload payload;
+        try
+        {
+            payload = JsonUtility.FromJson<RoomStageRequestPayload>(json);
+        }
+        catch
+        {
+            return;
+        }
+
+        string roomCode = this.NormalizeRoomCode(payload.roomCode);
+        if (!this.IsRoomStageRequestAuthorized(senderClientId, roomCode))
+        {
+            this.SetStatus($"Client {senderClientId} tidak punya izin start scene untuk room {roomCode}.");
+            return;
+        }
+
+        string sceneName = string.IsNullOrWhiteSpace(payload.sceneName) ? roomLobbySceneName : payload.sceneName.Trim();
+        string stageLabel = string.IsNullOrWhiteSpace(payload.stage) ? "room stage" : payload.stage.Trim();
+        this.StartSceneAsHostInternal(sceneName, stageLabel);
     }
 
     private void BroadcastRoomRosterSnapshot()
@@ -1420,6 +1525,10 @@ public class CoopNetworkBootstrap : MonoBehaviour
         }
 
         members.Add(clientId);
+        if (!roomOwners.ContainsKey(normalized))
+        {
+            roomOwners[normalized] = clientId;
+        }
     }
 
     private void RemoveClientFromRooms(ulong clientId)
@@ -1439,6 +1548,18 @@ public class CoopNetworkBootstrap : MonoBehaviour
             }
 
             members.Remove(clientId);
+            if (roomOwners.TryGetValue(pair.Key, out ulong ownerClientId) && ownerClientId == clientId)
+            {
+                if (members.Count > 0)
+                {
+                    roomOwners[pair.Key] = this.GetFirstRoomMember(members);
+                }
+                else
+                {
+                    roomOwners.Remove(pair.Key);
+                }
+            }
+
             if (members.Count > 0)
             {
                 continue;
@@ -1462,7 +1583,34 @@ public class CoopNetworkBootstrap : MonoBehaviour
             string roomCode = emptyRooms[i];
             roomMembers.Remove(roomCode);
             roomPasswords.Remove(roomCode);
+            roomOwners.Remove(roomCode);
         }
+    }
+
+    private ulong GetFirstRoomMember(HashSet<ulong> members)
+    {
+        foreach (ulong memberId in members)
+        {
+            return memberId;
+        }
+
+        return NetworkManager.ServerClientId;
+    }
+
+    private bool IsRoomStageRequestAuthorized(ulong senderClientId, string roomCode)
+    {
+        if (string.IsNullOrWhiteSpace(roomCode))
+        {
+            return false;
+        }
+
+        if (!connectedClientRoomCodes.TryGetValue(senderClientId, out string senderRoomCode) ||
+            !string.Equals(this.NormalizeRoomCode(senderRoomCode), roomCode, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return !roomOwners.TryGetValue(roomCode, out ulong ownerClientId) || ownerClientId == senderClientId;
     }
 
     private void SetStatus(string message)

@@ -1,6 +1,5 @@
 using TMPro;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 public class OfficeLobbyStartController : MonoBehaviour
@@ -77,22 +76,6 @@ public class OfficeLobbyStartController : MonoBehaviour
             return;
         }
 
-        this.LoadSceneSafely("Environment");
-    }
-
-    private void LoadSceneSafely(string sceneName)
-    {
-        if (string.IsNullOrWhiteSpace(sceneName))
-        {
-            return;
-        }
-
-        Scene activeScene = SceneManager.GetActiveScene();
-        if (string.Equals(activeScene.name, sceneName, System.StringComparison.OrdinalIgnoreCase))
-        {
-            return;
-        }
-
-        SceneManager.LoadScene(sceneName, LoadSceneMode.Single);
+        bootstrap.RequestForestSceneAsRoomOwner();
     }
 }

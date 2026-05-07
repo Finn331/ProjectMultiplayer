@@ -201,7 +201,10 @@ public class MainMenuController : MonoBehaviour
         this.SetInputIfEmpty(joinAddressInput, defaultJoinAddress);
         this.SetInputIfEmpty(joinPortInput, defaultJoinPort.ToString());
         this.SetInputIfEmpty(joinRoomCodeInput, "ROOM01");
-        this.SetInputIfEmpty(publicRoomSearchInput, "Room Survival");
+        if (publicRoomSearchInput != null)
+        {
+            publicRoomSearchInput.text = string.Empty;
+        }
 
         if (maxPlayersSlider != null)
         {
@@ -287,6 +290,7 @@ public class MainMenuController : MonoBehaviour
         this.SetStatus("Pilih Solo atau Multiplayer.");
         isRoomHostSession = false;
         this.SetHostControlMode(false);
+        this.SearchPublicRoomsByName();
     }
 
     private void PlaySolo()
@@ -444,6 +448,7 @@ public class MainMenuController : MonoBehaviour
                 joinPort,
                 asRoomHost: false);
             this.SetStatus("Mencoba join room...");
+            this.SetHostControlMode(true);
             return;
         }
 
@@ -462,6 +467,7 @@ public class MainMenuController : MonoBehaviour
                 joinPort,
                 asRoomHost: false);
             this.SetStatus("Room API tidak tersedia, fallback join langsung ke dedicated server.");
+            this.SetHostControlMode(true);
             return;
         }
 
@@ -502,6 +508,7 @@ public class MainMenuController : MonoBehaviour
                 resolvedPort,
                 asRoomHost: false);
             this.SetStatus("Mencoba join room...");
+            this.SetHostControlMode(true);
         });
     }
 
@@ -510,6 +517,13 @@ public class MainMenuController : MonoBehaviour
         if (!useRoomDirectoryApi)
         {
             this.SetStatus("Room Directory API nonaktif.");
+            return;
+        }
+
+        this.ResolveRoomDirectoryClient();
+        if (roomDirectoryClient == null)
+        {
+            this.SetPublicRoomResult("Room Directory API tidak tersedia.");
             return;
         }
 
@@ -527,7 +541,9 @@ public class MainMenuController : MonoBehaviour
             {
                 cachedPublicRoom = null;
                 this.ClearPublicRoomRows();
-                this.SetPublicRoomResult("Room public tidak ditemukan.");
+                this.SetPublicRoomResult(string.IsNullOrWhiteSpace(searchName)
+                    ? "Belum ada room public yang bisa di-join."
+                    : "Room public tidak ditemukan.");
                 return;
             }
 
@@ -635,6 +651,11 @@ public class MainMenuController : MonoBehaviour
             joinRoomCodeInput.text = room.roomCode;
         }
 
+        if (publicRoomSearchInput != null && string.IsNullOrWhiteSpace(publicRoomSearchInput.text))
+        {
+            publicRoomSearchInput.text = room.roomName;
+        }
+
         this.JoinFoundPublicRoom();
     }
 
@@ -675,27 +696,27 @@ public class MainMenuController : MonoBehaviour
     private void HostStartLobby()
     {
         this.ResolveBootstrap();
-        if (!isRoomHostSession || bootstrap == null || !bootstrap.IsClientActive)
+        if (!isRoomHostSession || bootstrap == null || !bootstrap.IsClientActive || !bootstrap.IsClientConnected)
         {
             this.SetStatus("Room owner belum terhubung ke dedicated server.");
             return;
         }
 
         this.TryNotifyRoomStage("office_lobby");
-        this.LoadSceneSafely(officeLobbySceneName);
+        bootstrap.RequestOfficeLobbySceneAsRoomOwner();
     }
 
     private void HostStartForest()
     {
         this.ResolveBootstrap();
-        if (!isRoomHostSession || bootstrap == null || !bootstrap.IsClientActive)
+        if (!isRoomHostSession || bootstrap == null || !bootstrap.IsClientActive || !bootstrap.IsClientConnected)
         {
             this.SetStatus("Room owner belum terhubung ke dedicated server.");
             return;
         }
 
         this.TryNotifyRoomStage("forest");
-        this.LoadSceneSafely(forestSceneName);
+        bootstrap.RequestForestSceneAsRoomOwner();
     }
 
     private void TryNotifyRoomStage(string stage)
@@ -957,6 +978,17 @@ public class MainMenuController : MonoBehaviour
                 this.SetHostControlMode(false);
             }
         }
+        else if (!isRoomHostSession && MainMenuSessionState.HasSession && MainMenuSessionState.Active.mode == SessionPlayMode.JoinRoom)
+        {
+            if (bootstrap != null && bootstrap.IsClientActive && !hostControlMode)
+            {
+                this.SetHostControlMode(true);
+            }
+            else if ((bootstrap == null || !bootstrap.IsSessionListening) && hostControlMode)
+            {
+                this.SetHostControlMode(false);
+            }
+        }
         else if (!isRoomHostSession && hostControlMode)
         {
             this.SetHostControlMode(false);
@@ -1115,12 +1147,24 @@ public class MainMenuController : MonoBehaviour
             lastObservedRoomStage = stage;
             if (stage.Contains("office") || stage.Contains("lobby"))
             {
+                if (bootstrap != null && bootstrap.IsSessionListening)
+                {
+                    this.SetStatus("Server sedang menyiapkan office lobby...");
+                    return;
+                }
+
                 this.LoadSceneSafely(officeLobbySceneName);
                 return;
             }
 
             if (stage.Contains("forest"))
             {
+                if (bootstrap != null && bootstrap.IsSessionListening)
+                {
+                    this.SetStatus("Server sedang menyiapkan forest...");
+                    return;
+                }
+
                 this.LoadSceneSafely(forestSceneName);
             }
         });
