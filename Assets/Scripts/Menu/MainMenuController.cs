@@ -971,7 +971,7 @@ public class MainMenuController : MonoBehaviour
     private void RefreshHostActionButtons()
     {
         this.ResolveBootstrap();
-        bool isOwnerConnected = isRoomHostSession && bootstrap != null && bootstrap.IsClientActive;
+        bool isOwnerConnected = isRoomHostSession && bootstrap != null && bootstrap.IsClientActive && bootstrap.IsClientConnected;
         bool hasSession = bootstrap != null && bootstrap.IsSessionListening;
 
         if (startLobbyButton != null)
@@ -1041,6 +1041,12 @@ public class MainMenuController : MonoBehaviour
         }
 
         if (!MainMenuSessionState.HasSession || MainMenuSessionState.Active.mode == SessionPlayMode.Solo)
+        {
+            return;
+        }
+
+        this.ResolveBootstrap();
+        if (bootstrap != null && bootstrap.IsClientActive && !bootstrap.IsClientConnected)
         {
             return;
         }

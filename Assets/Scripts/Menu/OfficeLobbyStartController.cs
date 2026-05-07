@@ -48,7 +48,7 @@ public class OfficeLobbyStartController : MonoBehaviour
         }
 
         bool isRoomOwner = MainMenuSessionState.HasSession && MainMenuSessionState.Active.mode == SessionPlayMode.HostRoom;
-        bool canStart = bootstrap != null && bootstrap.IsClientActive && isRoomOwner;
+        bool canStart = bootstrap != null && bootstrap.IsClientActive && bootstrap.IsClientConnected && isRoomOwner;
         startForestButton.interactable = canStart;
         if (statusText != null)
         {

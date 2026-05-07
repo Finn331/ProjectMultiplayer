@@ -144,6 +144,7 @@ public class CoopNetworkBootstrap : MonoBehaviour
     public bool IsSessionListening => networkManager != null && networkManager.IsListening;
     public bool IsHostActive => networkManager != null && networkManager.IsHost;
     public bool IsClientActive => networkManager != null && networkManager.IsClient;
+    public bool IsClientConnected => networkManager != null && networkManager.IsConnectedClient;
 
     public string ActiveRoomSummary =>
         $"{activeRoomName} | Code: {activeRoomCode} | {(activeRoomIsPrivate ? "Private" : "Public")} | {RoomMaxPlayers}p";
@@ -1177,7 +1178,7 @@ public class CoopNetworkBootstrap : MonoBehaviour
                 connectedClientRoomCodes[clientId] = localRoomCode;
             }
 
-            this.EnsureConnectedPlayerDoesNotDestroyWithScene(clientId);
+            this.EnsureLocalPlayerDoesNotDestroyWithScene();
             this.SetStatus($"Berhasil join room di {CurrentEndpoint}");
         }
     }
@@ -1369,7 +1370,7 @@ public class CoopNetworkBootstrap : MonoBehaviour
 
     private void EnsureConnectedPlayerDoesNotDestroyWithScene(ulong clientId)
     {
-        if (networkManager == null || networkManager.ConnectedClients == null)
+        if (networkManager == null || !networkManager.IsServer || networkManager.ConnectedClients == null)
         {
             return;
         }
@@ -1380,6 +1381,22 @@ public class CoopNetworkBootstrap : MonoBehaviour
         }
 
         networkClient.PlayerObject.DestroyWithScene = false;
+    }
+
+    private void EnsureLocalPlayerDoesNotDestroyWithScene()
+    {
+        if (networkManager == null || !networkManager.IsClient)
+        {
+            return;
+        }
+
+        NetworkClient localClient = networkManager.LocalClient;
+        if (localClient == null || localClient.PlayerObject == null)
+        {
+            return;
+        }
+
+        localClient.PlayerObject.DestroyWithScene = false;
     }
 
     private void OnTransportFailure()
