@@ -73,6 +73,11 @@ public class NetworkPlayerOwnerSetup : NetworkBehaviour
     {
         base.OnNetworkSpawn();
         this.ApplyOwnerState(IsOwner);
+
+        if (IsOwner && interactionSystem != null)
+        {
+            interactionSystem.RefreshSceneBindings();
+        }
     }
 
     public void RefreshOwnerState()

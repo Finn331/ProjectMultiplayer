@@ -127,7 +127,11 @@ public class PlayerAxeCombat : NetworkBehaviour
         }
 
         this.TryAutoDetectAxeReferences();
-        this.EnsureAxeVisualSetup();
+        if (startAxeEquipped)
+        {
+            this.EnsureAxeVisualSetup();
+        }
+
         this.SetAxeEquipped(startAxeEquipped);
         this.CacheAnimationHashes();
     }
@@ -184,10 +188,25 @@ public class PlayerAxeCombat : NetworkBehaviour
     public void SetAxeEquipped(bool equipped)
     {
         axeEquipped = equipped;
+        if (equipped)
+        {
+            this.EnsureAxeVisualSetup();
+        }
+        else if (axeRoot == null)
+        {
+            this.TryAutoDetectAxeReferences();
+        }
+
         if (axeRoot != null && axeRoot.gameObject.activeSelf != equipped)
         {
             axeRoot.gameObject.SetActive(equipped);
         }
+
+        if (!equipped)
+        {
+            this.SetDetectedAxeChildrenActive(false);
+        }
+
         this.UpdateAttackButtonVisibility();
     }
 
@@ -1163,6 +1182,30 @@ public class PlayerAxeCombat : NetworkBehaviour
         axeRoot = spawned.transform;
         Transform spawnedTip = this.FindDeepChildContains(axeRoot, axeTipNameContains);
         axeTip = spawnedTip != null ? spawnedTip : axeRoot;
+    }
+
+    private void SetDetectedAxeChildrenActive(bool active)
+    {
+        if (string.IsNullOrWhiteSpace(axeNameContains))
+        {
+            return;
+        }
+
+        string lowered = axeNameContains.ToLowerInvariant();
+        Transform[] children = GetComponentsInChildren<Transform>(true);
+        for (int i = 0; i < children.Length; i++)
+        {
+            Transform child = children[i];
+            if (child == null || child == transform)
+            {
+                continue;
+            }
+
+            if (child.name.ToLowerInvariant().Contains(lowered))
+            {
+                child.gameObject.SetActive(active);
+            }
+        }
     }
 
     private Transform ResolveRightHandBone()

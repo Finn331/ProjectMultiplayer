@@ -1331,7 +1331,7 @@ public class CoopNetworkBootstrap : MonoBehaviour
                 continue;
             }
 
-            bool isSceneObject = networkObject.IsSceneObject == true;
+            bool isSceneObject = networkObject.IsSceneObject != false;
             if (!isSceneObject && !this.IsPrefabAlreadyRegistered(pickable.gameObject))
             {
                 continue;
@@ -1365,7 +1365,7 @@ public class CoopNetworkBootstrap : MonoBehaviour
                 continue;
             }
 
-            bool isSceneObject = networkObject.IsSceneObject == true;
+            bool isSceneObject = networkObject.IsSceneObject != false;
             if (!isSceneObject && !this.IsPrefabAlreadyRegistered(chest.gameObject))
             {
                 continue;

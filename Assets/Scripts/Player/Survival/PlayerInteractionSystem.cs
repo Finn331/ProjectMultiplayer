@@ -35,6 +35,7 @@ public class PlayerInteractionSystem : MonoBehaviour
     private void Start()
     {
         this.CacheBaseInteractionRange();
+        this.RefreshSceneBindings();
 
         if (inventory == null)
         {
@@ -46,13 +47,42 @@ public class PlayerInteractionSystem : MonoBehaviour
             networkInventoryBridge = GetComponent<NetworkInventoryBridge>();
         }
 
-        this.ResolvePickButton();
-        this.BindPickButtonClick();
-
         if (pickButton != null)
         {
             pickButton.SetActive(false);
         }
+    }
+
+    public void RefreshSceneBindings()
+    {
+        if (inventory == null)
+        {
+            inventory = GetComponent<PlayerInventory>();
+        }
+
+        if (networkInventoryBridge == null)
+        {
+            networkInventoryBridge = GetComponent<NetworkInventoryBridge>();
+        }
+
+        if (playerCamera == null)
+        {
+            playerCamera = GetComponentInChildren<Camera>(true);
+            if (playerCamera == null)
+            {
+                playerCamera = Camera.main;
+            }
+        }
+
+        if (pickButton == null || pickButtonComponent == null)
+        {
+            pickButtonBound = false;
+            pickButton = null;
+            pickButtonComponent = null;
+        }
+
+        this.ResolvePickButton();
+        this.BindPickButtonClick();
     }
 
     public void SetInteractionRangeMultipliers(float detectionMultiplier, float interactMultiplier)
@@ -77,8 +107,7 @@ public class PlayerInteractionSystem : MonoBehaviour
 
         if (pickButton == null && autoBindPickButton)
         {
-            this.ResolvePickButton();
-            this.BindPickButtonClick();
+            this.RefreshSceneBindings();
         }
 
         this.DetectInteractable();

@@ -499,12 +499,18 @@ public class NetworkInventoryBridge : NetworkBehaviour
         NetworkObject networkObject = item.GetComponent<NetworkObject>();
         if (networkObject != null && !networkObject.IsSpawned)
         {
-            if (!this.IsNetworkPrefabRegistered(networkObject.PrefabIdHash))
+            bool canSpawn = networkObject.IsSceneObject != false || this.IsNetworkPrefabRegistered(networkObject.PrefabIdHash);
+            if (canSpawn)
             {
-                return false;
+                try
+                {
+                    networkObject.Spawn(true);
+                }
+                catch
+                {
+                    // Scene pickups can still be collected even if NGO did not spawn them.
+                }
             }
-
-            networkObject.Spawn(true);
         }
 
         int acceptedAmount = inventory.AddItem(item);
@@ -521,7 +527,10 @@ public class NetworkInventoryBridge : NetworkBehaviour
             }
             else
             {
+                ItemType removedType = item.itemType;
+                Vector3 removedPosition = item.transform.position;
                 Destroy(item.gameObject);
+                this.RemoveUnspawnedPickupClientRpc((int)removedType, removedPosition);
             }
         }
         else
@@ -530,6 +539,42 @@ public class NetworkInventoryBridge : NetworkBehaviour
         }
 
         return true;
+    }
+
+    [ClientRpc]
+    private void RemoveUnspawnedPickupClientRpc(int itemTypeValue, Vector3 approximatePosition)
+    {
+        if (!System.Enum.IsDefined(typeof(ItemType), itemTypeValue))
+        {
+            return;
+        }
+
+        ItemType itemType = (ItemType)itemTypeValue;
+        PickableItem[] items = FindObjectsOfType<PickableItem>(true);
+        float bestDistanceSqr = PickupResolveRadius * PickupResolveRadius;
+        PickableItem bestItem = null;
+        for (int i = 0; i < items.Length; i++)
+        {
+            PickableItem current = items[i];
+            if (current == null || current.itemType != itemType || !current.gameObject.activeInHierarchy)
+            {
+                continue;
+            }
+
+            float distanceSqr = (current.transform.position - approximatePosition).sqrMagnitude;
+            if (distanceSqr > bestDistanceSqr)
+            {
+                continue;
+            }
+
+            bestDistanceSqr = distanceSqr;
+            bestItem = current;
+        }
+
+        if (bestItem != null)
+        {
+            Destroy(bestItem.gameObject);
+        }
     }
 
     private bool TryConsumeLocalFromSlot(int slotIndex)
