@@ -75,6 +75,16 @@ public class NetworkPlayerOwnerSetup : NetworkBehaviour
         this.ApplyOwnerState(IsOwner);
     }
 
+    public void RefreshOwnerState()
+    {
+        if (!IsSpawned)
+        {
+            return;
+        }
+
+        this.ApplyOwnerState(IsOwner);
+    }
+
     private void ApplyOwnerState(bool isLocalOwner)
     {
         this.SetBehaviourState(movementController, isLocalOwner);

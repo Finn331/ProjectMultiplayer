@@ -155,6 +155,23 @@ public class OwnerDrivenNetworkTransform : NetworkBehaviour
         }
     }
 
+    public void ServerTeleport(Vector3 position, Quaternion rotation)
+    {
+        if (!IsServer)
+        {
+            return;
+        }
+
+        transform.SetPositionAndRotation(position, rotation);
+        hasServerSample = true;
+        lastServerSampleTime = Time.unscaledTime;
+        lastServerAcceptedPosition = position;
+        lastServerAcceptedRotation = rotation;
+        lastSentPosition = position;
+        lastSentRotation = rotation;
+        this.PushCurrentTransformToNetwork();
+    }
+
     [ServerRpc]
     private void SubmitTransformServerRpc(Vector3 position, Quaternion rotation, ServerRpcParams serverRpcParams = default)
     {

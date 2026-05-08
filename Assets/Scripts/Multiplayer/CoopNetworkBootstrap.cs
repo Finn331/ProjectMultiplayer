@@ -319,6 +319,9 @@ public class CoopNetworkBootstrap : MonoBehaviour
             {
                 DontDestroyOnLoad(networkManager.gameObject);
             }
+
+            SceneManager.sceneLoaded -= this.OnUnitySceneLoaded;
+            SceneManager.sceneLoaded += this.OnUnitySceneLoaded;
         }
 
         this.BindButtons();
@@ -1123,6 +1126,8 @@ public class CoopNetworkBootstrap : MonoBehaviour
             instance = null;
         }
 
+        SceneManager.sceneLoaded -= this.OnUnitySceneLoaded;
+
         if (networkManager == null || !callbacksBound)
         {
             return;
@@ -1132,8 +1137,39 @@ public class CoopNetworkBootstrap : MonoBehaviour
         networkManager.OnClientConnectedCallback -= this.OnClientConnected;
         networkManager.OnClientDisconnectCallback -= this.OnClientDisconnected;
         networkManager.OnTransportFailure -= this.OnTransportFailure;
+        SceneManager.sceneLoaded -= this.OnUnitySceneLoaded;
         this.UnbindRosterMessageHandler();
         callbacksBound = false;
+    }
+
+    private void OnUnitySceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        if (!Application.isPlaying || networkManager == null || !networkManager.IsListening)
+        {
+            return;
+        }
+
+        string sceneName = scene.name;
+        bool isRoomScene =
+            string.Equals(sceneName, roomLobbySceneName, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(sceneName, forestSceneName, StringComparison.OrdinalIgnoreCase);
+        if (!isRoomScene)
+        {
+            return;
+        }
+
+        scenePlayerObject = null;
+
+        if (networkManager.IsServer)
+        {
+            this.RepositionConnectedPlayersForLoadedScene(scene);
+            this.SpawnScenePickablesForNetwork();
+            this.SpawnSceneStorageChestsForNetwork();
+            this.BroadcastRoomRosterSnapshot();
+        }
+
+        this.RefreshLocalPlayerForLoadedScene();
+        this.SetStatus($"Scene '{sceneName}' siap. Player sudah masuk lobby.");
     }
 
     private void OnServerStarted()
@@ -1154,6 +1190,128 @@ public class CoopNetworkBootstrap : MonoBehaviour
         }
 
         this.BroadcastRoomRosterSnapshot();
+    }
+
+    private void RepositionConnectedPlayersForLoadedScene(Scene scene)
+    {
+        if (networkManager == null || !networkManager.IsServer || networkManager.ConnectedClients == null)
+        {
+            return;
+        }
+
+        this.GetSceneSpawnPose(scene, out Vector3 spawnPosition, out Quaternion spawnRotation);
+        int index = 0;
+        foreach (var pair in networkManager.ConnectedClients)
+        {
+            NetworkClient client = pair.Value;
+            if (client == null || client.PlayerObject == null)
+            {
+                continue;
+            }
+
+            Vector3 offset = this.GetPlayerSpawnOffset(index, spawnRotation);
+            this.TeleportPlayerObject(client.PlayerObject, spawnPosition + offset, spawnRotation);
+            index++;
+        }
+    }
+
+    private void RefreshLocalPlayerForLoadedScene()
+    {
+        if (networkManager == null || !networkManager.IsClient || networkManager.LocalClient == null || networkManager.LocalClient.PlayerObject == null)
+        {
+            return;
+        }
+
+        NetworkObject playerObject = networkManager.LocalClient.PlayerObject;
+        playerObject.DestroyWithScene = false;
+
+        NetworkPlayerOwnerSetup ownerSetup = playerObject.GetComponent<NetworkPlayerOwnerSetup>();
+        if (ownerSetup != null)
+        {
+            ownerSetup.RefreshOwnerState();
+        }
+
+        FPSControllerMobile controller = playerObject.GetComponent<FPSControllerMobile>();
+        if (controller != null)
+        {
+            controller.RefreshSceneInputBindings();
+        }
+    }
+
+    private void TeleportPlayerObject(NetworkObject playerObject, Vector3 position, Quaternion rotation)
+    {
+        if (playerObject == null)
+        {
+            return;
+        }
+
+        CharacterController characterController = playerObject.GetComponent<CharacterController>();
+        bool restoreController = characterController != null && characterController.enabled;
+        if (restoreController)
+        {
+            characterController.enabled = false;
+        }
+
+        playerObject.transform.SetPositionAndRotation(position, rotation);
+
+        OwnerDrivenNetworkTransform networkTransform = playerObject.GetComponent<OwnerDrivenNetworkTransform>();
+        if (networkTransform != null)
+        {
+            networkTransform.ServerTeleport(position, rotation);
+        }
+
+        if (restoreController)
+        {
+            characterController.enabled = true;
+        }
+    }
+
+    private Vector3 GetPlayerSpawnOffset(int index, Quaternion spawnRotation)
+    {
+        const float spacing = 1.35f;
+        int column = index % 2;
+        int row = index / 2;
+        Vector3 localOffset = new Vector3((column - 0.5f) * spacing, 0f, row * spacing);
+        return spawnRotation * localOffset;
+    }
+
+    private void GetSceneSpawnPose(Scene scene, out Vector3 position, out Quaternion rotation)
+    {
+        FPSControllerMobile[] controllers = FindObjectsOfType<FPSControllerMobile>(true);
+        FPSControllerMobile fallback = null;
+        for (int i = 0; i < controllers.Length; i++)
+        {
+            FPSControllerMobile controller = controllers[i];
+            if (controller == null || controller.gameObject.scene != scene)
+            {
+                continue;
+            }
+
+            NetworkObject networkObject = controller.GetComponent<NetworkObject>();
+            if (networkObject != null && networkObject.IsSpawned)
+            {
+                continue;
+            }
+
+            if (string.Equals(controller.gameObject.name, "Player", StringComparison.OrdinalIgnoreCase))
+            {
+                position = controller.transform.position;
+                rotation = controller.transform.rotation;
+                return;
+            }
+
+            fallback = controller;
+        }
+
+        if (fallback != null)
+        {
+            position = fallback.transform.position;
+            rotation = fallback.transform.rotation;
+            return;
+        }
+
+        position = new Vector3(0f, 1f, -8.06f);
+        rotation = Quaternion.identity;
     }
 
     private void SpawnScenePickablesForNetwork()

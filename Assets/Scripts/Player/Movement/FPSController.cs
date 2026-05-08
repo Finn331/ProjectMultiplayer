@@ -133,6 +133,47 @@ public class FPSControllerMobile : MonoBehaviour
         this.SetLocalFirstPersonRigActive(true);
     }
 
+    public void RefreshSceneInputBindings()
+    {
+        if (!this.HasInputAuthority())
+        {
+            this.SetLocalFirstPersonRigActive(false);
+            return;
+        }
+
+        if (!enabled)
+        {
+            enabled = true;
+        }
+
+        if (!controller)
+        {
+            controller = GetComponent<CharacterController>();
+        }
+
+        if (moveJoystick == null)
+        {
+            moveJoystick = FindObjectOfType<FloatingJoystick>(true);
+        }
+
+        if (lookArea == null)
+        {
+            lookArea = FindObjectOfType<LookArea>(true);
+        }
+
+        if (!mainCamera)
+        {
+            mainCamera = cameraHolder != null
+                ? cameraHolder.GetComponentInChildren<Camera>(true)
+                : Camera.main;
+        }
+
+        this.TryBindJumpButton();
+        this.SetLocalFirstPersonRigActive(true);
+        this.ApplyFirstPersonRendererVisibility();
+        this.ApplyFirstPersonCameraStabilization();
+    }
+
     void Update()
     {
         if (!this.HasInputAuthority())
