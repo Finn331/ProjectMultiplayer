@@ -5,10 +5,10 @@ using UnityEngine.Networking;
 
 public class RoomDirectoryClient : MonoBehaviour
 {
-    [SerializeField] private string baseUrl = "http://31.56.56.8:9011";
-    [SerializeField] private string fallbackBaseUrl = "http://31.56.56.8:9011";
+    [SerializeField] private string baseUrl = "http://2.27.165.46:9011";
+    [SerializeField] private string fallbackBaseUrl = "http://2.27.165.46:9011";
     [SerializeField] private float requestTimeoutSeconds = 8f;
-    private const string DefaultBaseUrl = "http://31.56.56.8:9011";
+    private const string DefaultBaseUrl = "http://2.27.165.46:9011";
 
     public string BaseUrl
     {
@@ -41,6 +41,34 @@ public class RoomDirectoryClient : MonoBehaviour
         };
 
         this.StartCoroutine(this.PostJson("/rooms/stage", payload, (RoomCreateResponse _, string error) =>
+        {
+            callback?.Invoke(string.IsNullOrEmpty(error), error);
+        }));
+    }
+
+    public void LeaveRoom(string roomId, string roomCode, Action<bool, string> callback)
+    {
+        RoomLeaveRequest payload = new RoomLeaveRequest
+        {
+            roomId = roomId,
+            roomCode = roomCode
+        };
+
+        this.StartCoroutine(this.PostJson("/rooms/leave", payload, (RoomCreateResponse _, string error) =>
+        {
+            callback?.Invoke(string.IsNullOrEmpty(error), error);
+        }));
+    }
+
+    public void HeartbeatRoom(string roomId, string roomCode, Action<bool, string> callback)
+    {
+        RoomHeartbeatRequest payload = new RoomHeartbeatRequest
+        {
+            roomId = roomId,
+            roomCode = roomCode
+        };
+
+        this.StartCoroutine(this.PostJson("/rooms/heartbeat", payload, (RoomCreateResponse _, string error) =>
         {
             callback?.Invoke(string.IsNullOrEmpty(error), error);
         }));

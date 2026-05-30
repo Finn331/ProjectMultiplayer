@@ -42,10 +42,14 @@ public class OwnerDrivenNetworkTransform : NetworkBehaviour
     private Vector3 lastServerAcceptedPosition;
     private Quaternion lastServerAcceptedRotation;
     private bool hasServerSample;
+    private bool hasSyncedServerTransform;
 
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();
+        syncedPosition.OnValueChanged += this.OnSyncedPositionChanged;
+        syncedRotation.OnValueChanged += this.OnSyncedRotationChanged;
+
         sendInterval = Mathf.Max(0.05f, sendInterval);
         positionThreshold = Mathf.Max(0.003f, positionThreshold);
         rotationThresholdDegrees = Mathf.Max(1f, rotationThresholdDegrees);
@@ -61,6 +65,14 @@ public class OwnerDrivenNetworkTransform : NetworkBehaviour
             lastServerAcceptedRotation = transform.rotation;
             this.PushCurrentTransformToNetwork();
         }
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        syncedPosition.OnValueChanged -= this.OnSyncedPositionChanged;
+        syncedRotation.OnValueChanged -= this.OnSyncedRotationChanged;
+        hasSyncedServerTransform = false;
+        base.OnNetworkDespawn();
     }
 
     private void Update()
@@ -144,6 +156,8 @@ public class OwnerDrivenNetworkTransform : NetworkBehaviour
 
     private void PushCurrentTransformToNetwork()
     {
+        hasSyncedServerTransform = true;
+
         if (syncPosition)
         {
             syncedPosition.Value = transform.position;
@@ -153,6 +167,16 @@ public class OwnerDrivenNetworkTransform : NetworkBehaviour
         {
             syncedRotation.Value = transform.rotation;
         }
+    }
+
+    private void OnSyncedPositionChanged(Vector3 previousValue, Vector3 newValue)
+    {
+        hasSyncedServerTransform = true;
+    }
+
+    private void OnSyncedRotationChanged(Quaternion previousValue, Quaternion newValue)
+    {
+        hasSyncedServerTransform = true;
     }
 
     public void ServerTeleport(Vector3 position, Quaternion rotation)
@@ -253,7 +277,7 @@ public class OwnerDrivenNetworkTransform : NetworkBehaviour
 
     private void TickOwnerCorrectionFromServer()
     {
-        if (!ownerApplyServerCorrection || !IsSpawned || NetworkManager == null || !NetworkManager.IsListening)
+        if (!ownerApplyServerCorrection || !IsSpawned || !hasSyncedServerTransform || NetworkManager == null || !NetworkManager.IsListening)
         {
             return;
         }

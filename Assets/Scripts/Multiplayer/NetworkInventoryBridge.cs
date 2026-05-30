@@ -79,13 +79,8 @@ public class NetworkInventoryBridge : NetworkBehaviour
             return false;
         }
 
-        NetworkObject itemNetworkObject = item.GetComponent<NetworkObject>();
-        if (itemNetworkObject != null && itemNetworkObject.IsSpawned)
-        {
-            this.RequestPickupServerRpc(itemNetworkObject.NetworkObjectId);
-            return true;
-        }
-
+        // Resolve by item snapshot on the server so scene pickups still work when
+        // in-scene NetworkObject ids differ or were not spawned by NGO yet.
         this.RequestPickupBySnapshotServerRpc((int)item.itemType, item.transform.position);
         return true;
     }

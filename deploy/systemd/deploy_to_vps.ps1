@@ -1,9 +1,9 @@
 $ErrorActionPreference = "Stop"
 
 $VpsUser = "root"
-$VpsHost = "31.56.56.8"
+$VpsHost = "2.27.165.46"
 $RemoteAppDir = "/root/project-multiplayer-server"
-$LocalBuildDir = "C:\Users\carlo\OneDrive\Documents\Github Project\Unity\Server\Project Multiplayer 1.0.1"
+$LocalBuildDir = "C:\Users\carlo\OneDrive\Documents\Github Project\Unity\Server\Project Multiplayer 1.0.6"
 $LocalUnitFile = "C:\Users\carlo\OneDrive\Documents\Github Project\Unity\ProjectMultiplayer\deploy\systemd\projectmultiplayer.service"
 $LocalInstallScript = "C:\Users\carlo\OneDrive\Documents\Github Project\Unity\ProjectMultiplayer\deploy\systemd\install_on_vps.sh"
 

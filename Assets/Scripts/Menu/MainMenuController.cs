@@ -60,14 +60,14 @@ public class MainMenuController : MonoBehaviour
     [SerializeField] private string forestSceneName = "Environment";
 
     [Header("Defaults")]
-    [SerializeField] private string defaultHostAddress = "31.56.56.8";
+    [SerializeField] private string defaultHostAddress = "2.27.165.46";
     [SerializeField] private ushort defaultHostPort = 9005;
-    [SerializeField] private string defaultJoinAddress = "31.56.56.8";
+    [SerializeField] private string defaultJoinAddress = "2.27.165.46";
     [SerializeField] private ushort defaultJoinPort = 9005;
 
     [Header("Room Directory (Optional API)")]
     [SerializeField] private bool useRoomDirectoryApi = true;
-    [SerializeField] private string roomDirectoryBaseUrl = "http://31.56.56.8:9011";
+    [SerializeField] private string roomDirectoryBaseUrl = "http://2.27.165.46:9011";
     [SerializeField] private bool showAdvancedEndpointInputs = false;
 
     private readonly List<GameObject> roomEntryRows = new List<GameObject>();
@@ -80,7 +80,10 @@ public class MainMenuController : MonoBehaviour
     private bool isRoomHostSession;
     private float nextHostUiRefreshTime;
     private float nextStagePollTime;
+    private float nextRoomHeartbeatTime;
     private bool stagePollInFlight;
+    private bool pendingStartLobbyRequest;
+    private bool pendingStartForestRequest;
     private string lastObservedRoomStage = string.Empty;
 
     private void Awake()
@@ -119,9 +122,19 @@ public class MainMenuController : MonoBehaviour
         }
     }
 
+    private void OnApplicationQuit()
+    {
+        if (useRoomDirectoryApi && roomDirectoryClient != null && MainMenuSessionState.HasSession)
+        {
+            roomDirectoryClient.LeaveRoom(activeRoomId, MainMenuSessionState.Active.roomCode, (_, _) => { });
+        }
+    }
+
     private void Update()
     {
         this.RefreshHostActionButtons();
+        this.SendRoomHeartbeatIfNeeded();
+        this.ProcessPendingStartRequestIfConnected();
 
         if (!hostControlMode)
         {
@@ -463,7 +476,20 @@ public class MainMenuController : MonoBehaviour
         {
             if (!string.IsNullOrWhiteSpace(error) || response == null || !response.success)
             {
-                this.SetStatus("Join room gagal: " + (string.IsNullOrWhiteSpace(error) ? response?.message : error));
+                string reason = string.IsNullOrWhiteSpace(error) ? response?.message : error;
+                this.StartDedicatedRoomSession(
+                    SessionPlayMode.JoinRoom,
+                    playerName,
+                    "Joined Room",
+                    joinCode,
+                    joinPassword,
+                    !string.IsNullOrEmpty(joinPassword),
+                    4,
+                    joinAddress,
+                    joinPort,
+                    asRoomHost: false);
+                this.SetStatus("Room API gagal (" + reason + "), fallback join langsung ke dedicated server...");
+                this.SetHostControlMode(true);
                 return;
             }
 
@@ -523,6 +549,7 @@ public class MainMenuController : MonoBehaviour
             }
 
             activeRoomId = response.roomId ?? string.Empty;
+            lastObservedRoomStage = "waiting";
             string responseCode = string.IsNullOrWhiteSpace(response.roomCode) ? roomCode : response.roomCode;
             string responseAddress = string.IsNullOrWhiteSpace(response.hostAddress) ? serverAddress : response.hostAddress;
             ushort responsePort = response.hostPort <= 0 ? serverPort : (ushort)response.hostPort;
@@ -545,6 +572,7 @@ public class MainMenuController : MonoBehaviour
 
             this.RefreshRoomInfo();
             this.SetStatus("Room dibuat. Sekarang host tersambung sebagai client room owner di VPS.");
+            this.TryNotifyRoomStage("waiting");
             this.SearchPublicRoomsByName();
         });
     }
@@ -862,25 +890,118 @@ public class MainMenuController : MonoBehaviour
     private void HostStartLobby()
     {
         this.ResolveBootstrap();
-        if (!isRoomHostSession || bootstrap == null || !bootstrap.IsClientActive || !bootstrap.IsClientConnected)
+        if (!isRoomHostSession || bootstrap == null || !MainMenuSessionState.HasSession)
         {
-            this.SetStatus("Room owner belum terhubung ke dedicated server.");
+            this.SetStatus("Session room owner belum siap.");
             return;
         }
 
+        if (!bootstrap.IsClientActive || !bootstrap.IsClientConnected)
+        {
+            pendingStartLobbyRequest = true;
+            pendingStartForestRequest = false;
+            this.ReconnectRoomOwnerIfNeeded();
+            this.SetStatus("Room owner sedang menyambung ulang ke dedicated server...");
+            return;
+        }
+
+        pendingStartLobbyRequest = false;
         bootstrap.RequestOfficeLobbySceneAsRoomOwner();
     }
 
     private void HostStartForest()
     {
         this.ResolveBootstrap();
-        if (!isRoomHostSession || bootstrap == null || !bootstrap.IsClientActive || !bootstrap.IsClientConnected)
+        if (!isRoomHostSession || bootstrap == null || !MainMenuSessionState.HasSession)
         {
-            this.SetStatus("Room owner belum terhubung ke dedicated server.");
+            this.SetStatus("Session room owner belum siap.");
             return;
         }
 
+        if (!bootstrap.IsClientActive || !bootstrap.IsClientConnected)
+        {
+            pendingStartLobbyRequest = false;
+            pendingStartForestRequest = true;
+            this.ReconnectRoomOwnerIfNeeded();
+            this.SetStatus("Room owner sedang menyambung ulang ke dedicated server...");
+            return;
+        }
+
+        pendingStartForestRequest = false;
         bootstrap.RequestForestSceneAsRoomOwner();
+    }
+
+    private void ReconnectRoomOwnerIfNeeded()
+    {
+        this.ResolveBootstrap();
+        if (bootstrap == null || !MainMenuSessionState.HasSession)
+        {
+            return;
+        }
+
+        if (bootstrap.IsClientActive && bootstrap.IsClientConnected)
+        {
+            return;
+        }
+
+        MainMenuSessionState.SessionConfig session = MainMenuSessionState.Active;
+        this.StartDedicatedRoomSession(
+            session.mode,
+            session.playerName,
+            session.roomName,
+            session.roomCode,
+            session.roomPassword,
+            session.roomPrivate,
+            session.maxPlayers,
+            session.hostAddress,
+            (ushort)session.hostPort,
+            asRoomHost: true);
+    }
+
+    private void ProcessPendingStartRequestIfConnected()
+    {
+        if (!pendingStartLobbyRequest && !pendingStartForestRequest)
+        {
+            return;
+        }
+
+        this.ResolveBootstrap();
+        if (bootstrap == null || !bootstrap.IsClientActive || !bootstrap.IsClientConnected)
+        {
+            return;
+        }
+
+        if (pendingStartLobbyRequest)
+        {
+            pendingStartLobbyRequest = false;
+            bootstrap.RequestOfficeLobbySceneAsRoomOwner();
+            return;
+        }
+
+        pendingStartForestRequest = false;
+        bootstrap.RequestForestSceneAsRoomOwner();
+    }
+
+    private void SendRoomHeartbeatIfNeeded()
+    {
+        if (!useRoomDirectoryApi || roomDirectoryClient == null || !MainMenuSessionState.HasSession)
+        {
+            return;
+        }
+
+        if (Time.unscaledTime < nextRoomHeartbeatTime)
+        {
+            return;
+        }
+
+        string roomCode = MainMenuSessionState.Active.roomCode;
+        if (string.IsNullOrWhiteSpace(activeRoomId) && string.IsNullOrWhiteSpace(roomCode))
+        {
+            return;
+        }
+
+        nextRoomHeartbeatTime = Time.unscaledTime + 10f;
+        roomDirectoryClient.HeartbeatRoom(activeRoomId, roomCode, (_, _) => { });
     }
 
     private void TryNotifyRoomStage(string stage)
@@ -1100,6 +1221,15 @@ public class MainMenuController : MonoBehaviour
 
     private void StopSession()
     {
+        string roomIdToLeave = activeRoomId;
+        string roomCodeToLeave = MainMenuSessionState.HasSession ? MainMenuSessionState.Active.roomCode : string.Empty;
+
+        if (useRoomDirectoryApi && roomDirectoryClient != null &&
+            (!string.IsNullOrWhiteSpace(roomIdToLeave) || !string.IsNullOrWhiteSpace(roomCodeToLeave)))
+        {
+            roomDirectoryClient.LeaveRoom(roomIdToLeave, roomCodeToLeave, (_, _) => { });
+        }
+
         this.ResolveBootstrap();
         if (bootstrap != null)
         {
@@ -1112,6 +1242,9 @@ public class MainMenuController : MonoBehaviour
         isRoomHostSession = false;
         lastObservedRoomStage = string.Empty;
         stagePollInFlight = false;
+        pendingStartLobbyRequest = false;
+        pendingStartForestRequest = false;
+        nextRoomHeartbeatTime = 0f;
         this.SetHostControlMode(false);
         this.SetStatus("Session dihentikan.");
         this.RefreshRoomInfo();
@@ -1221,29 +1354,38 @@ public class MainMenuController : MonoBehaviour
         if (normalizedStage.Contains("forest"))
         {
             this.TryNotifyRoomStage("forest");
+            if (bootstrap == null || !bootstrap.IsSessionListening)
+            {
+                this.LoadSceneSafely(forestSceneName);
+            }
+
             return;
         }
 
         if (normalizedStage.Contains("office") || normalizedStage.Contains("lobby"))
         {
             this.TryNotifyRoomStage("office_lobby");
+            if (bootstrap == null || !bootstrap.IsSessionListening)
+            {
+                this.LoadSceneSafely(officeLobbySceneName);
+            }
         }
     }
 
     private void RefreshHostActionButtons()
     {
         this.ResolveBootstrap();
-        bool isOwnerConnected = isRoomHostSession && bootstrap != null && bootstrap.IsClientActive && bootstrap.IsClientConnected;
+        bool canControlRoom = isRoomHostSession && MainMenuSessionState.HasSession;
         bool hasSession = bootstrap != null && bootstrap.IsSessionListening;
 
         if (startLobbyButton != null)
         {
-            startLobbyButton.interactable = isOwnerConnected;
+            startLobbyButton.interactable = canControlRoom;
         }
 
         if (startForestButton != null)
         {
-            startForestButton.interactable = isOwnerConnected;
+            startForestButton.interactable = canControlRoom;
         }
 
         if (hostLeaveButton != null)
@@ -1375,7 +1517,8 @@ public class MainMenuController : MonoBehaviour
             }
 
             lastObservedRoomStage = stage;
-            if (stage.Contains("office") || stage.Contains("lobby"))
+            if (string.Equals(stage, "office_lobby", System.StringComparison.Ordinal) ||
+                string.Equals(stage, "lobby", System.StringComparison.Ordinal))
             {
                 if (bootstrap != null && bootstrap.IsSessionListening)
                 {
@@ -1387,7 +1530,7 @@ public class MainMenuController : MonoBehaviour
                 return;
             }
 
-            if (stage.Contains("forest"))
+            if (string.Equals(stage, "forest", System.StringComparison.Ordinal))
             {
                 if (bootstrap != null && bootstrap.IsSessionListening)
                 {

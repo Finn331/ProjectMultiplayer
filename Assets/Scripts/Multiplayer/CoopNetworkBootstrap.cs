@@ -69,11 +69,11 @@ public class CoopNetworkBootstrap : MonoBehaviour
     }
 
     [Header("Connection")]
-    [SerializeField] private string serverAddress = "31.56.56.8";
+    [SerializeField] private string serverAddress = "2.27.165.46";
     [SerializeField] private ushort serverPort = 9005;
     [SerializeField] private string listenAddress = "0.0.0.0";
     [SerializeField] private AutoStartMode autoStartMode = AutoStartMode.Manual;
-    [SerializeField] private string vpsAddress = "31.56.56.8";
+    [SerializeField] private string vpsAddress = "2.27.165.46";
     [SerializeField] private ushort vpsPort = 9005;
     [SerializeField] private bool forceDedicatedServerInBatchMode = true;
     [SerializeField] private float clientConnectTimeoutSeconds = 10f;
@@ -1297,6 +1297,7 @@ public class CoopNetworkBootstrap : MonoBehaviour
             {
                 position = controller.transform.position;
                 rotation = controller.transform.rotation;
+                this.ProjectSpawnPoseToGround(scene, ref position);
                 return;
             }
 
@@ -1307,11 +1308,29 @@ public class CoopNetworkBootstrap : MonoBehaviour
         {
             position = fallback.transform.position;
             rotation = fallback.transform.rotation;
+            this.ProjectSpawnPoseToGround(scene, ref position);
             return;
         }
 
         position = new Vector3(0f, 1f, -8.06f);
         rotation = Quaternion.identity;
+        this.ProjectSpawnPoseToGround(scene, ref position);
+    }
+
+    private void ProjectSpawnPoseToGround(Scene scene, ref Vector3 position)
+    {
+        Vector3 rayOrigin = position + Vector3.up * 50f;
+        if (!Physics.Raycast(rayOrigin, Vector3.down, out RaycastHit hit, 200f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+        {
+            return;
+        }
+
+        if (hit.collider == null || hit.collider.gameObject.scene != scene)
+        {
+            return;
+        }
+
+        position.y = hit.point.y + 1.1f;
     }
 
     private void SpawnScenePickablesForNetwork()
@@ -1331,8 +1350,12 @@ public class CoopNetworkBootstrap : MonoBehaviour
                 continue;
             }
 
-            bool isSceneObject = networkObject.IsSceneObject != false;
-            if (!isSceneObject && !this.IsPrefabAlreadyRegistered(pickable.gameObject))
+            if (networkObject.IsSceneObject == true)
+            {
+                continue;
+            }
+
+            if (!this.IsPrefabAlreadyRegistered(pickable.gameObject))
             {
                 continue;
             }
@@ -1365,8 +1388,12 @@ public class CoopNetworkBootstrap : MonoBehaviour
                 continue;
             }
 
-            bool isSceneObject = networkObject.IsSceneObject != false;
-            if (!isSceneObject && !this.IsPrefabAlreadyRegistered(chest.gameObject))
+            if (networkObject.IsSceneObject == true)
+            {
+                continue;
+            }
+
+            if (!this.IsPrefabAlreadyRegistered(chest.gameObject))
             {
                 continue;
             }

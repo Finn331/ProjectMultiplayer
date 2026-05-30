@@ -116,6 +116,44 @@ public class NetworkPlayerOwnerSetup : NetworkBehaviour
                 localOnlyAudioListeners[i].enabled = isLocalOwner;
             }
         }
+
+        if (isLocalOwner)
+        {
+            this.EnsureSingleActiveAudioListener();
+        }
+    }
+
+    private void EnsureSingleActiveAudioListener()
+    {
+        AudioListener primaryListener = null;
+        for (int i = 0; i < localOnlyAudioListeners.Length; i++)
+        {
+            AudioListener candidate = localOnlyAudioListeners[i];
+            if (candidate == null || !candidate.enabled || !candidate.gameObject.activeInHierarchy)
+            {
+                continue;
+            }
+
+            primaryListener = candidate;
+            break;
+        }
+
+        if (primaryListener == null)
+        {
+            return;
+        }
+
+        AudioListener[] sceneListeners = FindObjectsOfType<AudioListener>(true);
+        for (int i = 0; i < sceneListeners.Length; i++)
+        {
+            AudioListener listener = sceneListeners[i];
+            if (listener == null || listener == primaryListener)
+            {
+                continue;
+            }
+
+            listener.enabled = false;
+        }
     }
 
     private void SetBehaviourState(Behaviour behaviour, bool state)

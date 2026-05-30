@@ -61,6 +61,20 @@ public class RoomStageUpdateRequest
 }
 
 [Serializable]
+public class RoomLeaveRequest
+{
+    public string roomId;
+    public string roomCode;
+}
+
+[Serializable]
+public class RoomHeartbeatRequest
+{
+    public string roomId;
+    public string roomCode;
+}
+
+[Serializable]
 public class RoomPublicInfo
 {
     public string roomId;
