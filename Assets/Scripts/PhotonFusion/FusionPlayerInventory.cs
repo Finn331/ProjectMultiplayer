@@ -41,7 +41,29 @@ public class FusionPlayerInventory : NetworkBehaviour
             return false;
         }
 
-        RPC_RequestPickup(networkObject);
+        float distance = Vector3.Distance(transform.position, item.transform.position);
+        if (distance > pickupDistance)
+        {
+            return false;
+        }
+
+        int requestedAmount = Mathf.Max(1, item.amount);
+        int acceptedAmount = inventory.AddItem(item.itemType, requestedAmount);
+
+        if (acceptedAmount <= 0)
+        {
+            return false;
+        }
+
+        if (acceptedAmount >= requestedAmount)
+        {
+            RPC_ConfirmPickupDespawn(networkObject);
+        }
+        else
+        {
+            RPC_ConfirmPickupPartial(networkObject, requestedAmount - acceptedAmount);
+        }
+
         return true;
     }
 
