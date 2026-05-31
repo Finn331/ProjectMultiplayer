@@ -16,6 +16,14 @@ public class HotbarSlotUI : MonoBehaviour,
 
     private static int dragFrom = -1;
 
+    private void Awake()
+    {
+        if (hotbar == null)
+        {
+            hotbar = GetComponentInParent<MobileHotbarUI>();
+        }
+    }
+
     void Update()
     {
         if (isHolding)
@@ -25,7 +33,10 @@ public class HotbarSlotUI : MonoBehaviour,
             if (timer >= holdTime && timer > minHoldDetect)
             {
                 isHolding = false;
-                hotbar.DropFromSlot(slotIndex);
+                if (hotbar != null)
+                {
+                    hotbar.DropFromSlot(slotIndex);
+                }
             }
         }
     }
@@ -42,7 +53,10 @@ public class HotbarSlotUI : MonoBehaviour,
 
         if (!isDragging && timer < holdTime)
         {
-            hotbar.SelectSlot(slotIndex);
+            if (hotbar != null)
+            {
+                hotbar.SelectSlot(slotIndex);
+            }
         }
     }
 
@@ -66,7 +80,10 @@ public class HotbarSlotUI : MonoBehaviour,
 
         if (targetSlot != null && dragFrom != -1 && targetSlot.slotIndex != slotIndex)
         {
-            hotbar.SwapSlot(dragFrom, targetSlot.slotIndex);
+            if (hotbar != null)
+            {
+                hotbar.SwapSlot(dragFrom, targetSlot.slotIndex);
+            }
         }
 
         dragFrom = -1;

@@ -260,6 +260,12 @@ public class HotbarConsumeUI : MonoBehaviour
 
     private bool HasLocalConsumeAuthority()
     {
+        var fusionObject = GetComponent<Fusion.NetworkObject>();
+        if (fusionObject != null && fusionObject.IsValid)
+        {
+            return fusionObject.HasStateAuthority;
+        }
+
         NetworkObject networkObject = GetComponent<NetworkObject>();
         if (networkObject != null && NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
         {
@@ -268,13 +274,12 @@ public class HotbarConsumeUI : MonoBehaviour
                 return false;
             }
         }
-
-        if (networkInventoryBridge == null || !networkInventoryBridge.UseNetworkedInventory)
+        else if (networkInventoryBridge != null && networkInventoryBridge.UseNetworkedInventory)
         {
-            return true;
+            return networkInventoryBridge.HasInputAuthority;
         }
 
-        return networkInventoryBridge.HasInputAuthority;
+        return true;
     }
 
     private GameObject FindEatButtonObject()

@@ -708,6 +708,12 @@ public class PlayerInventoryUI : MonoBehaviour
 
     private bool HasLocalInventoryAuthority()
     {
+        var fusionObject = GetComponent<Fusion.NetworkObject>();
+        if (fusionObject != null && fusionObject.IsValid)
+        {
+            return fusionObject.HasStateAuthority;
+        }
+
         NetworkObject networkObject = GetComponent<NetworkObject>();
         if (networkObject != null && NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
         {
@@ -718,13 +724,12 @@ public class PlayerInventoryUI : MonoBehaviour
 
             return networkObject.IsOwner;
         }
-
-        if (networkInventoryBridge == null || !networkInventoryBridge.UseNetworkedInventory)
+        else if (networkInventoryBridge != null && networkInventoryBridge.UseNetworkedInventory)
         {
-            return true;
+            return networkInventoryBridge.HasInputAuthority;
         }
 
-        return networkInventoryBridge.HasInputAuthority;
+        return true;
     }
 
     private bool CanRenderEditorPreview()

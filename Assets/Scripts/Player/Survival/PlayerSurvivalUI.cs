@@ -264,9 +264,24 @@ public class PlayerSurvivalUI : MonoBehaviour
 
     private PlayerSurvivalSystem FindPreferredSurvivalSystem()
     {
+        PlayerSurvivalSystem[] allSystems = FindObjectsOfType<PlayerSurvivalSystem>(true);
+
+        for (int i = 0; i < allSystems.Length; i++)
+        {
+            if (allSystems[i] == null)
+            {
+                continue;
+            }
+
+            var fusionObject = allSystems[i].GetComponent<Fusion.NetworkObject>();
+            if (fusionObject != null && fusionObject.IsValid && fusionObject.HasStateAuthority)
+            {
+                return allSystems[i];
+            }
+        }
+
         if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
         {
-            PlayerSurvivalSystem[] allSystems = FindObjectsOfType<PlayerSurvivalSystem>(true);
             for (int i = 0; i < allSystems.Length; i++)
             {
                 if (allSystems[i] == null)

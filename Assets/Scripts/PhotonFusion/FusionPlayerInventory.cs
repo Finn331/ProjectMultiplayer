@@ -28,14 +28,20 @@ public class FusionPlayerInventory : NetworkBehaviour
         ResolveReferences();
     }
 
-    public bool RequestPickup(FusionPickableItem item)
+    public bool RequestPickup(PickableItem item)
     {
-        if (!IsNetworkReady() || !HasFusionInputAuthority() || item == null || item.Object == null || !item.Object.IsValid || item.Runner == null)
+        if (!IsNetworkReady() || !HasFusionInputAuthority() || item == null)
         {
             return false;
         }
 
-        RPC_RequestPickup(item.Object);
+        var networkObject = item.GetComponent<NetworkObject>();
+        if (networkObject == null || !networkObject.IsValid || Runner == null)
+        {
+            return false;
+        }
+
+        RPC_RequestPickup(networkObject);
         return true;
     }
 
@@ -84,14 +90,20 @@ public class FusionPlayerInventory : NetworkBehaviour
             return;
         }
 
-        FusionPickableItem item = itemObject.GetComponent<FusionPickableItem>();
-        if (item == null || !item.CanPickup(transform, pickupDistance))
+        PickableItem item = itemObject.GetComponent<PickableItem>();
+        if (item == null)
         {
             return;
         }
 
-        int requestedAmount = item.ClampedAmount;
-        int acceptedAmount = inventory.AddItem(item.ItemType, requestedAmount);
+        float distance = Vector3.Distance(transform.position, item.transform.position);
+        if (distance > pickupDistance)
+        {
+            return;
+        }
+
+        int requestedAmount = Mathf.Max(1, item.amount);
+        int acceptedAmount = inventory.AddItem(item.itemType, requestedAmount);
         if (acceptedAmount <= 0)
         {
             return;
@@ -103,7 +115,7 @@ public class FusionPlayerInventory : NetworkBehaviour
             return;
         }
 
-        item.Amount = requestedAmount - acceptedAmount;
+        item.amount = requestedAmount - acceptedAmount;
     }
 
     [Rpc(RpcSources.InputAuthority, RpcTargets.StateAuthority)]

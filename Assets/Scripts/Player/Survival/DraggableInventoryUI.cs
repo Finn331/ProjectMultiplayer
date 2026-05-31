@@ -50,6 +50,12 @@ public class DraggableInventoryUI : MonoBehaviour
 
     private void Start()
     {
+        if (Application.isPlaying && !HasLocalInventoryAuthority())
+        {
+            enabled = false;
+            return;
+        }
+
         SetupSlots();
         if (inventory != null)
         {
@@ -57,6 +63,28 @@ public class DraggableInventoryUI : MonoBehaviour
         }
         SetupHotbarDrag();
         RefreshUI();
+    }
+
+    private bool HasLocalInventoryAuthority()
+    {
+        var fusionObject = GetComponent<Fusion.NetworkObject>();
+        if (fusionObject != null && fusionObject.IsValid)
+        {
+            return fusionObject.HasStateAuthority;
+        }
+
+        Unity.Netcode.NetworkObject networkObject = GetComponent<Unity.Netcode.NetworkObject>();
+        if (networkObject != null && Unity.Netcode.NetworkManager.Singleton != null && Unity.Netcode.NetworkManager.Singleton.IsListening)
+        {
+            if (!networkObject.IsSpawned) return false;
+            return networkObject.IsOwner;
+        }
+        else if (networkBridge != null && networkBridge.UseNetworkedInventory)
+        {
+            return networkBridge.HasInputAuthority;
+        }
+
+        return true;
     }
 
     private void OnDestroy()

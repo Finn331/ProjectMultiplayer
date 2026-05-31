@@ -251,6 +251,20 @@ public class PlayerInteractionSystem : MonoBehaviour
             return;
         }
 
+        var fusionInventory = GetComponent<FusionPlayerInventory>();
+        if (fusionInventory != null)
+        {
+            bool requested = fusionInventory.RequestPickup(item);
+            if (requested)
+            {
+                if (pickButton != null)
+                {
+                    pickButton.SetActive(false);
+                }
+                return;
+            }
+        }
+
         if (inventory == null)
         {
             return;
@@ -279,6 +293,12 @@ public class PlayerInteractionSystem : MonoBehaviour
 
     private bool HasLocalInteractAuthority()
     {
+        var fusionObject = GetComponent<Fusion.NetworkObject>();
+        if (fusionObject != null && fusionObject.IsValid)
+        {
+            return fusionObject.HasStateAuthority;
+        }
+
         NetworkObject networkObject = GetComponent<NetworkObject>();
         if (networkObject != null && NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
         {
@@ -292,13 +312,12 @@ public class PlayerInteractionSystem : MonoBehaviour
                 return false;
             }
         }
-
-        if (networkInventoryBridge == null || !networkInventoryBridge.UseNetworkedInventory)
+        else if (networkInventoryBridge != null && networkInventoryBridge.UseNetworkedInventory)
         {
-            return true;
+            return networkInventoryBridge.HasInputAuthority;
         }
 
-        return networkInventoryBridge.HasInputAuthority;
+        return true;
     }
 
     private void ResolvePickButton()

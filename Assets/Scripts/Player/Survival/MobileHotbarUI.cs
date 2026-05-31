@@ -55,9 +55,81 @@ public class MobileHotbarUI : MonoBehaviour
     private void OnEnable()
     {
         this.ResolveReferences();
+
+        if (Application.isPlaying && !this.HasLocalInventoryAuthority())
+        {
+            enabled = false;
+            return;
+        }
+
+        this.FindHotbarSlots();
         this.SubscribeInventory();
         this.SetupDragEvents();
         this.Refresh();
+    }
+
+    private void FindHotbarSlots()
+    {
+        if (slotButtons.Count > 0 && slotButtons[0] != null) return;
+
+        slotButtons.Clear();
+        slotIcons.Clear();
+        slotCounts.Clear();
+
+        HotbarSlotUI[] slots = FindObjectsOfType<HotbarSlotUI>(true);
+        System.Array.Sort(slots, (a, b) => a.slotIndex.CompareTo(b.slotIndex));
+
+        foreach (var slot in slots)
+        {
+            Button btn = slot.GetComponent<Button>();
+            if (btn != null) slotButtons.Add(btn);
+
+            Transform iconTransform = slot.transform.Find("Icon");
+            if (iconTransform != null)
+            {
+                Image img = iconTransform.GetComponent<Image>();
+                slotIcons.Add(img);
+            }
+            else
+            {
+                slotIcons.Add(null);
+            }
+
+            Transform countTransform = slot.transform.Find("CountText");
+            if (countTransform != null)
+            {
+                TMP_Text txt = countTransform.GetComponent<TMP_Text>();
+                slotCounts.Add(txt);
+            }
+            else
+            {
+                slotCounts.Add(null);
+            }
+
+            slot.hotbar = this;
+        }
+    }
+
+    private bool HasLocalInventoryAuthority()
+    {
+        var fusionObject = GetComponent<Fusion.NetworkObject>();
+        if (fusionObject != null && fusionObject.IsValid)
+        {
+            return fusionObject.HasStateAuthority;
+        }
+
+        Unity.Netcode.NetworkObject networkObject = GetComponent<Unity.Netcode.NetworkObject>();
+        if (networkObject != null && Unity.Netcode.NetworkManager.Singleton != null && Unity.Netcode.NetworkManager.Singleton.IsListening)
+        {
+            if (!networkObject.IsSpawned) return false;
+            return networkObject.IsOwner;
+        }
+        else if (networkBridge != null && networkBridge.UseNetworkedInventory)
+        {
+            return networkBridge.HasInputAuthority;
+        }
+
+        return true;
     }
 
     private void OnDisable()

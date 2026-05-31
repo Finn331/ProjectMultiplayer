@@ -202,6 +202,7 @@ GameObject:
   - component: {fileID: 3670379303215142028}
   - component: {fileID: 2143775898492630770}
   - component: {fileID: 7103980233483436989}
+  - component: {fileID: 2418521628232560225}
   m_Layer: 0
   m_Name: FusionPlayer
   m_TagString: Untagged
@@ -1015,6 +1016,23 @@ MonoBehaviour:
   SyncParent: 0
   _autoAOIOverride: 1
   DisableSharedModeInterpolation: 0
+--- !u!114 &2418521628232560225
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4472293491055181419}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 69c1be4902e64b048a4b91f0410beab8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  inventory: {fileID: 0}
+  iconDatabase: {fileID: 11400000, guid: 2690faf9946f70d41b1c280c162af876, type: 2}
+  hotbarUI: {fileID: 0}
+  networkBridge: {fileID: 0}
+  maxSlots: 12
 --- !u!1 &7516938604735521551
 GameObject:
   m_ObjectHideFlags: 0

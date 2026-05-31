@@ -92,7 +92,7 @@ public class PlayerAnimatorDriver : MonoBehaviour
         }
 
         Vector3 referenceVelocity = velocity.sqrMagnitude > 0.0001f ? velocity : syntheticVelocity;
-        float inputMagnitude = this.GetInputMagnitude();
+        float inputMagnitude = this.GetInputMagnitude(referenceVelocity);
         float speedNormalized = inputMagnitude;
         Vector2 moveInput = this.GetDirectionInput(referenceVelocity);
         float verticalVelocity = referenceVelocity.y;
@@ -178,8 +178,26 @@ public class PlayerAnimatorDriver : MonoBehaviour
         hasLastFramePosition = true;
     }
 
-    private float GetInputMagnitude()
+    private bool ShouldProcessAnimator()
     {
+        return true;
+    }
+
+    private float GetInputMagnitude(Vector3 referenceVelocity)
+    {
+        NetworkObject networkObject = GetComponent<NetworkObject>();
+        bool isRemoteNGO = networkObject != null && NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && !networkObject.IsOwner;
+        
+        var fusionObject = GetComponent<Fusion.NetworkObject>();
+        bool isRemoteFusion = fusionObject != null && fusionObject.IsValid && !fusionObject.HasStateAuthority;
+
+        if (isRemoteNGO || isRemoteFusion)
+        {
+            float maxSpeed = movementController != null ? Mathf.Max(0.01f, movementController.moveSpeed) : 5f;
+            Vector3 horizontalVelocity = new Vector3(referenceVelocity.x, 0f, referenceVelocity.z);
+            return Mathf.Clamp01(horizontalVelocity.magnitude / maxSpeed);
+        }
+
         if (movementController == null || movementController.moveJoystick == null)
         {
             return 0f;
@@ -258,21 +276,5 @@ public class PlayerAnimatorDriver : MonoBehaviour
             QueryTriggerInteraction.Ignore);
     }
 
-    private bool ShouldProcessAnimator()
-    {
-        NetworkObject networkObject = GetComponent<NetworkObject>();
-        if (networkObject != null && NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
-        {
-            if (!networkObject.IsSpawned) return false;
-            return networkObject.IsOwner;
-        }
 
-        var fusionObject = GetComponent<Fusion.NetworkObject>();
-        if (fusionObject != null)
-        {
-            return fusionObject.HasStateAuthority;
-        }
-
-        return true;
-    }
 }
