@@ -2,52 +2,48 @@ using System.Collections.Generic;
 using Fusion;
 using UnityEngine;
 
-public class FusionPlayerSpawner : SimulationBehaviour, IPlayerJoined, IPlayerLeft, ISpawned
+public class FusionPlayerSpawner : MonoBehaviour
 {
     [SerializeField] private NetworkPrefabRef playerPrefab;
 
-    private readonly Dictionary<PlayerRef, NetworkObject> spawnedPlayers = new Dictionary<PlayerRef, NetworkObject>();
-
-    public void Spawned()
+    private void Start()
     {
-        if (Runner == null || !Runner.IsRunning)
+        var runner = FindObjectOfType<NetworkRunner>();
+        if (runner != null && runner.IsRunning)
         {
-            return;
+            SpawnLocalPlayer(runner);
         }
+    }
 
+    private void SpawnLocalPlayer(NetworkRunner runner)
+    {
         if (!playerPrefab.IsValid)
         {
             Debug.LogWarning("Cannot spawn Fusion player because playerPrefab is not assigned.", this);
             return;
         }
 
-        PlayerRef localPlayer = Runner.LocalPlayer;
-        if (spawnedPlayers.ContainsKey(localPlayer))
+        PlayerRef localPlayer = runner.LocalPlayer;
+        if (localPlayer.IsNone) return;
+
+        // Cek apakah player sudah spawn (menghindari double spawn)
+        foreach (var no in FindObjectsOfType<NetworkObject>())
         {
-            return;
+            if (no.HasStateAuthority && no.GetComponent<FusionPlayerMovement>() != null)
+            {
+                return;
+            }
         }
 
         Transform spawnPoint = GetSpawnPoint(localPlayer);
         Vector3 position = spawnPoint != null ? spawnPoint.position : new Vector3(0f, 1.2f, -8f);
         Quaternion rotation = spawnPoint != null ? spawnPoint.rotation : Quaternion.identity;
 
-        // Di Shared Mode, setiap client men-spawn karakternya sendiri agar memiliki State Authority
-        NetworkObject playerObject = Runner.Spawn(playerPrefab, position, rotation, localPlayer);
-        spawnedPlayers[localPlayer] = playerObject;
+        // Di Shared Mode, setiap client men-spawn karakternya sendiri
+        NetworkObject playerObject = runner.Spawn(playerPrefab, position, rotation, localPlayer);
         
         // Daftarkan sebagai Player Object
-        Runner.SetPlayerObject(localPlayer, playerObject);
-    }
-
-    public void PlayerJoined(PlayerRef player)
-    {
-        // Dalam Shared Mode, spawning dilakukan oleh masing-masing client di Spawned().
-    }
-
-    public void PlayerLeft(PlayerRef player)
-    {
-        // Fusion otomatis men-despawn objek milik player yang keluar di Shared Mode.
-        spawnedPlayers.Remove(player);
+        runner.SetPlayerObject(localPlayer, playerObject);
     }
 
     private static Transform GetSpawnPoint(PlayerRef player)
