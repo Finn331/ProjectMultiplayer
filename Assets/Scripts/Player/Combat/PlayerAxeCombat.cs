@@ -857,6 +857,11 @@ public class PlayerAxeCombat : NetworkBehaviour
     {
         if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening || !IsSpawned || !IsOwner)
         {
+            var fusionCombat = GetComponent<FusionPlayerCombat>();
+            if (fusionCombat != null)
+            {
+                fusionCombat.RequestSwing();
+            }
             return;
         }
 
@@ -934,17 +939,20 @@ public class PlayerAxeCombat : NetworkBehaviour
 
     private bool HasLocalAttackAuthority()
     {
-        if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening)
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
         {
-            return true;
+            if (!IsSpawned) return false;
+            return IsOwner;
         }
 
-        if (!IsSpawned)
+        // Fallback for Photon Fusion
+        var fusionNo = GetComponent<Fusion.NetworkObject>();
+        if (fusionNo != null)
         {
-            return false;
+            return fusionNo.HasStateAuthority;
         }
 
-        return IsOwner;
+        return true;
     }
 
     private void ResolveAttackButton()

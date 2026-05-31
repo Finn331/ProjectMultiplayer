@@ -223,9 +223,9 @@ public class FusionStorageChest : NetworkBehaviour
             return false;
         }
 
-        if (info.Source == PlayerRef.None)
+        if (playerObject != null && playerObject.IsValid)
         {
-            return playerObject.HasInputAuthority;
+            return playerObject.HasStateAuthority;
         }
 
         return playerObject.InputAuthority == info.Source;

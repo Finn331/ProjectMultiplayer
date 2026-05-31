@@ -218,6 +218,6 @@ public class FusionPlayerInventory : NetworkBehaviour
 
     private bool HasFusionInputAuthority()
     {
-        return Object != null && Object.HasInputAuthority;
+        return Object != null && Object.HasStateAuthority;
     }
 }

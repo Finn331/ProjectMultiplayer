@@ -10,7 +10,7 @@ public class FusionPlayerOwnerSetup : NetworkBehaviour
 
     public override void Spawned()
     {
-        ApplyOwnerState(Object != null && Object.HasInputAuthority);
+        ApplyOwnerState(Object != null && Object.HasStateAuthority);
     }
 
     public override void Despawned(NetworkRunner runner, bool hasState)
