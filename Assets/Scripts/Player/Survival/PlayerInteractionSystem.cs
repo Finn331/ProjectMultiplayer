@@ -98,10 +98,6 @@ public class PlayerInteractionSystem : MonoBehaviour
     {
         if (!this.HasLocalInteractAuthority())
         {
-            if (pickButton != null)
-            {
-                pickButton.SetActive(false);
-            }
             return;
         }
 
