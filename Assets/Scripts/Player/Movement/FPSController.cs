@@ -181,6 +181,13 @@ public class FPSControllerMobile : MonoBehaviour
             return;
         }
 
+        // If Fusion is active, let FusionPlayerMovement handle movement and look in FixedUpdateNetwork.
+        var fusionObject = GetComponent<Fusion.NetworkObject>();
+        if (fusionObject != null)
+        {
+            return;
+        }
+
         MobileMovement();
         MobileLook();
         ApplyGravity();
@@ -559,6 +566,13 @@ public class FPSControllerMobile : MonoBehaviour
         var fusionObject = GetComponent<Fusion.NetworkObject>();
         if (fusionObject != null)
         {
+            // If the Fusion object has not spawned yet (e.g. during Unity Start()),
+            // return true to let the component initialize its references fully.
+            // FusionPlayerOwnerSetup will handle disabling it in Spawned() if we are a remote client.
+            if (!fusionObject.IsValid)
+            {
+                return true;
+            }
             return fusionObject.HasStateAuthority;
         }
 

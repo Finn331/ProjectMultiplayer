@@ -53,7 +53,21 @@ public class FusionPlayerMovement : NetworkBehaviour
 
     public override void FixedUpdateNetwork()
     {
-        return;
+        if (!HasFusionInputAuthority() || controller == null)
+        {
+            return;
+        }
+
+        if (moveJoystick == null || lookArea == null)
+        {
+            RefreshSceneBindings();
+        }
+
+        TryBindJumpButton();
+
+        Move();
+        Look();
+        ApplyGravity();
     }
 
     private void OnDisable()
@@ -86,6 +100,15 @@ public class FusionPlayerMovement : NetworkBehaviour
         if (lookArea == null)
         {
             lookArea = FindObjectOfType<LookArea>(true);
+        }
+
+        if (cameraHolder == null)
+        {
+            var fpsController = GetComponent<FPSControllerMobile>();
+            if (fpsController != null)
+            {
+                cameraHolder = fpsController.cameraHolder;
+            }
         }
 
         TryBindJumpButton();
@@ -124,6 +147,22 @@ public class FusionPlayerMovement : NetworkBehaviour
         controller.Move(direction.normalized * (moveSpeed * inputMagnitude * GetDeltaTime()));
     }
 
+    private Vector2 accumulatedLookDelta;
+
+    private void Update()
+    {
+        if (Object == null || !Object.HasStateAuthority)
+        {
+            return;
+        }
+
+        if (lookArea != null)
+        {
+            accumulatedLookDelta += lookArea.LookDelta;
+            lookArea.ResetDelta();
+        }
+    }
+
     private void Look()
     {
         if (lookArea == null || cameraHolder == null)
@@ -131,7 +170,9 @@ public class FusionPlayerMovement : NetworkBehaviour
             return;
         }
 
-        Vector2 delta = lookArea.LookDelta;
+        Vector2 delta = accumulatedLookDelta;
+        accumulatedLookDelta = Vector2.zero;
+
         if (delta.sqrMagnitude < 0.01f)
         {
             return;
@@ -142,7 +183,6 @@ public class FusionPlayerMovement : NetworkBehaviour
         xRotation = Mathf.Clamp(xRotation - lookY, -maxLookAngle, maxLookAngle);
         cameraHolder.localRotation = Quaternion.Euler(xRotation, 0f, 0f);
         transform.Rotate(Vector3.up * lookX);
-        lookArea.ResetDelta();
     }
 
     private void ApplyGravity()
