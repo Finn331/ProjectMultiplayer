@@ -102,7 +102,7 @@ public class FusionPlayerInventory : NetworkBehaviour
         return true;
     }
 
-    [Rpc(RpcSources.InputAuthority, RpcTargets.All)]
+    [Rpc(RpcSources.All, RpcTargets.All)]
     private void RPC_ConfirmPickupDespawn(NetworkObject itemObject)
     {
         if (itemObject == null || Runner == null) return;
@@ -113,7 +113,7 @@ public class FusionPlayerInventory : NetworkBehaviour
         }
     }
 
-    [Rpc(RpcSources.InputAuthority, RpcTargets.All)]
+    [Rpc(RpcSources.All, RpcTargets.All)]
     private void RPC_ConfirmPickupPartial(NetworkObject itemObject, int remainingAmount)
     {
         if (itemObject == null || Runner == null) return;

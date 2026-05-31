@@ -182,7 +182,20 @@ public class PlayerInteractionSystem : MonoBehaviour
 
         Vector3 direction = (hit.collider.transform.position - playerCamera.transform.position).normalized;
         float distance = Vector3.Distance(playerCamera.transform.position, hit.collider.transform.position);
-        if (Physics.Raycast(playerCamera.transform.position, direction, distance, obstacleLayer))
+        
+        RaycastHit[] obstacleHits = Physics.RaycastAll(playerCamera.transform.position, direction, distance, obstacleLayer);
+        bool isBlocked = false;
+        foreach (var ohit in obstacleHits)
+        {
+            if (ohit.collider.transform.root == transform.root) continue;
+            if (ohit.collider.GetComponent<CharacterController>() != null) continue;
+            if (ohit.collider.GetComponentInParent<FusionPlayerInventory>() != null) continue;
+            
+            isBlocked = true;
+            break;
+        }
+
+        if (isBlocked)
         {
             return;
         }
