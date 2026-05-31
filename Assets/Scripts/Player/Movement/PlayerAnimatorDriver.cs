@@ -261,18 +261,18 @@ public class PlayerAnimatorDriver : MonoBehaviour
     private bool ShouldProcessAnimator()
     {
         NetworkObject networkObject = GetComponent<NetworkObject>();
-        if (networkObject == null || NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening)
+        if (networkObject != null && NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
         {
-            return true;
+            if (!networkObject.IsSpawned) return false;
+            return networkObject.IsOwner;
         }
 
-        if (!networkObject.IsSpawned)
+        var fusionObject = GetComponent<Fusion.NetworkObject>();
+        if (fusionObject != null)
         {
-            return false;
+            return fusionObject.HasStateAuthority;
         }
 
-        // In multiplayer, only owner computes animator parameters from local input/physics.
-        // Remote players receive synced parameters via network bridge to avoid false "falling" state.
-        return networkObject.IsOwner;
+        return true;
     }
 }

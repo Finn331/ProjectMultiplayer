@@ -550,17 +550,19 @@ public class FPSControllerMobile : MonoBehaviour
     private bool HasInputAuthority()
     {
         NetworkObject networkObject = GetComponent<NetworkObject>();
-        if (networkObject == null || NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening)
+        if (networkObject != null && NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
         {
-            return true;
+            if (!networkObject.IsSpawned) return false;
+            return networkObject.IsOwner;
         }
 
-        if (!networkObject.IsSpawned)
+        var fusionObject = GetComponent<Fusion.NetworkObject>();
+        if (fusionObject != null)
         {
-            return false;
+            return fusionObject.HasStateAuthority;
         }
 
-        return networkObject.IsOwner;
+        return true;
     }
 
     private void SetLocalFirstPersonRigActive(bool active)
