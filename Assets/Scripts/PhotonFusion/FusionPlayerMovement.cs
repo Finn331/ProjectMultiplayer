@@ -53,23 +53,7 @@ public class FusionPlayerMovement : NetworkBehaviour
 
     public override void FixedUpdateNetwork()
     {
-        // V1 Photon path is Shared Mode owner-driven movement: only the input authority simulates
-        // CharacterController motion, and a separate Fusion transform sync component must publish it.
-        if (!HasFusionInputAuthority() || controller == null)
-        {
-            return;
-        }
-
-        if (moveJoystick == null || lookArea == null)
-        {
-            RefreshSceneBindings();
-        }
-
-        TryBindJumpButton();
-
-        Move();
-        Look();
-        ApplyGravity();
+        return;
     }
 
     private void OnDisable()
