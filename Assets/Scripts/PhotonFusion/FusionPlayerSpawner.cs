@@ -15,7 +15,7 @@ public class FusionPlayerSpawner : MonoBehaviour
         }
     }
 
-    private void SpawnLocalPlayer(NetworkRunner runner)
+    private async void SpawnLocalPlayer(NetworkRunner runner)
     {
         if (!playerPrefab.IsValid)
         {
@@ -40,10 +40,13 @@ public class FusionPlayerSpawner : MonoBehaviour
         Quaternion rotation = spawnPoint != null ? spawnPoint.rotation : Quaternion.identity;
 
         // Di Shared Mode, setiap client men-spawn karakternya sendiri
-        NetworkObject playerObject = runner.Spawn(playerPrefab, position, rotation, localPlayer);
+        NetworkObject playerObject = await runner.SpawnAsync(playerPrefab, position, rotation, localPlayer);
         
-        // Daftarkan sebagai Player Object
-        runner.SetPlayerObject(localPlayer, playerObject);
+        if (playerObject != null)
+        {
+            // Daftarkan sebagai Player Object
+            runner.SetPlayerObject(localPlayer, playerObject);
+        }
     }
 
     private static Transform GetSpawnPoint(PlayerRef player)
