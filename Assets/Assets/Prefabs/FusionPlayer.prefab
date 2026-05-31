@@ -201,6 +201,7 @@ GameObject:
   - component: {fileID: 2888294261796364785}
   - component: {fileID: 3670379303215142028}
   - component: {fileID: 2143775898492630770}
+  - component: {fileID: 7103980233483436989}
   m_Layer: 0
   m_Name: FusionPlayer
   m_TagString: Untagged
@@ -876,6 +877,7 @@ MonoBehaviour:
   - {fileID: 2888294261796364785}
   - {fileID: 3670379303215142028}
   - {fileID: 2143775898492630770}
+  - {fileID: 7103980233483436989}
   ForceRemoteRenderTimeframe: 0
 --- !u!114 &4243588901381709582
 MonoBehaviour:
@@ -996,6 +998,23 @@ MonoBehaviour:
   moveXParam: MoveX
   moveYParam: MoveY
   floatSyncThreshold: 0.01
+--- !u!114 &7103980233483436989
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4472293491055181419}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 158639473, guid: e725a070cec140c4caffb81624c8c787, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _stateAuthorityChangeErrorCorrectionDelta: 0
+  SyncScale: 0
+  SyncParent: 0
+  _autoAOIOverride: 1
+  DisableSharedModeInterpolation: 0
 --- !u!1 &7516938604735521551
 GameObject:
   m_ObjectHideFlags: 0

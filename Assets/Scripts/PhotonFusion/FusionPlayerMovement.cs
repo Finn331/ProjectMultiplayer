@@ -231,7 +231,7 @@ public class FusionPlayerMovement : NetworkBehaviour
 
     private bool HasFusionInputAuthority()
     {
-        return Object != null && Object.HasInputAuthority;
+        return Object != null && Object.HasStateAuthority;
     }
 
     private void WarnIfUnsupportedAuthorityModel()

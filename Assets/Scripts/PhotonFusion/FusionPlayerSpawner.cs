@@ -2,15 +2,15 @@ using System.Collections.Generic;
 using Fusion;
 using UnityEngine;
 
-public class FusionPlayerSpawner : SimulationBehaviour, IPlayerJoined, IPlayerLeft
+public class FusionPlayerSpawner : SimulationBehaviour, IPlayerJoined, IPlayerLeft, ISpawned
 {
     [SerializeField] private NetworkPrefabRef playerPrefab;
 
     private readonly Dictionary<PlayerRef, NetworkObject> spawnedPlayers = new Dictionary<PlayerRef, NetworkObject>();
 
-    public void PlayerJoined(PlayerRef player)
+    public void Spawned()
     {
-        if (Runner == null || !Runner.IsRunning || !Runner.IsSharedModeMasterClient)
+        if (Runner == null || !Runner.IsRunning)
         {
             return;
         }
@@ -21,34 +21,32 @@ public class FusionPlayerSpawner : SimulationBehaviour, IPlayerJoined, IPlayerLe
             return;
         }
 
-        if (spawnedPlayers.ContainsKey(player))
+        PlayerRef localPlayer = Runner.LocalPlayer;
+        if (spawnedPlayers.ContainsKey(localPlayer))
         {
             return;
         }
 
-        Transform spawnPoint = GetSpawnPoint(player);
+        Transform spawnPoint = GetSpawnPoint(localPlayer);
         Vector3 position = spawnPoint != null ? spawnPoint.position : new Vector3(0f, 1.2f, -8f);
         Quaternion rotation = spawnPoint != null ? spawnPoint.rotation : Quaternion.identity;
 
-        NetworkObject playerObject = Runner.Spawn(playerPrefab, position, rotation, player);
-        spawnedPlayers[player] = playerObject;
-        Runner.SetPlayerObject(player, playerObject);
+        // Di Shared Mode, setiap client men-spawn karakternya sendiri agar memiliki State Authority
+        NetworkObject playerObject = Runner.Spawn(playerPrefab, position, rotation, localPlayer);
+        spawnedPlayers[localPlayer] = playerObject;
+        
+        // Daftarkan sebagai Player Object
+        Runner.SetPlayerObject(localPlayer, playerObject);
+    }
+
+    public void PlayerJoined(PlayerRef player)
+    {
+        // Dalam Shared Mode, spawning dilakukan oleh masing-masing client di Spawned().
     }
 
     public void PlayerLeft(PlayerRef player)
     {
-        if (Runner == null)
-        {
-            spawnedPlayers.Remove(player);
-            return;
-        }
-
-        if (spawnedPlayers.TryGetValue(player, out NetworkObject playerObject) && playerObject != null)
-        {
-            Runner.SetPlayerObject(player, null);
-            Runner.Despawn(playerObject);
-        }
-
+        // Fusion otomatis men-despawn objek milik player yang keluar di Shared Mode.
         spawnedPlayers.Remove(player);
     }
 

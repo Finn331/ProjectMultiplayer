@@ -5871,7 +5871,7 @@ MonoBehaviour:
   dropImpulse: 1.8
   spawnAsSingleStack: 0
   dropScatterRadius: 0.25
-  choppedReplacement: {fileID: 0}
+  choppedReplacement: {fileID: 2006871526}
   logHits: 1
   preventRapidDuplicateHits: 1
   minHitIntervalSeconds: 0.3
@@ -13938,7 +13938,7 @@ PrefabInstance:
     - target: {fileID: 4472293491055181419, guid: 7aa1e3a8354b74942aa72a3e5cf36e33,
         type: 3}
       propertyPath: m_IsActive
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 4659772919811998255, guid: 7aa1e3a8354b74942aa72a3e5cf36e33,
         type: 3}

@@ -11,6 +11,14 @@ public class FusionTreeChoppable : NetworkBehaviour
     [SerializeField] private GameObject visualRoot;
     [SerializeField] private Collider[] collidersToDisable;
 
+    [Header("Optional Drops")]
+    [SerializeField] private NetworkPrefabRef dropPrefab;
+    [SerializeField] private int dropAmount = 1;
+    [SerializeField] private Transform dropPoint;
+    [SerializeField] private float dropImpulse = 1.8f;
+    [SerializeField] private bool spawnAsSingleStack = false;
+    [SerializeField] private float dropScatterRadius = 0.25f;
+
     [Networked] public int Health { get; private set; }
     [Networked] public NetworkBool IsDepleted { get; private set; }
 
@@ -66,10 +74,48 @@ public class FusionTreeChoppable : NetworkBehaviour
 
         IsDepleted = true;
         ApplyDepletionVisuals();
+        SpawnDrop();
 
         if (despawnWhenDepleted && Runner != null && Object != null && Object.IsValid)
         {
             Runner.Despawn(Object);
+        }
+    }
+
+    private void SpawnDrop()
+    {
+        if (!dropPrefab.IsValid || Runner == null || !Runner.IsRunning)
+        {
+            return;
+        }
+
+        int totalAmount = Mathf.Max(1, dropAmount);
+        int spawnCount = spawnAsSingleStack ? 1 : totalAmount;
+        int amountPerDrop = spawnAsSingleStack ? totalAmount : 1;
+        Vector3 basePosition = dropPoint != null
+            ? dropPoint.position
+            : transform.position + (Vector3.up * 0.5f);
+
+        for (int i = 0; i < spawnCount; i++)
+        {
+            Vector2 randomOffset2D = Random.insideUnitCircle * Mathf.Max(0f, dropScatterRadius);
+            Vector3 spawnPosition = basePosition + new Vector3(randomOffset2D.x, 0f, randomOffset2D.y);
+            
+            // Player yang menebang akan mendapat State Authority sementara atas drop ini (di Shared Mode)
+            NetworkObject droppedObj = Runner.Spawn(dropPrefab, spawnPosition, Quaternion.identity, Runner.LocalPlayer);
+
+            FusionPickableItem pickable = droppedObj.GetComponent<FusionPickableItem>();
+            if (pickable != null)
+            {
+                pickable.Amount = Mathf.Max(1, amountPerDrop);
+            }
+
+            Rigidbody rb = droppedObj.GetComponent<Rigidbody>();
+            if (rb != null)
+            {
+                Vector3 randomPush = transform.forward + Vector3.up + new Vector3(randomOffset2D.x, 0f, randomOffset2D.y);
+                rb.AddForce(randomPush.normalized * dropImpulse, ForceMode.VelocityChange);
+            }
         }
     }
 

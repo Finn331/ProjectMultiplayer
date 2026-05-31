@@ -57,47 +57,31 @@ public class FusionAnimatorSync : NetworkBehaviour
     {
         if (HasFusionStateAuthority())
         {
-            if (HasFusionInputAuthority())
-            {
-                PushNetworkStateFromController();
-            }
-
-            ApplyNetworkStateToAnimator();
-            return;
-        }
-
-        if (HasFusionInputAuthority())
-        {
+            // Owner captures local state, applies to Animator, and syncs to Networked variables
             CaptureLocalControllerState(
                 out float speed,
                 out float verticalVelocity,
                 out bool grounded,
                 out float moveX,
                 out float moveY);
+                
             ApplyValuesToAnimator(speed, verticalVelocity, grounded, moveX, moveY);
-            TrySendAnimatorState(speed, verticalVelocity, grounded, moveX, moveY);
+            
+            // Sync to network
+            Speed = GetThresholdedValue(Speed, speed);
+            VerticalVelocity = GetThresholdedValue(VerticalVelocity, verticalVelocity);
+            IsGrounded = grounded;
+            MoveX = GetThresholdedValue(MoveX, moveX);
+            MoveY = GetThresholdedValue(MoveY, moveY);
+            
             return;
         }
 
+        // Remote proxy applies network state to Animator
         ApplyNetworkStateToAnimator();
     }
 
-    private void PushNetworkStateFromController()
-    {
-        if (controller == null)
-        {
-            return;
-        }
-
-        Vector3 localVelocity = transform.InverseTransformDirection(controller.velocity);
-        Vector3 planarVelocity = new Vector3(controller.velocity.x, 0f, controller.velocity.z);
-
-        Speed = GetThresholdedValue(Speed, planarVelocity.magnitude);
-        VerticalVelocity = GetThresholdedValue(VerticalVelocity, controller.velocity.y);
-        IsGrounded = controller.isGrounded;
-        MoveX = GetThresholdedValue(MoveX, localVelocity.x);
-        MoveY = GetThresholdedValue(MoveY, localVelocity.z);
-    }
+    // Removed PushNetworkStateFromController since it is handled in FixedUpdateNetwork
 
     private void CaptureLocalControllerState(
         out float speed,
@@ -126,31 +110,7 @@ public class FusionAnimatorSync : NetworkBehaviour
         moveY = localVelocity.z;
     }
 
-    private void TrySendAnimatorState(float speed, float verticalVelocity, bool grounded, float moveX, float moveY)
-    {
-        if (HasFusionStateAuthority() || !ShouldSendAnimatorState(speed, verticalVelocity, grounded, moveX, moveY))
-        {
-            return;
-        }
-
-        lastSentSpeed = speed;
-        lastSentVerticalVelocity = verticalVelocity;
-        lastSentGrounded = grounded;
-        lastSentMoveX = moveX;
-        lastSentMoveY = moveY;
-        hasSentAnimatorState = true;
-        RPC_UpdateAnimatorState(speed, verticalVelocity, grounded, moveX, moveY);
-    }
-
-    [Rpc(RpcSources.InputAuthority, RpcTargets.StateAuthority)]
-    private void RPC_UpdateAnimatorState(float speed, float verticalVelocity, bool grounded, float moveX, float moveY)
-    {
-        Speed = GetThresholdedValue(Speed, speed);
-        VerticalVelocity = GetThresholdedValue(VerticalVelocity, verticalVelocity);
-        IsGrounded = grounded;
-        MoveX = GetThresholdedValue(MoveX, moveX);
-        MoveY = GetThresholdedValue(MoveY, moveY);
-    }
+    // Removed TrySendAnimatorState and RPC_UpdateAnimatorState (not needed in Shared Mode)
 
     private void ApplyNetworkStateToAnimator()
     {
@@ -205,15 +165,7 @@ public class FusionAnimatorSync : NetworkBehaviour
         return current;
     }
 
-    private bool ShouldSendAnimatorState(float speed, float verticalVelocity, bool grounded, float moveX, float moveY)
-    {
-        return !hasSentAnimatorState ||
-            Mathf.Abs(lastSentSpeed - speed) > floatSyncThreshold ||
-            Mathf.Abs(lastSentVerticalVelocity - verticalVelocity) > floatSyncThreshold ||
-            lastSentGrounded != grounded ||
-            Mathf.Abs(lastSentMoveX - moveX) > floatSyncThreshold ||
-            Mathf.Abs(lastSentMoveY - moveY) > floatSyncThreshold;
-    }
+    // Removed ShouldSendAnimatorState
 
     private void ResolveReferences()
     {

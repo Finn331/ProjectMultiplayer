@@ -9,7 +9,7 @@ public class MainMenuPrototypeUIBuilder : MonoBehaviour
 {
     [Header("Target")]
     [SerializeField] private MainMenuController targetController;
-    [SerializeField] private CoopNetworkBootstrap targetBootstrap;
+    [SerializeField] private PhotonFusionBootstrap targetBootstrap;
 
     [Header("Build")]
     [SerializeField] private bool buildOnAwake;
@@ -88,16 +88,18 @@ public class MainMenuPrototypeUIBuilder : MonoBehaviour
         {
             targetController = gameObject.AddComponent<MainMenuController>();
         }
+        
+        targetController.enabled = true;
 
         if (targetBootstrap == null)
         {
-            targetBootstrap = FindObjectOfType<CoopNetworkBootstrap>(true);
+            targetBootstrap = FindObjectOfType<PhotonFusionBootstrap>(true);
         }
 
         if (targetBootstrap == null)
         {
             GameObject bootstrapObject = new GameObject("CoopBootstrap");
-            targetBootstrap = bootstrapObject.AddComponent<CoopNetworkBootstrap>();
+            targetBootstrap = bootstrapObject.AddComponent<PhotonFusionBootstrap>();
         }
     }
 

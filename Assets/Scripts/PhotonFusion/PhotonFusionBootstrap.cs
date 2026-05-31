@@ -8,12 +8,14 @@ using UnityEngine;
 public class PhotonFusionBootstrap : MonoBehaviour, INetworkRunnerCallbacks
 {
     private static PhotonFusionBootstrap instance;
+    public static PhotonFusionBootstrap Instance => instance;
 
     [SerializeField] private NetworkRunner runnerPrefab;
     [SerializeField] private string gameplaySceneName = "Gameplay";
     [SerializeField] private string forestSceneName = "Environment";
 
     private NetworkRunner runner;
+    private NetworkRunner lobbyRunner;
     private bool startInProgress;
 
     public event Action<string> StatusChanged;
@@ -25,6 +27,8 @@ public class PhotonFusionBootstrap : MonoBehaviour, INetworkRunnerCallbacks
     public bool IsMasterClient => runner != null && runner.IsSharedModeMasterClient;
     public string GameplaySceneName => gameplaySceneName;
     public string ForestSceneName => forestSceneName;
+    
+    public IEnumerable<PlayerRef> ActivePlayers => runner != null ? runner.ActivePlayers : Array.Empty<PlayerRef>();
 
     private void Awake()
     {
@@ -254,18 +258,27 @@ public class PhotonFusionBootstrap : MonoBehaviour, INetworkRunnerCallbacks
 
     public void OnShutdown(NetworkRunner runner, ShutdownReason shutdownReason)
     {
-        SetStatus("Photon shutdown: " + shutdownReason);
-        if (this.runner == runner)
-        {
-            CleanupRunner(true, runner);
-            return;
-        }
+        // Only handle shutdown for the game runner, not the lobby runner
+        if (runner != this.runner) return;
 
+        SetStatus("Photon shutdown: " + shutdownReason);
+        CleanupRunner(true, runner);
         RunnerStopped?.Invoke();
     }
 
-    public void OnPlayerJoined(NetworkRunner runner, PlayerRef player) { }
-    public void OnPlayerLeft(NetworkRunner runner, PlayerRef player) { }
+    public void OnPlayerJoined(NetworkRunner runner, PlayerRef player)
+    {
+        // Only handle for the game runner
+        if (runner != this.runner) return;
+        SetStatus("Player joined: " + player.PlayerId);
+    }
+
+    public void OnPlayerLeft(NetworkRunner runner, PlayerRef player)
+    {
+        // Only handle for the game runner
+        if (runner != this.runner) return;
+        SetStatus("Player left: " + player.PlayerId);
+    }
     public void OnInput(NetworkRunner runner, NetworkInput input) { }
     public void OnInputMissing(NetworkRunner runner, PlayerRef player, NetworkInput input) { }
     public void OnConnectedToServer(NetworkRunner runner) { }
@@ -273,7 +286,75 @@ public class PhotonFusionBootstrap : MonoBehaviour, INetworkRunnerCallbacks
     public void OnConnectRequest(NetworkRunner runner, NetworkRunnerCallbackArgs.ConnectRequest request, byte[] token) { request.Accept(); }
     public void OnConnectFailed(NetworkRunner runner, NetAddress remoteAddress, NetConnectFailedReason reason) { SetStatus("Photon connect failed: " + reason); }
     public void OnUserSimulationMessage(NetworkRunner runner, SimulationMessagePtr message) { }
-    public void OnSessionListUpdated(NetworkRunner runner, List<SessionInfo> sessionList) { }
+    public event Action<List<SessionInfo>> SessionListUpdated;
+
+    public async void JoinLobby()
+    {
+        if (startInProgress) return;
+
+        try
+        {
+            // Clean up previous lobby runner if any, but DON'T touch the game runner
+            if (lobbyRunner != null)
+            {
+                await lobbyRunner.Shutdown();
+                if (lobbyRunner != null)
+                {
+                    Destroy(lobbyRunner.gameObject);
+                    lobbyRunner = null;
+                }
+            }
+
+            if (!this || !isActiveAndEnabled) return;
+
+            lobbyRunner = new GameObject("PhotonLobbyRunner").AddComponent<NetworkRunner>();
+            lobbyRunner.name = "PhotonLobbyRunner";
+            // Use a dedicated callback handler so lobby events don't interfere with game state
+            var lobbyHandler = new LobbyCallbackHandler(this);
+            lobbyRunner.AddCallbacks(lobbyHandler);
+            DontDestroyOnLoad(lobbyRunner.gameObject);
+
+            var result = await lobbyRunner.JoinSessionLobby(SessionLobby.Shared);
+
+            if (!this || !isActiveAndEnabled)
+            {
+                if (lobbyRunner != null)
+                {
+                    Destroy(lobbyRunner.gameObject);
+                    lobbyRunner = null;
+                }
+                return;
+            }
+
+            if (!result.Ok)
+            {
+                Debug.Log("Failed to join lobby: " + result.ShutdownReason);
+                if (lobbyRunner != null)
+                {
+                    Destroy(lobbyRunner.gameObject);
+                    lobbyRunner = null;
+                }
+            }
+            else
+            {
+                Debug.Log("Connected to Photon Lobby for room search.");
+            }
+        }
+        catch (Exception e)
+        {
+            Debug.Log("Lobby join error: " + e.Message);
+            if (lobbyRunner != null)
+            {
+                Destroy(lobbyRunner.gameObject);
+                lobbyRunner = null;
+            }
+        }
+    }
+
+    public void OnSessionListUpdated(NetworkRunner runner, List<SessionInfo> sessionList) 
+    { 
+        SessionListUpdated?.Invoke(sessionList);
+    }
     public void OnCustomAuthenticationResponse(NetworkRunner runner, Dictionary<string, object> data) { }
     public void OnHostMigration(NetworkRunner runner, HostMigrationToken hostMigrationToken) { }
     public void OnReliableDataReceived(NetworkRunner runner, PlayerRef player, ReliableKey key, ArraySegment<byte> data) { }
@@ -282,4 +363,40 @@ public class PhotonFusionBootstrap : MonoBehaviour, INetworkRunnerCallbacks
     public void OnSceneLoadStart(NetworkRunner runner) { }
     public void OnObjectExitAOI(NetworkRunner runner, NetworkObject obj, PlayerRef player) { }
     public void OnObjectEnterAOI(NetworkRunner runner, NetworkObject obj, PlayerRef player) { }
+
+    /// <summary>
+    /// Dedicated callback handler for the lobby runner.
+    /// Only forwards OnSessionListUpdated to the bootstrap, ignoring all other events
+    /// so they don't interfere with the game runner's state.
+    /// </summary>
+    private class LobbyCallbackHandler : INetworkRunnerCallbacks
+    {
+        private readonly PhotonFusionBootstrap owner;
+        public LobbyCallbackHandler(PhotonFusionBootstrap owner) { this.owner = owner; }
+
+        public void OnSessionListUpdated(NetworkRunner runner, List<SessionInfo> sessionList)
+        {
+            owner.SessionListUpdated?.Invoke(sessionList);
+        }
+
+        // All other callbacks are intentionally empty - lobby doesn't need them
+        public void OnPlayerJoined(NetworkRunner runner, PlayerRef player) { }
+        public void OnPlayerLeft(NetworkRunner runner, PlayerRef player) { }
+        public void OnInput(NetworkRunner runner, NetworkInput input) { }
+        public void OnInputMissing(NetworkRunner runner, PlayerRef player, NetworkInput input) { }
+        public void OnShutdown(NetworkRunner runner, ShutdownReason shutdownReason) { }
+        public void OnConnectedToServer(NetworkRunner runner) { }
+        public void OnDisconnectedFromServer(NetworkRunner runner, NetDisconnectReason reason) { }
+        public void OnConnectRequest(NetworkRunner runner, NetworkRunnerCallbackArgs.ConnectRequest request, byte[] token) { }
+        public void OnConnectFailed(NetworkRunner runner, NetAddress remoteAddress, NetConnectFailedReason reason) { }
+        public void OnUserSimulationMessage(NetworkRunner runner, SimulationMessagePtr message) { }
+        public void OnCustomAuthenticationResponse(NetworkRunner runner, Dictionary<string, object> data) { }
+        public void OnHostMigration(NetworkRunner runner, HostMigrationToken hostMigrationToken) { }
+        public void OnReliableDataReceived(NetworkRunner runner, PlayerRef player, ReliableKey key, ArraySegment<byte> data) { }
+        public void OnReliableDataProgress(NetworkRunner runner, PlayerRef player, ReliableKey key, float progress) { }
+        public void OnSceneLoadDone(NetworkRunner runner) { }
+        public void OnSceneLoadStart(NetworkRunner runner) { }
+        public void OnObjectExitAOI(NetworkRunner runner, NetworkObject obj, PlayerRef player) { }
+        public void OnObjectEnterAOI(NetworkRunner runner, NetworkObject obj, PlayerRef player) { }
+    }
 }
