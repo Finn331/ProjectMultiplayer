@@ -80,42 +80,27 @@ public class FusionPlayerInventory : NetworkBehaviour
         return true;
     }
 
-    [Rpc(RpcSources.InputAuthority, RpcTargets.StateAuthority)]
-    private void RPC_RequestPickup(NetworkObject itemObject)
+    [Rpc(RpcSources.InputAuthority, RpcTargets.All)]
+    private void RPC_ConfirmPickupDespawn(NetworkObject itemObject)
     {
-        ResolveReferences();
-
-        if (inventory == null || itemObject == null || Runner == null)
-        {
-            return;
-        }
-
-        PickableItem item = itemObject.GetComponent<PickableItem>();
-        if (item == null)
-        {
-            return;
-        }
-
-        float distance = Vector3.Distance(transform.position, item.transform.position);
-        if (distance > pickupDistance)
-        {
-            return;
-        }
-
-        int requestedAmount = Mathf.Max(1, item.amount);
-        int acceptedAmount = inventory.AddItem(item.itemType, requestedAmount);
-        if (acceptedAmount <= 0)
-        {
-            return;
-        }
-
-        if (acceptedAmount >= requestedAmount)
+        if (itemObject == null || Runner == null) return;
+        
+        if (itemObject.HasStateAuthority || (Runner.IsSharedModeMasterClient && itemObject.StateAuthority == PlayerRef.None))
         {
             Runner.Despawn(itemObject);
-            return;
         }
+    }
 
-        item.amount = requestedAmount - acceptedAmount;
+    [Rpc(RpcSources.InputAuthority, RpcTargets.All)]
+    private void RPC_ConfirmPickupPartial(NetworkObject itemObject, int remainingAmount)
+    {
+        if (itemObject == null || Runner == null) return;
+        
+        if (itemObject.HasStateAuthority || (Runner.IsSharedModeMasterClient && itemObject.StateAuthority == PlayerRef.None))
+        {
+            PickableItem item = itemObject.GetComponent<PickableItem>();
+            if (item != null) item.amount = remainingAmount;
+        }
     }
 
     [Rpc(RpcSources.InputAuthority, RpcTargets.StateAuthority)]
