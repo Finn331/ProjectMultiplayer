@@ -1,6 +1,7 @@
 using Fusion;
 using UnityEngine;
 
+[DisallowMultipleComponent]
 public class FusionPickableItem : NetworkBehaviour
 {
     [Networked] public int ItemTypeValue { get; set; }
@@ -10,30 +11,30 @@ public class FusionPickableItem : NetworkBehaviour
     [SerializeField] private ItemType defaultItemType;
     [SerializeField] private int defaultAmount = 1;
 
+    private PickableItem pickableItem;
+
     public ItemType ItemType => IsValidItemTypeValue(ItemTypeValue) ? (ItemType)ItemTypeValue : defaultItemType;
     public int ClampedAmount => Mathf.Max(1, Amount);
 
     public override void Spawned()
     {
-        if (!HasFusionStateAuthority())
+        ResolveReferences();
+        if (HasFusionStateAuthority())
         {
-            return;
+            InitializeDefaultsIfNeeded();
         }
 
-        if (!IsInitialized)
-        {
-            ItemTypeValue = (int)defaultItemType;
-            IsInitialized = true;
-        }
-        else if (!IsValidItemTypeValue(ItemTypeValue))
-        {
-            ItemTypeValue = (int)defaultItemType;
-        }
+        ApplyToPickableItem();
+    }
 
-        if (Amount < 1)
-        {
-            Amount = Mathf.Max(1, defaultAmount);
-        }
+    public override void Render()
+    {
+        ApplyToPickableItem();
+    }
+
+    private void Awake()
+    {
+        ResolveReferences();
     }
 
     public bool Initialize(ItemType itemType, int amount)
@@ -46,6 +47,7 @@ public class FusionPickableItem : NetworkBehaviour
         ItemTypeValue = (int)itemType;
         Amount = Mathf.Max(1, amount);
         IsInitialized = true;
+        ApplyToPickableItem();
         return true;
     }
 
@@ -57,6 +59,44 @@ public class FusionPickableItem : NetworkBehaviour
     private bool HasFusionStateAuthority()
     {
         return Object != null && Object.HasStateAuthority;
+    }
+
+    private void ResolveReferences()
+    {
+        if (pickableItem == null)
+        {
+            pickableItem = GetComponent<PickableItem>();
+        }
+    }
+
+    private void InitializeDefaultsIfNeeded()
+    {
+        if (!IsInitialized || !IsValidItemTypeValue(ItemTypeValue))
+        {
+            ItemTypeValue = (int)defaultItemType;
+            IsInitialized = true;
+        }
+
+        if (Amount < 1)
+        {
+            Amount = Mathf.Max(1, defaultAmount);
+        }
+    }
+
+    private void ApplyToPickableItem()
+    {
+        ResolveReferences();
+        if (pickableItem == null)
+        {
+            return;
+        }
+
+        pickableItem.itemType = ItemType;
+        pickableItem.amount = ClampedAmount;
+        if (string.IsNullOrWhiteSpace(pickableItem.itemName))
+        {
+            pickableItem.itemName = pickableItem.itemType.ToString();
+        }
     }
 
     private static bool IsValidItemTypeValue(int value)

@@ -1,5 +1,4 @@
 using UnityEngine;
-using Unity.Netcode;
 
 public class TreeChoppable : MonoBehaviour
 {
@@ -31,6 +30,13 @@ public class TreeChoppable : MonoBehaviour
 
     public bool IsDepleted => isDepleted;
     public float CurrentHitPoints => Mathf.Max(0f, currentHitPoints);
+    public bool HasDropPrefab => dropPrefab != null;
+    public ItemType DropItemType => dropPrefab != null ? dropPrefab.itemType : default;
+    public int FusionDropCount => spawnAsSingleStack ? 1 : Mathf.Max(1, dropAmount);
+    public int FusionAmountPerDrop => spawnAsSingleStack ? Mathf.Max(1, dropAmount) : 1;
+    public float DropScatterRadius => Mathf.Max(0f, dropScatterRadius);
+    public Vector3 DropForward => transform.forward;
+    public Vector3 DropBasePosition => dropPoint != null ? dropPoint.position : transform.position + (Vector3.up * 0.5f);
 
     private void Awake()
     {
@@ -118,7 +124,7 @@ public class TreeChoppable : MonoBehaviour
 
         if (currentHitPoints <= 0f)
         {
-            this.OnTreeChopped(attacker: null, spawnDrop: true, deterministicDrops: true);
+            this.OnTreeChopped(attacker: null, spawnDrop: false, deterministicDrops: false);
         }
 
         return true;
@@ -191,15 +197,6 @@ public class TreeChoppable : MonoBehaviour
                 }
 
                 marker.Initialize(sceneDropId);
-            }
-
-            if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && NetworkManager.Singleton.IsServer)
-            {
-                NetworkObject droppedNetObj = dropped.GetComponent<NetworkObject>();
-                if (droppedNetObj != null && !droppedNetObj.IsSpawned)
-                {
-                    droppedNetObj.Spawn(true);
-                }
             }
 
             Rigidbody rb = dropped.GetComponent<Rigidbody>();

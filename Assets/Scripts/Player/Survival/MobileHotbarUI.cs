@@ -31,6 +31,7 @@ public class MobileHotbarUI : MonoBehaviour
     public System.Collections.Generic.List<TMP_Text> slotCounts = new System.Collections.Generic.List<TMP_Text>();
 
     [Header("Drag Settings")]
+    [SerializeField] private bool enableHotbarDrag;
     [HideInInspector] public Action<int, ItemType> OnSlotDragStart;
     [HideInInspector] public Action<ItemType, int> OnSlotDragEnd;
 
@@ -539,7 +540,7 @@ public class MobileHotbarUI : MonoBehaviour
 
     private void SetupDragEvents()
     {
-        if (dragEventsInitialized)
+        if (dragEventsInitialized || !enableHotbarDrag)
         {
             return;
         }

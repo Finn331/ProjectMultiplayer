@@ -16,7 +16,8 @@ GameObject:
   - component: {fileID: -1992707798586956373}
   - component: {fileID: 8942364306671759795}
   - component: {fileID: 2169127183363033633}
-  - component: {fileID: 2070778921173042707}
+  - component: {fileID: -6653728796553723219}
+  - component: {fileID: 8903199633505325103}
   m_Layer: 3
   m_Name: Stone
   m_TagString: Untagged
@@ -187,7 +188,7 @@ MonoBehaviour:
   onInteraction:
     m_PersistentCalls:
       m_Calls: []
---- !u!114 &2070778921173042707
+--- !u!114 &-6653728796553723219
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -196,17 +197,31 @@ MonoBehaviour:
   m_GameObject: {fileID: 5443179461439313778}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
+  m_Script: {fileID: -1552182283, guid: e725a070cec140c4caffb81624c8c787, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  GlobalObjectIdHash: 0
-  InScenePlacedSourceGlobalObjectIdHash: 0
-  AlwaysReplicateAsRoot: 0
-  SynchronizeTransform: 1
-  ActiveSceneSynchronization: 0
-  SceneMigrationSynchronization: 1
-  SpawnWithObservers: 1
-  DontDestroyWithOwner: 0
-  AutoObjectParentSync: 1
-  SyncOwnerTransformWhenParented: 1
-  AllowOwnerToParent: 0
+  SortKey: 2808611084
+  ObjectInterest: 1
+  Flags: 262145
+  NestedObjects: []
+  NetworkedBehaviours:
+  - {fileID: 8903199633505325103}
+  ForceRemoteRenderTimeframe: 0
+--- !u!114 &8903199633505325103
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5443179461439313778}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1e4ba96b228652543b99d9cc56551ce5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _ItemTypeValue: 0
+  _Amount: 0
+  _IsInitialized:
+    _value: 0
+  defaultItemType: 1
+  defaultAmount: 1

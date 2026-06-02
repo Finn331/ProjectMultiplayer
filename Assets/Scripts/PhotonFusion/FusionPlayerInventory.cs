@@ -11,6 +11,7 @@ public class FusionPlayerInventory : NetworkBehaviour
     {
         public ItemType itemType;
         public NetworkPrefabRef prefab;
+        public GameObject prefabObject;
     }
 
     [SerializeField] private PlayerInventory inventory;
@@ -38,8 +39,9 @@ public class FusionPlayerInventory : NetworkBehaviour
             return false;
         }
 
-        var networkObject = item.GetComponent<NetworkObject>();
-        if (networkObject == null || !networkObject.IsValid || Runner == null)
+        FusionPickableItem fusionItem = item.GetComponent<FusionPickableItem>();
+        NetworkObject networkObject = item.GetComponent<NetworkObject>();
+        if (fusionItem == null || networkObject == null || !networkObject.IsValid || Runner == null)
         {
             return RequestScenePickup(item);
         }
@@ -50,7 +52,9 @@ public class FusionPlayerInventory : NetworkBehaviour
             return false;
         }
 
-        int requestedAmount = Mathf.Max(1, item.amount);
+        item.itemType = fusionItem.ItemType;
+        item.amount = fusionItem.ClampedAmount;
+        int requestedAmount = fusionItem.ClampedAmount;
         int acceptedAmount = inventory.AddItem(item);
 
         if (acceptedAmount <= 0)
@@ -104,7 +108,7 @@ public class FusionPlayerInventory : NetworkBehaviour
         ClaimedLocalPickupIds.Add(itemObjectId);
         if (acceptedAmount >= requestedAmount)
         {
-            RPC_ConfirmScenePickup(item.transform.position, item.itemType, requestedAmount, sceneDropId);
+            RPC_ConfirmScenePickup(item.transform.position, transform.position, item.itemType, requestedAmount, sceneDropId);
         }
         else
         {
@@ -147,7 +151,7 @@ public class FusionPlayerInventory : NetworkBehaviour
         }
 
         int clampedAmount = Mathf.Max(1, amount);
-        if (TryGetDropPrefab(itemType.Value, out NetworkPrefabRef _))
+        if (CanSpawnFusionDrop(itemType.Value))
         {
             RPC_RequestDrop(slotIndex, (int)itemType.Value, clampedAmount);
             return true;
@@ -156,6 +160,56 @@ public class FusionPlayerInventory : NetworkBehaviour
         if (!TryRequestSceneDrop(slotIndex, itemType.Value, clampedAmount))
         {
             return false;
+        }
+
+        return true;
+    }
+
+    public bool SpawnTreeDrops(TreeChoppable tree)
+    {
+        if (!IsNetworkReady() || !HasFusionInputAuthority() || tree == null || !tree.HasDropPrefab)
+        {
+            return false;
+        }
+
+        ItemType itemType = tree.DropItemType;
+        if (!TryGetDropPrefab(itemType, out NetworkPrefabRef dropPrefab, out GameObject dropPrefabObject))
+        {
+            return false;
+        }
+
+        int spawnCount = Mathf.Max(1, tree.FusionDropCount);
+        int amountPerDrop = Mathf.Max(1, tree.FusionAmountPerDrop);
+        Vector3 basePosition = tree.DropBasePosition;
+        Vector3 forward = tree.DropForward;
+
+        for (int i = 0; i < spawnCount; i++)
+        {
+            int sceneDropId = FusionSceneDropUtility.ComputeSceneDropId(tree.transform.position, itemType, i);
+            Vector2 offset2D = FusionSceneDropUtility.ComputeDeterministicScatter(sceneDropId, tree.DropScatterRadius);
+            Vector3 spawnPosition = basePosition + new Vector3(offset2D.x, 0f, offset2D.y);
+            NetworkObject droppedObject = dropPrefabObject != null
+                ? Runner.Spawn(dropPrefabObject, spawnPosition, Quaternion.identity, Object.InputAuthority)
+                : Runner.Spawn(dropPrefab, spawnPosition, Quaternion.identity, Object.InputAuthority);
+
+            if (droppedObject == null)
+            {
+                continue;
+            }
+
+            FusionPickableItem droppedItem = droppedObject.GetComponent<FusionPickableItem>();
+            if (droppedItem == null || !droppedItem.Initialize(itemType, amountPerDrop))
+            {
+                Runner.Despawn(droppedObject);
+                continue;
+            }
+
+            Rigidbody rigidbody = droppedObject.GetComponent<Rigidbody>();
+            if (rigidbody != null)
+            {
+                Vector3 randomPush = forward + Vector3.up + new Vector3(offset2D.x, 0f, offset2D.y);
+                rigidbody.AddForce(randomPush.normalized * 1.8f, ForceMode.VelocityChange);
+            }
         }
 
         return true;
@@ -184,10 +238,10 @@ public class FusionPlayerInventory : NetworkBehaviour
         }
     }
 
-    [Rpc(RpcSources.InputAuthority, RpcTargets.All)]
-    private void RPC_ConfirmScenePickup(Vector3 itemPosition, ItemType itemType, int requestedAmount, int sceneDropId)
+    [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
+    private void RPC_ConfirmScenePickup(Vector3 itemPosition, Vector3 pickerPosition, ItemType itemType, int requestedAmount, int sceneDropId)
     {
-        PickableItem item = FindMatchingScenePickup(itemPosition, itemType, requestedAmount, sceneDropId);
+        PickableItem item = FindMatchingScenePickup(itemPosition, pickerPosition, itemType, requestedAmount, sceneDropId);
         if (item == null)
         {
             return;
@@ -198,7 +252,7 @@ public class FusionPlayerInventory : NetworkBehaviour
         Destroy(item.gameObject);
     }
 
-    [Rpc(RpcSources.InputAuthority, RpcTargets.All)]
+    [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
     private void RPC_SpawnSceneDrop(Vector3 position, Vector3 forward, ItemType itemType, int amount)
     {
         SpawnSceneDropLocal(position, forward, itemType, amount, sceneDropId: 0);
@@ -337,11 +391,13 @@ public class FusionPlayerInventory : NetworkBehaviour
         SceneDropTemplates[sourceItem.itemType] = template;
     }
 
-    private static PickableItem FindMatchingScenePickup(Vector3 itemPosition, ItemType itemType, int requestedAmount, int sceneDropId)
+    private static PickableItem FindMatchingScenePickup(Vector3 itemPosition, Vector3 pickerPosition, ItemType itemType, int requestedAmount, int sceneDropId)
     {
         PickableItem[] items = FindObjectsOfType<PickableItem>(true);
         PickableItem bestMatch = null;
         float bestDistanceSqr = sceneDropId != 0 ? float.MaxValue : 1.44f;
+        PickableItem bestNearPicker = null;
+        float bestNearPickerSqr = 16f;
 
         for (int i = 0; i < items.Length; i++)
         {
@@ -363,6 +419,13 @@ public class FusionPlayerInventory : NetworkBehaviour
             }
 
             float distanceSqr = (candidate.transform.position - itemPosition).sqrMagnitude;
+            float pickerDistanceSqr = (candidate.transform.position - pickerPosition).sqrMagnitude;
+            if (pickerDistanceSqr <= bestNearPickerSqr)
+            {
+                bestNearPickerSqr = pickerDistanceSqr;
+                bestNearPicker = candidate;
+            }
+
             if (distanceSqr > bestDistanceSqr)
             {
                 continue;
@@ -372,10 +435,10 @@ public class FusionPlayerInventory : NetworkBehaviour
             bestMatch = candidate;
         }
 
-        return bestMatch;
+        return bestMatch != null ? bestMatch : bestNearPicker;
     }
 
-    [Rpc(RpcSources.InputAuthority, RpcTargets.StateAuthority)]
+    [Rpc(RpcSources.StateAuthority, RpcTargets.StateAuthority)]
     private void RPC_RequestDrop(int slotIndex, int expectedItemTypeValue, int amount)
     {
         ResolveReferences();
@@ -391,7 +454,7 @@ public class FusionPlayerInventory : NetworkBehaviour
         }
 
         ItemType itemType = (ItemType)expectedItemTypeValue;
-        if (!TryGetDropPrefab(itemType, out NetworkPrefabRef dropPrefab))
+        if (!TryGetDropPrefab(itemType, out NetworkPrefabRef dropPrefab, out GameObject dropPrefabObject))
         {
             return;
         }
@@ -410,7 +473,9 @@ public class FusionPlayerInventory : NetworkBehaviour
 
         Vector3 spawnPosition = GetDropPosition();
         Quaternion spawnRotation = Quaternion.identity;
-        NetworkObject droppedObject = Runner.Spawn(dropPrefab, spawnPosition, spawnRotation, Object.InputAuthority);
+        NetworkObject droppedObject = dropPrefabObject != null
+            ? Runner.Spawn(dropPrefabObject, spawnPosition, spawnRotation, Object.InputAuthority)
+            : Runner.Spawn(dropPrefab, spawnPosition, spawnRotation, Object.InputAuthority);
         if (droppedObject == null)
         {
             return;
@@ -455,13 +520,21 @@ public class FusionPlayerInventory : NetworkBehaviour
         return origin.position + origin.forward * dropForwardDistance + Vector3.up * dropUpOffset;
     }
 
-    private bool TryGetDropPrefab(ItemType itemType, out NetworkPrefabRef prefab)
+    private bool TryGetDropPrefab(ItemType itemType, out NetworkPrefabRef prefab, out GameObject prefabObject)
     {
+        prefabObject = null;
         if (dropPrefabs != null)
         {
             for (int i = 0; i < dropPrefabs.Length; i++)
             {
                 DropPrefabBinding binding = dropPrefabs[i];
+                if (binding != null && binding.itemType == itemType && binding.prefabObject != null && binding.prefabObject.GetComponent<NetworkObject>() != null)
+                {
+                    prefabObject = binding.prefabObject;
+                    prefab = default;
+                    return true;
+                }
+
                 if (binding != null && binding.itemType == itemType && binding.prefab.IsValid)
                 {
                     prefab = binding.prefab;
@@ -478,6 +551,11 @@ public class FusionPlayerInventory : NetworkBehaviour
 
         prefab = default;
         return false;
+    }
+
+    private bool CanSpawnFusionDrop(ItemType itemType)
+    {
+        return TryGetDropPrefab(itemType, out NetworkPrefabRef _, out GameObject _);
     }
 
     private bool IsNetworkReady()

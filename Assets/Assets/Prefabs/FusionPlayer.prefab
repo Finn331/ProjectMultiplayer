@@ -758,6 +758,7 @@ MonoBehaviour:
   swipeThreshold: 50
   iconDatabase: {fileID: 11400000, guid: 2690faf9946f70d41b1c280c162af876, type: 2}
   slotCounts: []
+  enableHotbarDrag: 0
 --- !u!114 &5881460033544063950
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -936,7 +937,17 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   inventory: {fileID: 0}
   pickupDistance: 4
-  dropPrefabs: []
+  dropPrefabs:
+  - itemType: 0
+    prefab:
+      RawGuidValue: 00000000000000000000000000000000
+    prefabObject: {fileID: 5804142493525070282, guid: 81f9cb41b51d56648acbfa75867f0822,
+      type: 3}
+  - itemType: 1
+    prefab:
+      RawGuidValue: 00000000000000000000000000000000
+    prefabObject: {fileID: 5443179461439313778, guid: 2db27714ae3f63c4fae6b2073beea94b,
+      type: 3}
   fallbackDropPrefab:
     RawGuidValue: 00000000000000000000000000000000
   dropOrigin: {fileID: 0}
@@ -977,6 +988,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   animator: {fileID: 0}
+  axeCombat: {fileID: 0}
   swingTrigger: HeavyWeaponSwing
   fallbackSwingTrigger: Swing
 --- !u!114 &2143775898492630770

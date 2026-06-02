@@ -101,7 +101,7 @@ public class FusionPlayerCombat : NetworkBehaviour
         TrySetTrigger(fallbackSwingTrigger);
     }
 
-    [Rpc(RpcSources.InputAuthority, RpcTargets.All)]
+    [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
     private void RPC_SceneTreeHit(Vector3 treePosition, float damage, RpcInfo info = default)
     {
         if (!TryFindTreeByPosition(treePosition, out TreeChoppable tree))
@@ -109,7 +109,16 @@ public class FusionPlayerCombat : NetworkBehaviour
             return;
         }
 
-        tree.ApplyFusionReplicatedHit(damage);
+        bool wasDepleted = tree.IsDepleted;
+        bool accepted = tree.ApplyFusionReplicatedHit(damage);
+        if (accepted && !wasDepleted && tree.IsDepleted && Object != null && Object.HasStateAuthority)
+        {
+            FusionPlayerInventory fusionInventory = GetComponent<FusionPlayerInventory>();
+            if (fusionInventory != null)
+            {
+                fusionInventory.SpawnTreeDrops(tree);
+            }
+        }
     }
 
     [Rpc(RpcSources.InputAuthority, RpcTargets.All)]
