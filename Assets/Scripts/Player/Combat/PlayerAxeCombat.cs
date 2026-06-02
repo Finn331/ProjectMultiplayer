@@ -336,6 +336,12 @@ public class PlayerAxeCombat : NetworkBehaviour
         if (targetSurvival != null && targetSurvival.gameObject != gameObject)
         {
             float appliedPlayerDamage = Mathf.Max(0f, playerDamagePerHit * runtimePlayerDamageMultiplier);
+            var fusionCombat = GetComponent<FusionPlayerCombat>();
+            if (targetSurvival.GetComponent<FusionPlayerSurvival>() != null && fusionCombat != null && fusionCombat.RequestPlayerDamage(targetSurvival.transform.position, appliedPlayerDamage))
+            {
+                return;
+            }
+
             NetworkObject targetNetworkObject = targetSurvival.GetComponent<NetworkObject>();
             if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && IsSpawned && IsOwner && targetNetworkObject != null)
             {
@@ -356,6 +362,12 @@ public class PlayerAxeCombat : NetworkBehaviour
         }
 
         float appliedTreeDamage = Mathf.Max(0f, treeDamagePerHit * runtimeTreeDamageMultiplier);
+        var fusionCombat = GetComponent<FusionPlayerCombat>();
+        if (fusionCombat != null && fusionCombat.RequestSceneTreeHit(tree.transform.position, appliedTreeDamage))
+        {
+            return;
+        }
+
         if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && IsSpawned && IsOwner)
         {
             this.RequestTreeHitServerRpc(hitPoint, appliedTreeDamage);

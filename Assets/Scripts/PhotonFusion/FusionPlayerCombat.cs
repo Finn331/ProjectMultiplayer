@@ -57,6 +57,28 @@ public class FusionPlayerCombat : NetworkBehaviour
         return true;
     }
 
+    public bool RequestSceneTreeHit(Vector3 treePosition, float damage)
+    {
+        if (!IsNetworkReady() || !HasFusionInputAuthority() || damage <= 0f)
+        {
+            return false;
+        }
+
+        RPC_SceneTreeHit(treePosition, damage);
+        return true;
+    }
+
+    public bool RequestPlayerDamage(Vector3 targetPosition, float damage)
+    {
+        if (!IsNetworkReady() || !HasFusionInputAuthority() || damage <= 0f)
+        {
+            return false;
+        }
+
+        RPC_PlayerDamage(targetPosition, damage);
+        return true;
+    }
+
     [Rpc(RpcSources.InputAuthority, RpcTargets.All)]
     private void RPC_Swing(RpcInfo info = default)
     {
@@ -77,6 +99,90 @@ public class FusionPlayerCombat : NetworkBehaviour
         }
 
         TrySetTrigger(fallbackSwingTrigger);
+    }
+
+    [Rpc(RpcSources.InputAuthority, RpcTargets.All)]
+    private void RPC_SceneTreeHit(Vector3 treePosition, float damage, RpcInfo info = default)
+    {
+        if (!TryFindTreeByPosition(treePosition, out TreeChoppable tree))
+        {
+            return;
+        }
+
+        tree.ApplyAxeHit(damage, gameObject);
+    }
+
+    [Rpc(RpcSources.InputAuthority, RpcTargets.All)]
+    private void RPC_PlayerDamage(Vector3 targetPosition, float damage, RpcInfo info = default)
+    {
+        if (!TryFindFusionSurvivalByPosition(targetPosition, out FusionPlayerSurvival targetSurvival))
+        {
+            return;
+        }
+
+        targetSurvival.ApplyDamageForStateAuthority(damage);
+    }
+
+    private static bool TryFindTreeByPosition(Vector3 treePosition, out TreeChoppable tree)
+    {
+        tree = null;
+        TreeChoppable[] trees = FindObjectsOfType<TreeChoppable>(true);
+        if (trees == null || trees.Length == 0)
+        {
+            return false;
+        }
+
+        float bestSqr = 1f;
+        for (int i = 0; i < trees.Length; i++)
+        {
+            TreeChoppable candidate = trees[i];
+            if (candidate == null || candidate.IsDepleted)
+            {
+                continue;
+            }
+
+            float sqr = (candidate.transform.position - treePosition).sqrMagnitude;
+            if (sqr > bestSqr)
+            {
+                continue;
+            }
+
+            bestSqr = sqr;
+            tree = candidate;
+        }
+
+        return tree != null;
+    }
+
+    private bool TryFindFusionSurvivalByPosition(Vector3 targetPosition, out FusionPlayerSurvival targetSurvival)
+    {
+        targetSurvival = null;
+        FusionPlayerSurvival[] survivals = FindObjectsOfType<FusionPlayerSurvival>(true);
+        if (survivals == null || survivals.Length == 0)
+        {
+            return false;
+        }
+
+        float bestSqr = 4f;
+        for (int i = 0; i < survivals.Length; i++)
+        {
+            FusionPlayerSurvival candidate = survivals[i];
+            if (candidate == null || candidate.gameObject == gameObject)
+            {
+                continue;
+            }
+
+            float sqr = (candidate.transform.position - targetPosition).sqrMagnitude;
+            if (sqr > bestSqr)
+            {
+                continue;
+            }
+
+            bestSqr = sqr;
+            targetSurvival = candidate;
+        }
+
+        return targetSurvival != null;
     }
 
     private bool TrySetTrigger(string triggerName)

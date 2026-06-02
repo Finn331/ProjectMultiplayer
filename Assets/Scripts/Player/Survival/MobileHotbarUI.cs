@@ -382,7 +382,12 @@ public class MobileHotbarUI : MonoBehaviour
         }
 
         bool dropRequested;
-        if (networkBridge != null && networkBridge.UseNetworkedInventory)
+        FusionPlayerInventory fusionInventory = GetComponent<FusionPlayerInventory>();
+        if (fusionInventory != null)
+        {
+            dropRequested = fusionInventory.RequestDropFromSlot(globalSlotIndex, 1);
+        }
+        else if (networkBridge != null && networkBridge.UseNetworkedInventory)
         {
             dropRequested = networkBridge.TryRequestDropFromSlot(globalSlotIndex, 1);
         }

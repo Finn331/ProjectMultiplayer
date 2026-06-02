@@ -4,6 +4,7 @@ using UnityEngine;
 public class FusionPlayerInventory : NetworkBehaviour
 {
     private static readonly System.Collections.Generic.HashSet<int> ClaimedLocalPickupIds = new System.Collections.Generic.HashSet<int>();
+    private static readonly System.Collections.Generic.Dictionary<ItemType, PickableItem> SceneDropTemplates = new System.Collections.Generic.Dictionary<ItemType, PickableItem>();
 
     [System.Serializable]
     private class DropPrefabBinding
@@ -50,7 +51,7 @@ public class FusionPlayerInventory : NetworkBehaviour
         }
 
         int requestedAmount = Mathf.Max(1, item.amount);
-        int acceptedAmount = inventory.AddItem(item.itemType, requestedAmount);
+        int acceptedAmount = inventory.AddItem(item);
 
         if (acceptedAmount <= 0)
         {
@@ -88,8 +89,10 @@ public class FusionPlayerInventory : NetworkBehaviour
             return false;
         }
 
+        CacheSceneDropTemplate(item);
+
         int requestedAmount = Mathf.Max(1, item.amount);
-        int acceptedAmount = inventory.AddItem(item.itemType, requestedAmount);
+        int acceptedAmount = inventory.AddItem(item);
         if (acceptedAmount <= 0)
         {
             return false;
@@ -140,7 +143,18 @@ public class FusionPlayerInventory : NetworkBehaviour
             return false;
         }
 
-        RPC_RequestDrop(slotIndex, (int)itemType.Value, Mathf.Max(1, amount));
+        int clampedAmount = Mathf.Max(1, amount);
+        if (TryGetDropPrefab(itemType.Value, out NetworkPrefabRef _))
+        {
+            RPC_RequestDrop(slotIndex, (int)itemType.Value, clampedAmount);
+            return true;
+        }
+
+        if (!TryRequestSceneDrop(slotIndex, itemType.Value, clampedAmount))
+        {
+            return false;
+        }
+
         return true;
     }
 
@@ -176,8 +190,137 @@ public class FusionPlayerInventory : NetworkBehaviour
             return;
         }
 
+        CacheSceneDropTemplate(item);
         ClaimedLocalPickupIds.Add(item.gameObject.GetInstanceID());
         Destroy(item.gameObject);
+    }
+
+    [Rpc(RpcSources.InputAuthority, RpcTargets.All)]
+    private void RPC_SpawnSceneDrop(Vector3 position, Vector3 forward, ItemType itemType, int amount)
+    {
+        SpawnSceneDropLocal(position, forward, itemType, amount);
+    }
+
+    private bool TryRequestSceneDrop(int slotIndex, ItemType itemType, int amount)
+    {
+        int removedAmount = Mathf.Min(Mathf.Max(1, amount), inventory.GetSlotAmount(slotIndex));
+        if (removedAmount <= 0 || !CanSpawnSceneDrop(itemType))
+        {
+            return false;
+        }
+
+        if (inventory.GetSlotItemType(slotIndex) != itemType || !inventory.RemoveItemFromSlot(slotIndex, removedAmount, out ItemType removedItemType))
+        {
+            return false;
+        }
+
+        if (removedItemType != itemType)
+        {
+            inventory.AddItem(removedItemType, removedAmount);
+            return false;
+        }
+
+        Transform origin = dropOrigin != null ? dropOrigin : transform;
+        RPC_SpawnSceneDrop(GetDropPosition(), origin.forward, itemType, removedAmount);
+        return true;
+    }
+
+    private static bool CanSpawnSceneDrop(ItemType itemType)
+    {
+        if (SceneDropTemplates.TryGetValue(itemType, out PickableItem template) && template != null)
+        {
+            return true;
+        }
+
+        return itemType == ItemType.Axe && Resources.Load<GameObject>("Prefabs/axe") != null;
+    }
+
+    private static void SpawnSceneDropLocal(Vector3 position, Vector3 forward, ItemType itemType, int amount)
+    {
+        GameObject droppedObject = null;
+        if (SceneDropTemplates.TryGetValue(itemType, out PickableItem template) && template != null)
+        {
+            droppedObject = Instantiate(template.gameObject, position, Quaternion.identity);
+        }
+        else if (itemType == ItemType.Axe)
+        {
+            GameObject axePrefab = Resources.Load<GameObject>("Prefabs/axe");
+            if (axePrefab != null)
+            {
+                droppedObject = Instantiate(axePrefab, position, Quaternion.identity);
+            }
+        }
+
+        if (droppedObject == null)
+        {
+            return;
+        }
+
+        droppedObject.name = itemType + " (Dropped)";
+        droppedObject.SetActive(true);
+        int itemLayer = LayerMask.NameToLayer("Item");
+        if (itemLayer >= 0)
+        {
+            droppedObject.layer = itemLayer;
+        }
+
+        PickableItem pickableItem = droppedObject.GetComponent<PickableItem>();
+        if (pickableItem == null)
+        {
+            pickableItem = droppedObject.AddComponent<PickableItem>();
+        }
+
+        pickableItem.enabled = true;
+        pickableItem.itemType = itemType;
+        pickableItem.itemName = itemType.ToString();
+        pickableItem.amount = Mathf.Max(1, amount);
+
+        Interactable interactable = droppedObject.GetComponent<Interactable>();
+        if (interactable == null)
+        {
+            interactable = droppedObject.AddComponent<Interactable>();
+        }
+        interactable.enabled = true;
+
+        Collider[] colliders = droppedObject.GetComponentsInChildren<Collider>(true);
+        if (colliders == null || colliders.Length == 0)
+        {
+            BoxCollider boxCollider = droppedObject.AddComponent<BoxCollider>();
+            boxCollider.size = Vector3.one * 0.35f;
+            colliders = new Collider[] { boxCollider };
+        }
+
+        for (int i = 0; i < colliders.Length; i++)
+        {
+            if (colliders[i] != null)
+            {
+                colliders[i].enabled = true;
+            }
+        }
+
+        Rigidbody rigidbody = droppedObject.GetComponent<Rigidbody>();
+        if (rigidbody == null)
+        {
+            rigidbody = droppedObject.AddComponent<Rigidbody>();
+        }
+
+        rigidbody.isKinematic = false;
+        rigidbody.detectCollisions = true;
+        rigidbody.AddForce((forward.normalized + Vector3.up).normalized * 2f, ForceMode.VelocityChange);
+    }
+
+    private static void CacheSceneDropTemplate(PickableItem sourceItem)
+    {
+        if (sourceItem == null || SceneDropTemplates.ContainsKey(sourceItem.itemType))
+        {
+            return;
+        }
+
+        PickableItem template = Instantiate(sourceItem);
+        template.name = sourceItem.itemType + " FusionSceneDropTemplate";
+        template.gameObject.SetActive(false);
+        DontDestroyOnLoad(template.gameObject);
+        SceneDropTemplates[sourceItem.itemType] = template;
     }
 
     private static PickableItem FindMatchingScenePickup(Vector3 itemPosition, ItemType itemType, int requestedAmount)
