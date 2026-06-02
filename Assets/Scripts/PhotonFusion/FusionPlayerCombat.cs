@@ -109,7 +109,7 @@ public class FusionPlayerCombat : NetworkBehaviour
             return;
         }
 
-        tree.ApplyAxeHit(damage, gameObject);
+        tree.ApplyFusionReplicatedHit(damage);
     }
 
     [Rpc(RpcSources.InputAuthority, RpcTargets.All)]

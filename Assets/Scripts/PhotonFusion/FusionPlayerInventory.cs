@@ -89,6 +89,9 @@ public class FusionPlayerInventory : NetworkBehaviour
             return false;
         }
 
+        FusionSceneDropMarker sceneDropMarker = item.GetComponent<FusionSceneDropMarker>();
+        int sceneDropId = sceneDropMarker != null ? sceneDropMarker.SceneDropId : 0;
+
         CacheSceneDropTemplate(item);
 
         int requestedAmount = Mathf.Max(1, item.amount);
@@ -101,7 +104,7 @@ public class FusionPlayerInventory : NetworkBehaviour
         ClaimedLocalPickupIds.Add(itemObjectId);
         if (acceptedAmount >= requestedAmount)
         {
-            RPC_ConfirmScenePickup(item.transform.position, item.itemType, requestedAmount);
+            RPC_ConfirmScenePickup(item.transform.position, item.itemType, requestedAmount, sceneDropId);
         }
         else
         {
@@ -182,9 +185,9 @@ public class FusionPlayerInventory : NetworkBehaviour
     }
 
     [Rpc(RpcSources.InputAuthority, RpcTargets.All)]
-    private void RPC_ConfirmScenePickup(Vector3 itemPosition, ItemType itemType, int requestedAmount)
+    private void RPC_ConfirmScenePickup(Vector3 itemPosition, ItemType itemType, int requestedAmount, int sceneDropId)
     {
-        PickableItem item = FindMatchingScenePickup(itemPosition, itemType, requestedAmount);
+        PickableItem item = FindMatchingScenePickup(itemPosition, itemType, requestedAmount, sceneDropId);
         if (item == null)
         {
             return;
@@ -198,7 +201,7 @@ public class FusionPlayerInventory : NetworkBehaviour
     [Rpc(RpcSources.InputAuthority, RpcTargets.All)]
     private void RPC_SpawnSceneDrop(Vector3 position, Vector3 forward, ItemType itemType, int amount)
     {
-        SpawnSceneDropLocal(position, forward, itemType, amount);
+        SpawnSceneDropLocal(position, forward, itemType, amount, sceneDropId: 0);
     }
 
     private bool TryRequestSceneDrop(int slotIndex, ItemType itemType, int amount)
@@ -235,7 +238,7 @@ public class FusionPlayerInventory : NetworkBehaviour
         return itemType == ItemType.Axe && Resources.Load<GameObject>("Prefabs/axe") != null;
     }
 
-    private static void SpawnSceneDropLocal(Vector3 position, Vector3 forward, ItemType itemType, int amount)
+    private static void SpawnSceneDropLocal(Vector3 position, Vector3 forward, ItemType itemType, int amount, int sceneDropId)
     {
         GameObject droppedObject = null;
         if (SceneDropTemplates.TryGetValue(itemType, out PickableItem template) && template != null)
@@ -274,6 +277,17 @@ public class FusionPlayerInventory : NetworkBehaviour
         pickableItem.itemType = itemType;
         pickableItem.itemName = itemType.ToString();
         pickableItem.amount = Mathf.Max(1, amount);
+
+        if (sceneDropId != 0)
+        {
+            FusionSceneDropMarker marker = droppedObject.GetComponent<FusionSceneDropMarker>();
+            if (marker == null)
+            {
+                marker = droppedObject.AddComponent<FusionSceneDropMarker>();
+            }
+
+            marker.Initialize(sceneDropId);
+        }
 
         Interactable interactable = droppedObject.GetComponent<Interactable>();
         if (interactable == null)
@@ -323,11 +337,11 @@ public class FusionPlayerInventory : NetworkBehaviour
         SceneDropTemplates[sourceItem.itemType] = template;
     }
 
-    private static PickableItem FindMatchingScenePickup(Vector3 itemPosition, ItemType itemType, int requestedAmount)
+    private static PickableItem FindMatchingScenePickup(Vector3 itemPosition, ItemType itemType, int requestedAmount, int sceneDropId)
     {
         PickableItem[] items = FindObjectsOfType<PickableItem>(true);
         PickableItem bestMatch = null;
-        float bestDistanceSqr = 0.25f;
+        float bestDistanceSqr = sceneDropId != 0 ? float.MaxValue : 0.25f;
 
         for (int i = 0; i < items.Length; i++)
         {
@@ -335,6 +349,17 @@ public class FusionPlayerInventory : NetworkBehaviour
             if (candidate == null || candidate.itemType != itemType || candidate.amount != requestedAmount)
             {
                 continue;
+            }
+
+            FusionSceneDropMarker marker = candidate.GetComponent<FusionSceneDropMarker>();
+            if (sceneDropId != 0)
+            {
+                if (marker == null || marker.SceneDropId != sceneDropId)
+                {
+                    continue;
+                }
+
+                return candidate;
             }
 
             float distanceSqr = (candidate.transform.position - itemPosition).sqrMagnitude;

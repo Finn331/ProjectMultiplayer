@@ -82,7 +82,7 @@ public class TreeChoppable : MonoBehaviour
 
         if (currentHitPoints <= 0f)
         {
-            this.OnTreeChopped(attacker, spawnDrop: true);
+            this.OnTreeChopped(attacker, spawnDrop: true, deterministicDrops: false);
         }
 
         return true;
@@ -98,11 +98,33 @@ public class TreeChoppable : MonoBehaviour
         currentHitPoints = Mathf.Max(0f, currentHitPoints - Mathf.Max(0f, damage));
         if (forceDepleted || currentHitPoints <= 0f)
         {
-            this.OnTreeChopped(attacker: null, spawnDrop: false);
+            this.OnTreeChopped(attacker: null, spawnDrop: false, deterministicDrops: false);
         }
     }
 
-    private void OnTreeChopped(GameObject attacker, bool spawnDrop)
+    public bool ApplyFusionReplicatedHit(float damage)
+    {
+        if (isDepleted || damage <= 0f)
+        {
+            return false;
+        }
+
+        currentHitPoints = Mathf.Max(0f, currentHitPoints - damage);
+
+        if (logHits)
+        {
+            Debug.Log($"Tree '{name}' kena Fusion hit. HP: {currentHitPoints:0.##}/{maxHitPoints:0.##}");
+        }
+
+        if (currentHitPoints <= 0f)
+        {
+            this.OnTreeChopped(attacker: null, spawnDrop: true, deterministicDrops: true);
+        }
+
+        return true;
+    }
+
+    private void OnTreeChopped(GameObject attacker, bool spawnDrop, bool deterministicDrops)
     {
         if (isDepleted)
         {
@@ -112,7 +134,7 @@ public class TreeChoppable : MonoBehaviour
         isDepleted = true;
         if (spawnDrop)
         {
-            this.SpawnDrop();
+            this.SpawnDrop(deterministicDrops);
         }
 
         if (choppedReplacement != null)
@@ -135,7 +157,7 @@ public class TreeChoppable : MonoBehaviour
         }
     }
 
-    private void SpawnDrop()
+    private void SpawnDrop(bool deterministicDrops)
     {
         if (dropPrefab == null)
         {
@@ -151,11 +173,25 @@ public class TreeChoppable : MonoBehaviour
 
         for (int i = 0; i < spawnCount; i++)
         {
-            Vector2 randomOffset2D = Random.insideUnitCircle * Mathf.Max(0f, dropScatterRadius);
+            int sceneDropId = FusionSceneDropUtility.ComputeSceneDropId(transform.position, dropPrefab.itemType, i);
+            Vector2 randomOffset2D = deterministicDrops
+                ? FusionSceneDropUtility.ComputeDeterministicScatter(sceneDropId, dropScatterRadius)
+                : Random.insideUnitCircle * Mathf.Max(0f, dropScatterRadius);
             Vector3 spawnPosition = basePosition + new Vector3(randomOffset2D.x, 0f, randomOffset2D.y);
             PickableItem dropped = Instantiate(dropPrefab, spawnPosition, Quaternion.identity);
             dropped.gameObject.SetActive(true);
             dropped.amount = Mathf.Max(1, amountPerDrop);
+
+            if (deterministicDrops)
+            {
+                FusionSceneDropMarker marker = dropped.GetComponent<FusionSceneDropMarker>();
+                if (marker == null)
+                {
+                    marker = dropped.gameObject.AddComponent<FusionSceneDropMarker>();
+                }
+
+                marker.Initialize(sceneDropId);
+            }
 
             if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && NetworkManager.Singleton.IsServer)
             {
