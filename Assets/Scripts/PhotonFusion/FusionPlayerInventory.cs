@@ -3,6 +3,8 @@ using UnityEngine;
 
 public class FusionPlayerInventory : NetworkBehaviour
 {
+    private static readonly System.Collections.Generic.HashSet<int> ClaimedLocalPickupIds = new System.Collections.Generic.HashSet<int>();
+
     [System.Serializable]
     private class DropPrefabBinding
     {
@@ -30,7 +32,7 @@ public class FusionPlayerInventory : NetworkBehaviour
 
     public bool RequestPickup(PickableItem item)
     {
-        if (!IsNetworkReady() || !HasFusionInputAuthority() || item == null)
+        if (!IsNetworkReady() || !HasFusionInputAuthority() || item == null || inventory == null)
         {
             return false;
         }
@@ -38,7 +40,7 @@ public class FusionPlayerInventory : NetworkBehaviour
         var networkObject = item.GetComponent<NetworkObject>();
         if (networkObject == null || !networkObject.IsValid || Runner == null)
         {
-            return false;
+            return RequestScenePickup(item);
         }
 
         float distance = Vector3.Distance(transform.position, item.transform.position);
@@ -62,6 +64,46 @@ public class FusionPlayerInventory : NetworkBehaviour
         else
         {
             RPC_ConfirmPickupPartial(networkObject, requestedAmount - acceptedAmount);
+        }
+
+        return true;
+    }
+
+    private bool RequestScenePickup(PickableItem item)
+    {
+        if (item == null || Runner == null || inventory == null)
+        {
+            return false;
+        }
+
+        float distance = Vector3.Distance(transform.position, item.transform.position);
+        if (distance > pickupDistance)
+        {
+            return false;
+        }
+
+        int itemObjectId = item.gameObject.GetInstanceID();
+        if (ClaimedLocalPickupIds.Contains(itemObjectId))
+        {
+            return false;
+        }
+
+        int requestedAmount = Mathf.Max(1, item.amount);
+        int acceptedAmount = inventory.AddItem(item.itemType, requestedAmount);
+        if (acceptedAmount <= 0)
+        {
+            return false;
+        }
+
+        ClaimedLocalPickupIds.Add(itemObjectId);
+        if (acceptedAmount >= requestedAmount)
+        {
+            RPC_ConfirmScenePickup(item.transform.position, item.itemType, requestedAmount);
+        }
+        else
+        {
+            item.amount = requestedAmount - acceptedAmount;
+            ClaimedLocalPickupIds.Remove(itemObjectId);
         }
 
         return true;
@@ -123,6 +165,46 @@ public class FusionPlayerInventory : NetworkBehaviour
             PickableItem item = itemObject.GetComponent<PickableItem>();
             if (item != null) item.amount = remainingAmount;
         }
+    }
+
+    [Rpc(RpcSources.InputAuthority, RpcTargets.All)]
+    private void RPC_ConfirmScenePickup(Vector3 itemPosition, ItemType itemType, int requestedAmount)
+    {
+        PickableItem item = FindMatchingScenePickup(itemPosition, itemType, requestedAmount);
+        if (item == null)
+        {
+            return;
+        }
+
+        ClaimedLocalPickupIds.Add(item.gameObject.GetInstanceID());
+        Destroy(item.gameObject);
+    }
+
+    private static PickableItem FindMatchingScenePickup(Vector3 itemPosition, ItemType itemType, int requestedAmount)
+    {
+        PickableItem[] items = FindObjectsOfType<PickableItem>(true);
+        PickableItem bestMatch = null;
+        float bestDistanceSqr = 0.25f;
+
+        for (int i = 0; i < items.Length; i++)
+        {
+            PickableItem candidate = items[i];
+            if (candidate == null || candidate.itemType != itemType || candidate.amount != requestedAmount)
+            {
+                continue;
+            }
+
+            float distanceSqr = (candidate.transform.position - itemPosition).sqrMagnitude;
+            if (distanceSqr > bestDistanceSqr)
+            {
+                continue;
+            }
+
+            bestDistanceSqr = distanceSqr;
+            bestMatch = candidate;
+        }
+
+        return bestMatch;
     }
 
     [Rpc(RpcSources.InputAuthority, RpcTargets.StateAuthority)]

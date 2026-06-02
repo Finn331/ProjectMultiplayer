@@ -91,13 +91,25 @@ public class PlayerInventory : MonoBehaviour
 
     public int AddItem(ItemType itemType, int amount)
     {
+        this.EnsureSlotSetup();
+
         int remaining = Mathf.Max(1, amount);
         int acceptedAmount = 0;
 
-        acceptedAmount += this.FillExistingStacks(itemType, remaining, 0, InventorySlotCount, ref remaining);
-        acceptedAmount += this.FillExistingStacks(itemType, remaining, HotbarStartIndex, TotalSlotCount, ref remaining);
-        acceptedAmount += this.FillEmptySlots(itemType, remaining, 0, InventorySlotCount, ref remaining);
-        acceptedAmount += this.FillEmptySlots(itemType, remaining, HotbarStartIndex, TotalSlotCount, ref remaining);
+        if (itemType == ItemType.Axe)
+        {
+            acceptedAmount += this.FillExistingStacks(itemType, remaining, HotbarStartIndex, TotalSlotCount, ref remaining);
+            acceptedAmount += this.FillEmptySlots(itemType, remaining, HotbarStartIndex, TotalSlotCount, ref remaining);
+            acceptedAmount += this.FillExistingStacks(itemType, remaining, 0, InventorySlotCount, ref remaining);
+            acceptedAmount += this.FillEmptySlots(itemType, remaining, 0, InventorySlotCount, ref remaining);
+        }
+        else
+        {
+            acceptedAmount += this.FillExistingStacks(itemType, remaining, 0, InventorySlotCount, ref remaining);
+            acceptedAmount += this.FillExistingStacks(itemType, remaining, HotbarStartIndex, TotalSlotCount, ref remaining);
+            acceptedAmount += this.FillEmptySlots(itemType, remaining, 0, InventorySlotCount, ref remaining);
+            acceptedAmount += this.FillEmptySlots(itemType, remaining, HotbarStartIndex, TotalSlotCount, ref remaining);
+        }
 
         if (acceptedAmount <= 0)
         {

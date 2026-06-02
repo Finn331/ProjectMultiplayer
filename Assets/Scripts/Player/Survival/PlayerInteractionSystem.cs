@@ -264,14 +264,12 @@ public class PlayerInteractionSystem : MonoBehaviour
         if (fusionInventory != null)
         {
             bool requested = fusionInventory.RequestPickup(item);
-            if (requested)
+            if (requested && pickButton != null)
             {
-                if (pickButton != null)
-                {
-                    pickButton.SetActive(false);
-                }
-                return;
+                pickButton.SetActive(false);
             }
+
+            return;
         }
 
         if (inventory == null)
