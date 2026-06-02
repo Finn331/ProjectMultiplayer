@@ -8,6 +8,8 @@ public class HotbarSlotUI : MonoBehaviour,
     public int slotIndex;
     public MobileHotbarUI hotbar;
 
+    [SerializeField] private bool enableHoldToDrop;
+
     private float holdTime = 2f;
     private float minHoldDetect = 0.2f;
     private float timer;
@@ -30,7 +32,7 @@ public class HotbarSlotUI : MonoBehaviour,
         {
             timer += Time.deltaTime;
 
-            if (timer >= holdTime && timer > minHoldDetect)
+            if (enableHoldToDrop && timer >= holdTime && timer > minHoldDetect)
             {
                 isHolding = false;
                 if (hotbar != null)

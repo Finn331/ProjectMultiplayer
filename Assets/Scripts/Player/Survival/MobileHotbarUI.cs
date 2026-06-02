@@ -559,19 +559,19 @@ public class MobileHotbarUI : MonoBehaviour
                 trigger = slotButton.gameObject.AddComponent<EventTrigger>();
             }
 
-            EventTrigger.Entry pointerDown = new EventTrigger.Entry { eventID = EventTriggerType.PointerDown };
-            pointerDown.callback.AddListener(_ => this.OnHotbarSlotPointerDown(slotIndex));
-            trigger.triggers.Add(pointerDown);
+            EventTrigger.Entry beginDrag = new EventTrigger.Entry { eventID = EventTriggerType.BeginDrag };
+            beginDrag.callback.AddListener(_ => this.OnHotbarSlotDragStart(slotIndex));
+            trigger.triggers.Add(beginDrag);
 
-            EventTrigger.Entry pointerUp = new EventTrigger.Entry { eventID = EventTriggerType.PointerUp };
-            pointerUp.callback.AddListener(_ => this.OnHotbarSlotPointerUp(slotIndex));
-            trigger.triggers.Add(pointerUp);
+            EventTrigger.Entry endDrag = new EventTrigger.Entry { eventID = EventTriggerType.EndDrag };
+            endDrag.callback.AddListener(_ => this.OnHotbarSlotDragEnd(slotIndex));
+            trigger.triggers.Add(endDrag);
         }
 
         dragEventsInitialized = true;
     }
 
-    private void OnHotbarSlotPointerDown(int slotIndex)
+    private void OnHotbarSlotDragStart(int slotIndex)
     {
         ItemType? slotItem = this.GetSlotItem(slotIndex);
         if (slotItem == null)
@@ -584,7 +584,7 @@ public class MobileHotbarUI : MonoBehaviour
         OnSlotDragStart?.Invoke(slotIndex, slotItem.Value);
     }
 
-    private void OnHotbarSlotPointerUp(int slotIndex)
+    private void OnHotbarSlotDragEnd(int slotIndex)
     {
         if (draggedItemType == null)
         {

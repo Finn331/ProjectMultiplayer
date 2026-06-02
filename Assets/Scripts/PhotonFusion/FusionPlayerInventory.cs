@@ -341,12 +341,12 @@ public class FusionPlayerInventory : NetworkBehaviour
     {
         PickableItem[] items = FindObjectsOfType<PickableItem>(true);
         PickableItem bestMatch = null;
-        float bestDistanceSqr = sceneDropId != 0 ? float.MaxValue : 0.25f;
+        float bestDistanceSqr = sceneDropId != 0 ? float.MaxValue : 1.44f;
 
         for (int i = 0; i < items.Length; i++)
         {
             PickableItem candidate = items[i];
-            if (candidate == null || candidate.itemType != itemType || candidate.amount != requestedAmount)
+            if (candidate == null || !candidate.gameObject.activeInHierarchy || candidate.itemType != itemType || candidate.amount != requestedAmount)
             {
                 continue;
             }
