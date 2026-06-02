@@ -5,17 +5,45 @@ using UnityEngine;
 public class FusionPlayerCombat : NetworkBehaviour
 {
     [SerializeField] private Animator animator;
+    [SerializeField] private PlayerAxeCombat axeCombat;
     [SerializeField] private string swingTrigger = "HeavyWeaponSwing";
     [SerializeField] private string fallbackSwingTrigger = "Swing";
+
+    [Networked] private NetworkBool AxeEquipped { get; set; }
+
+    private bool lastAppliedAxeEquipped;
+    private bool hasAppliedAxeState;
 
     public override void Spawned()
     {
         ResolveReferences();
+        ApplyAxeEquippedState(AxeEquipped);
+    }
+
+    public override void Render()
+    {
+        ApplyAxeEquippedState(AxeEquipped);
     }
 
     private void Awake()
     {
         ResolveReferences();
+    }
+
+    public void SetAxeEquippedForFusion(bool equipped)
+    {
+        ResolveReferences();
+        ApplyAxeEquippedState(equipped);
+
+        if (!IsNetworkReady() || !HasFusionInputAuthority())
+        {
+            return;
+        }
+
+        if (AxeEquipped != equipped)
+        {
+            AxeEquipped = equipped;
+        }
     }
 
     public bool RequestSwing()
@@ -79,6 +107,24 @@ public class FusionPlayerCombat : NetworkBehaviour
         {
             animator = GetComponent<Animator>();
         }
+
+        if (axeCombat == null)
+        {
+            axeCombat = GetComponent<PlayerAxeCombat>();
+        }
+    }
+
+    private void ApplyAxeEquippedState(bool equipped)
+    {
+        ResolveReferences();
+        if (axeCombat == null || (hasAppliedAxeState && lastAppliedAxeEquipped == equipped))
+        {
+            return;
+        }
+
+        hasAppliedAxeState = true;
+        lastAppliedAxeEquipped = equipped;
+        axeCombat.SetAxeEquippedFromNetwork(equipped);
     }
 
     private bool IsNetworkReady()

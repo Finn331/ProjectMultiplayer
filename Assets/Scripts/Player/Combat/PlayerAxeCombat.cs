@@ -113,6 +113,7 @@ public class PlayerAxeCombat : NetworkBehaviour
     private float runtimeAttackCooldownMultiplier = 1f;
     private float runtimeTreeDamageMultiplier = 1f;
     private float runtimePlayerDamageMultiplier = 1f;
+    private bool suppressFusionEquipNotify;
 
     private void Awake()
     {
@@ -187,6 +188,16 @@ public class PlayerAxeCombat : NetworkBehaviour
 
     public void SetAxeEquipped(bool equipped)
     {
+        this.SetAxeEquippedInternal(equipped, notifyFusion: true);
+    }
+
+    public void SetAxeEquippedFromNetwork(bool equipped)
+    {
+        this.SetAxeEquippedInternal(equipped, notifyFusion: false);
+    }
+
+    private void SetAxeEquippedInternal(bool equipped, bool notifyFusion)
+    {
         axeEquipped = equipped;
         if (equipped)
         {
@@ -208,6 +219,17 @@ public class PlayerAxeCombat : NetworkBehaviour
         }
 
         this.UpdateAttackButtonVisibility();
+
+        if (notifyFusion && !suppressFusionEquipNotify)
+        {
+            var fusionCombat = GetComponent<FusionPlayerCombat>();
+            if (fusionCombat != null)
+            {
+                suppressFusionEquipNotify = true;
+                fusionCombat.SetAxeEquippedForFusion(equipped);
+                suppressFusionEquipNotify = false;
+            }
+        }
     }
 
     public bool IsAxeEquipped()
