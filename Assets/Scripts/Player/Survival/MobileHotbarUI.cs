@@ -162,6 +162,19 @@ public class MobileHotbarUI : MonoBehaviour
         {
             networkBridge = GetComponent<NetworkInventoryBridge>();
         }
+
+        if (iconDatabase == null)
+        {
+            iconDatabase = Resources.Load<ItemIconDatabase>("ItemIconDB");
+            if (iconDatabase == null)
+            {
+                ItemIconDatabase[] dbs = Resources.FindObjectsOfTypeAll<ItemIconDatabase>();
+                if (dbs != null && dbs.Length > 0)
+                {
+                    iconDatabase = dbs[0];
+                }
+            }
+        }
     }
 
     private void SubscribeInventory()
@@ -244,8 +257,21 @@ public class MobileHotbarUI : MonoBehaviour
 
             if (icon != null)
             {
-                icon.sprite = iconDatabase != null ? iconDatabase.GetIcon(itemType.Value) : null;
-                icon.enabled = icon.sprite != null;
+                Sprite sprite = iconDatabase != null ? iconDatabase.GetIcon(itemType.Value) : null;
+                if (sprite != null)
+                {
+                    icon.sprite = sprite;
+                    icon.enabled = true;
+                }
+                else if (iconDatabase == null)
+                {
+                    icon.enabled = false;
+                }
+                else
+                {
+                    icon.sprite = null;
+                    icon.gameObject.SetActive(false);
+                }
             }
 
             if (countLabel != null)
