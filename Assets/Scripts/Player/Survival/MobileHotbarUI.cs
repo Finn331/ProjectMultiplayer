@@ -37,6 +37,8 @@ public class MobileHotbarUI : MonoBehaviour
 
     public event Action<int, ItemType?> SelectedSlotChanged;
 
+    private static MobileHotbarUI activeLocalInstance;
+
     private int selectedSlot = -1;
     private int dragSourceSlot = -1;
     private ItemType? draggedItemType;
@@ -53,6 +55,8 @@ public class MobileHotbarUI : MonoBehaviour
         this.ResolveReferences();
     }
 
+    public static MobileHotbarUI ActiveLocalInstance => activeLocalInstance;
+
     private void OnEnable()
     {
         this.ResolveReferences();
@@ -62,6 +66,8 @@ public class MobileHotbarUI : MonoBehaviour
             enabled = false;
             return;
         }
+
+        activeLocalInstance = this;
 
         this.FindHotbarSlots();
         this.SubscribeInventory();
@@ -80,10 +86,14 @@ public class MobileHotbarUI : MonoBehaviour
         HotbarSlotUI[] slots = FindObjectsOfType<HotbarSlotUI>(true);
         System.Array.Sort(slots, (a, b) => a.slotIndex.CompareTo(b.slotIndex));
 
+        int count = 0;
         foreach (var slot in slots)
         {
+            if (count >= Mathf.Max(1, maxSlots)) break;
+
             Button btn = slot.GetComponent<Button>();
             if (btn != null) slotButtons.Add(btn);
+            else { slotIcons.Add(null); slotCounts.Add(null); count++; continue; }
 
             Transform iconTransform = slot.transform.Find("Icon");
             if (iconTransform != null)
@@ -107,7 +117,7 @@ public class MobileHotbarUI : MonoBehaviour
                 slotCounts.Add(null);
             }
 
-            slot.hotbar = this;
+            count++;
         }
     }
 
@@ -135,6 +145,11 @@ public class MobileHotbarUI : MonoBehaviour
 
     private void OnDisable()
     {
+        if (activeLocalInstance == this)
+        {
+            activeLocalInstance = null;
+        }
+
         this.UnsubscribeInventory();
     }
 

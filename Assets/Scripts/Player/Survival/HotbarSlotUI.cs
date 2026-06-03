@@ -25,8 +25,18 @@ public class HotbarSlotUI : MonoBehaviour,
         }
     }
 
+    private void ResolveHotbar()
+    {
+        if (hotbar == null)
+        {
+            hotbar = MobileHotbarUI.ActiveLocalInstance;
+        }
+    }
+
     void Update()
     {
+        ResolveHotbar();
+
         if (isHolding)
         {
             timer += Time.deltaTime;
@@ -44,12 +54,14 @@ public class HotbarSlotUI : MonoBehaviour,
 
     public void OnPointerDown(PointerEventData eventData)
     {
+        ResolveHotbar();
         isHolding = true;
         timer = 0f;
     }
 
     public void OnPointerUp(PointerEventData eventData)
     {
+        ResolveHotbar();
         isHolding = false;
 
         if (timer < holdTime)
@@ -63,6 +75,7 @@ public class HotbarSlotUI : MonoBehaviour,
 
     public void OnBeginDrag(PointerEventData eventData)
     {
+        ResolveHotbar();
         dragFrom = slotIndex;
         isDragging = true;
         isHolding = false;
@@ -72,6 +85,7 @@ public class HotbarSlotUI : MonoBehaviour,
 
     public void OnEndDrag(PointerEventData eventData)
     {
+        ResolveHotbar();
         isDragging = false;
 
         GameObject target = eventData.pointerCurrentRaycast.gameObject;
