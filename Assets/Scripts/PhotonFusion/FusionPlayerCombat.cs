@@ -110,13 +110,22 @@ public class FusionPlayerCombat : NetworkBehaviour
         }
 
         bool wasDepleted = tree.IsDepleted;
+        Vector3 treePos = tree.transform.position;
+        Vector3 dropBase = tree.DropBasePosition;
+        Vector3 dropForward = tree.DropForward;
+        bool hasDropPrefab = tree.HasDropPrefab;
+        ItemType dropItemType = tree.DropItemType;
+        int dropCount = tree.FusionDropCount;
+        int amountPerDrop = tree.FusionAmountPerDrop;
+        float scatter = tree.DropScatterRadius;
+
         bool accepted = tree.ApplyFusionReplicatedHit(damage);
         if (accepted && !wasDepleted && tree.IsDepleted && Object != null && Object.HasStateAuthority)
         {
             FusionPlayerInventory fusionInventory = GetComponent<FusionPlayerInventory>();
-            if (fusionInventory != null)
+            if (fusionInventory != null && hasDropPrefab)
             {
-                fusionInventory.SpawnTreeDrops(tree);
+                fusionInventory.SpawnTreeDropsFromData(treePos, dropBase, dropForward, dropItemType, dropCount, amountPerDrop, scatter);
             }
         }
     }

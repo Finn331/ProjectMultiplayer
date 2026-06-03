@@ -172,22 +172,37 @@ public class FusionPlayerInventory : NetworkBehaviour
             return false;
         }
 
-        ItemType itemType = tree.DropItemType;
+        return SpawnTreeDropsFromData(
+            tree.transform.position,
+            tree.DropBasePosition,
+            tree.DropForward,
+            tree.DropItemType,
+            tree.FusionDropCount,
+            tree.FusionAmountPerDrop,
+            tree.DropScatterRadius);
+    }
+
+    public bool SpawnTreeDropsFromData(Vector3 treePosition, Vector3 dropBasePosition, Vector3 dropForward, ItemType itemType, int spawnCount, int amountPerDrop, float scatter)
+    {
+        if (!IsNetworkReady() || !HasFusionInputAuthority())
+        {
+            return false;
+        }
+
         if (!TryGetDropPrefab(itemType, out NetworkPrefabRef dropPrefab, out GameObject dropPrefabObject))
         {
             return false;
         }
 
-        int spawnCount = Mathf.Max(1, tree.FusionDropCount);
-        int amountPerDrop = Mathf.Max(1, tree.FusionAmountPerDrop);
-        Vector3 basePosition = tree.DropBasePosition;
-        Vector3 forward = tree.DropForward;
+        int clampedSpawnCount = Mathf.Max(1, spawnCount);
+        int clampedAmountPerDrop = Mathf.Max(1, amountPerDrop);
+        float clampedScatter = Mathf.Max(0f, scatter);
 
-        for (int i = 0; i < spawnCount; i++)
+        for (int i = 0; i < clampedSpawnCount; i++)
         {
-            int sceneDropId = FusionSceneDropUtility.ComputeSceneDropId(tree.transform.position, itemType, i);
-            Vector2 offset2D = FusionSceneDropUtility.ComputeDeterministicScatter(sceneDropId, tree.DropScatterRadius);
-            Vector3 spawnPosition = basePosition + new Vector3(offset2D.x, 0f, offset2D.y);
+            int sceneDropId = FusionSceneDropUtility.ComputeSceneDropId(treePosition, itemType, i);
+            Vector2 offset2D = FusionSceneDropUtility.ComputeDeterministicScatter(sceneDropId, clampedScatter);
+            Vector3 spawnPosition = dropBasePosition + new Vector3(offset2D.x, 0f, offset2D.y);
             NetworkObject droppedObject = dropPrefabObject != null
                 ? Runner.Spawn(dropPrefabObject, spawnPosition, Quaternion.identity, Object.InputAuthority)
                 : Runner.Spawn(dropPrefab, spawnPosition, Quaternion.identity, Object.InputAuthority);
@@ -198,7 +213,7 @@ public class FusionPlayerInventory : NetworkBehaviour
             }
 
             FusionPickableItem droppedItem = droppedObject.GetComponent<FusionPickableItem>();
-            if (droppedItem == null || !droppedItem.Initialize(itemType, amountPerDrop))
+            if (droppedItem == null || !droppedItem.Initialize(itemType, clampedAmountPerDrop))
             {
                 Runner.Despawn(droppedObject);
                 continue;
@@ -207,7 +222,7 @@ public class FusionPlayerInventory : NetworkBehaviour
             Rigidbody rigidbody = droppedObject.GetComponent<Rigidbody>();
             if (rigidbody != null)
             {
-                Vector3 randomPush = forward + Vector3.up + new Vector3(offset2D.x, 0f, offset2D.y);
+                Vector3 randomPush = dropForward + Vector3.up + new Vector3(offset2D.x, 0f, offset2D.y);
                 rigidbody.AddForce(randomPush.normalized * 1.8f, ForceMode.VelocityChange);
             }
         }
