@@ -194,27 +194,37 @@ public class FusionPlayerInventory : NetworkBehaviour
             return false;
         }
 
+        NetworkObject dropNetworkPrefab = dropPrefabObject != null
+            ? dropPrefabObject.GetComponent<NetworkObject>()
+            : null;
+
         int clampedSpawnCount = Mathf.Max(1, spawnCount);
         int clampedAmountPerDrop = Mathf.Max(1, amountPerDrop);
         float clampedScatter = Mathf.Max(0f, scatter);
+        int successCount = 0;
 
         for (int i = 0; i < clampedSpawnCount; i++)
         {
             int sceneDropId = FusionSceneDropUtility.ComputeSceneDropId(treePosition, itemType, i);
             Vector2 offset2D = FusionSceneDropUtility.ComputeDeterministicScatter(sceneDropId, clampedScatter);
             Vector3 spawnPosition = dropBasePosition + new Vector3(offset2D.x, 0f, offset2D.y);
-            NetworkObject droppedObject = dropPrefabObject != null
-                ? Runner.Spawn(dropPrefabObject, spawnPosition, Quaternion.identity, Object.InputAuthority)
-                : Runner.Spawn(dropPrefab, spawnPosition, Quaternion.identity, Object.InputAuthority);
+
+            NetworkObject droppedObject = dropNetworkPrefab != null
+                ? Runner.Spawn(dropNetworkPrefab, spawnPosition, Quaternion.identity, Object.InputAuthority)
+                : (dropPrefabObject != null
+                    ? Runner.Spawn(dropPrefabObject, spawnPosition, Quaternion.identity, Object.InputAuthority)
+                    : Runner.Spawn(dropPrefab, spawnPosition, Quaternion.identity, Object.InputAuthority));
 
             if (droppedObject == null)
             {
+                Debug.LogWarning($"[SpawnTreeDrops] Runner.Spawn returned null for drop {i} of {clampedSpawnCount}, itemType={itemType}");
                 continue;
             }
 
             FusionPickableItem droppedItem = droppedObject.GetComponent<FusionPickableItem>();
             if (droppedItem == null || !droppedItem.Initialize(itemType, clampedAmountPerDrop))
             {
+                Debug.LogWarning($"[SpawnTreeDrops] Initialize failed for drop {i}, despawning");
                 Runner.Despawn(droppedObject);
                 continue;
             }
@@ -225,9 +235,16 @@ public class FusionPlayerInventory : NetworkBehaviour
                 Vector3 randomPush = dropForward + Vector3.up + new Vector3(offset2D.x, 0f, offset2D.y);
                 rigidbody.AddForce(randomPush.normalized * 1.8f, ForceMode.VelocityChange);
             }
+
+            successCount++;
         }
 
-        return true;
+        if (successCount != clampedSpawnCount)
+        {
+            Debug.LogWarning($"[SpawnTreeDrops] Only {successCount}/{clampedSpawnCount} drops spawned successfully for {itemType}");
+        }
+
+        return successCount > 0;
     }
 
     [Rpc(RpcSources.All, RpcTargets.All)]

@@ -18,6 +18,7 @@ GameObject:
   - component: {fileID: -3560597460124640503}
   - component: {fileID: 2497530013598807777}
   - component: {fileID: -3884886594853377628}
+  - component: {fileID: -4477769526738107445}
   m_Layer: 3
   m_Name: Wood
   m_TagString: Untagged
@@ -206,6 +207,7 @@ MonoBehaviour:
   NestedObjects: []
   NetworkedBehaviours:
   - {fileID: -3884886594853377628}
+  - {fileID: -4477769526738107445}
   ForceRemoteRenderTimeframe: 0
 --- !u!114 &-3884886594853377628
 MonoBehaviour:
@@ -225,3 +227,20 @@ MonoBehaviour:
     _value: 0
   defaultItemType: 0
   defaultAmount: 1
+--- !u!114 &-4477769526738107445
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5804142493525070282}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 158639473, guid: e725a070cec140c4caffb81624c8c787, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _stateAuthorityChangeErrorCorrectionDelta: 0
+  SyncScale: 0
+  SyncParent: 0
+  _autoAOIOverride: 1
+  DisableSharedModeInterpolation: 0
