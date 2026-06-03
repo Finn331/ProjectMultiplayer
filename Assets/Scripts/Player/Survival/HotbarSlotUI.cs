@@ -10,8 +10,7 @@ public class HotbarSlotUI : MonoBehaviour,
 
     [SerializeField] private bool enableHoldToDrop;
 
-    private float holdTime = 2f;
-    private float minHoldDetect = 0.2f;
+    private const float holdTime = 2f;
     private float timer;
     private bool isHolding;
     private bool isDragging;
@@ -32,7 +31,7 @@ public class HotbarSlotUI : MonoBehaviour,
         {
             timer += Time.deltaTime;
 
-            if (enableHoldToDrop && timer >= holdTime && timer > minHoldDetect)
+            if (enableHoldToDrop && timer >= holdTime)
             {
                 isHolding = false;
                 if (hotbar != null)
@@ -53,7 +52,7 @@ public class HotbarSlotUI : MonoBehaviour,
     {
         isHolding = false;
 
-        if (!isDragging && timer < holdTime)
+        if (timer < holdTime)
         {
             if (hotbar != null)
             {
@@ -76,15 +75,15 @@ public class HotbarSlotUI : MonoBehaviour,
         isDragging = false;
 
         GameObject target = eventData.pointerCurrentRaycast.gameObject;
-        if (target == null) return;
-
-        HotbarSlotUI targetSlot = target.GetComponentInParent<HotbarSlotUI>();
-
-        if (targetSlot != null && dragFrom != -1 && targetSlot.slotIndex != slotIndex)
+        if (target != null)
         {
-            if (hotbar != null)
+            HotbarSlotUI targetSlot = target.GetComponentInParent<HotbarSlotUI>();
+            if (targetSlot != null && dragFrom != -1 && targetSlot.slotIndex != slotIndex)
             {
-                hotbar.SwapSlot(dragFrom, targetSlot.slotIndex);
+                if (hotbar != null)
+                {
+                    hotbar.SwapSlot(dragFrom, targetSlot.slotIndex);
+                }
             }
         }
 
