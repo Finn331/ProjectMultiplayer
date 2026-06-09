@@ -13,7 +13,6 @@ public class HotbarSlotUI : MonoBehaviour,
     private const float holdTime = 2f;
     private float timer;
     private bool isHolding;
-    private bool isDragging;
 
     private static int dragFrom = -1;
 
@@ -77,7 +76,6 @@ public class HotbarSlotUI : MonoBehaviour,
     {
         ResolveHotbar();
         dragFrom = slotIndex;
-        isDragging = true;
         isHolding = false;
     }
 
@@ -86,7 +84,6 @@ public class HotbarSlotUI : MonoBehaviour,
     public void OnEndDrag(PointerEventData eventData)
     {
         ResolveHotbar();
-        isDragging = false;
 
         GameObject target = eventData.pointerCurrentRaycast.gameObject;
         if (target != null)

@@ -44,19 +44,6 @@ public class PlayerAxeCombat : MonoBehaviour
     [SerializeField, Range(-1f, 1f)] private float treeMeleeAssistForwardDot = -0.2f;
     [SerializeField] private bool logHitDebug;
 
-    [Header("Server Validation")]
-    [SerializeField] private float serverTreeResolveRadius = 3.5f;
-    [SerializeField] private float serverHitValidationDistance = 8f;
-    [SerializeField] private float clientTreeSyncResolveRadius = 3.5f;
-    [SerializeField] private bool logServerTreeHitDebug;
-
-    [Header("Server Anti-Spam")]
-    [SerializeField] private bool enforceServerHitCooldown = true;
-    [SerializeField] private float serverPlayerHitCooldownSeconds = 0.35f;
-    [SerializeField] private float serverTreeHitCooldownSeconds = 0.28f;
-    [SerializeField] private float serverMaxPlayerDamagePerHit = 35f;
-    [SerializeField] private float serverMaxTreeDamagePerHit = 5f;
-
     [Header("Damage")]
     [SerializeField] private float treeDamagePerHit = 1f;
     [SerializeField] private float playerDamagePerHit = 10f;
@@ -107,8 +94,6 @@ public class PlayerAxeCombat : MonoBehaviour
     private bool hasIsGroundedParam;
     private Coroutine swingRecoveryRoutine;
     private int swingSequenceId;
-    private readonly Dictionary<ulong, float> serverLastPlayerHitByTarget = new Dictionary<ulong, float>();
-    private float serverLastTreeHitTime = -999f;
     private float runtimeAttackCooldownMultiplier = 1f;
     private float runtimeTreeDamageMultiplier = 1f;
     private float runtimePlayerDamageMultiplier = 1f;
@@ -360,82 +345,6 @@ public class PlayerAxeCombat : MonoBehaviour
         }
 
         tree.ApplyAxeHit(appliedTreeDamage, gameObject);
-    }
-
-    private TreeChoppable FindBestServerTreeCandidate(
-        TreeChoppable[] trees,
-        Vector3 hitPoint,
-        Vector3 attackerPosition,
-        float resolveRadius,
-        float maxAttackerDistance)
-    {
-        TreeChoppable bestByHitPoint = null;
-        TreeChoppable bestByAttackerDistance = null;
-        float bestHitPointSqr = resolveRadius * resolveRadius;
-        float bestAttackerSqr = float.MaxValue;
-        float maxAttackerSqr = maxAttackerDistance * maxAttackerDistance;
-
-        for (int i = 0; i < trees.Length; i++)
-        {
-            TreeChoppable candidate = trees[i];
-            if (candidate == null || !candidate.gameObject.activeInHierarchy || candidate.IsDepleted)
-            {
-                continue;
-            }
-
-            float attackerSqr = (candidate.transform.position - attackerPosition).sqrMagnitude;
-            if (attackerSqr > maxAttackerSqr)
-            {
-                continue;
-            }
-
-            float hitPointSqr = (candidate.transform.position - hitPoint).sqrMagnitude;
-            if (hitPointSqr <= bestHitPointSqr)
-            {
-                bestHitPointSqr = hitPointSqr;
-                bestByHitPoint = candidate;
-            }
-
-            if (attackerSqr < bestAttackerSqr)
-            {
-                bestAttackerSqr = attackerSqr;
-                bestByAttackerDistance = candidate;
-            }
-        }
-
-        return bestByHitPoint != null ? bestByHitPoint : bestByAttackerDistance;
-    }
-
-    private bool TryFindTreeByPosition(Vector3 treePosition, out TreeChoppable tree)
-    {
-        tree = null;
-        TreeChoppable[] trees = FindObjectsOfType<TreeChoppable>(true);
-        if (trees == null || trees.Length == 0)
-        {
-            return false;
-        }
-
-        float radius = Mathf.Max(0.5f, clientTreeSyncResolveRadius);
-        float bestSqr = radius * radius;
-        for (int i = 0; i < trees.Length; i++)
-        {
-            TreeChoppable candidate = trees[i];
-            if (candidate == null || !candidate.gameObject.activeInHierarchy)
-            {
-                continue;
-            }
-
-            float sqr = (candidate.transform.position - treePosition).sqrMagnitude;
-            if (sqr > bestSqr)
-            {
-                continue;
-            }
-
-            bestSqr = sqr;
-            tree = candidate;
-        }
-
-        return tree != null;
     }
 
     private bool TryGetHit(out RaycastHit bestHit)
