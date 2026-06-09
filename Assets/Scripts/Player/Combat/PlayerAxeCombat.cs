@@ -1,11 +1,10 @@
 using System.Collections;
 using System.Collections.Generic;
 using TMPro;
-using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.UI;
 
-public class PlayerAxeCombat : NetworkBehaviour
+public class PlayerAxeCombat : MonoBehaviour
 {
     [Header("References")]
     [SerializeField] private Animator animator;
@@ -342,15 +341,7 @@ public class PlayerAxeCombat : NetworkBehaviour
                 return;
             }
 
-            NetworkObject targetNetworkObject = targetSurvival.GetComponent<NetworkObject>();
-            if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && IsSpawned && IsOwner && targetNetworkObject != null)
-            {
-                this.RequestPlayerDamageServerRpc(targetNetworkObject.NetworkObjectId, appliedPlayerDamage);
-            }
-            else
-            {
-                targetSurvival.ApplyDamage(appliedPlayerDamage);
-            }
+            targetSurvival.ApplyDamage(appliedPlayerDamage);
         }
     }
 
@@ -368,134 +359,7 @@ public class PlayerAxeCombat : NetworkBehaviour
             return;
         }
 
-        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && IsSpawned && IsOwner)
-        {
-            this.RequestTreeHitServerRpc(hitPoint, appliedTreeDamage);
-            return;
-        }
-
         tree.ApplyAxeHit(appliedTreeDamage, gameObject);
-    }
-
-    [ServerRpc(RequireOwnership = false)]
-    private void RequestPlayerDamageServerRpc(ulong targetNetworkObjectId, float damage, ServerRpcParams rpcParams = default)
-    {
-        if (rpcParams.Receive.SenderClientId != OwnerClientId || NetworkManager == null)
-        {
-            return;
-        }
-
-        if (!NetworkManager.SpawnManager.SpawnedObjects.TryGetValue(targetNetworkObjectId, out NetworkObject targetObject))
-        {
-            return;
-        }
-
-        if (targetObject == null || targetObject == NetworkObject)
-        {
-            return;
-        }
-
-        float distance = Vector3.Distance(transform.position, targetObject.transform.position);
-        if (distance > Mathf.Max(1.5f, serverHitValidationDistance))
-        {
-            return;
-        }
-
-        PlayerSurvivalSystem targetSurvival = targetObject.GetComponent<PlayerSurvivalSystem>();
-        if (targetSurvival == null)
-        {
-            return;
-        }
-
-        if (enforceServerHitCooldown)
-        {
-            float now = Time.unscaledTime;
-            float minCooldown = Mathf.Max(0.01f, serverPlayerHitCooldownSeconds);
-            if (serverLastPlayerHitByTarget.TryGetValue(targetNetworkObjectId, out float previousTime) &&
-                (now - previousTime) < minCooldown)
-            {
-                return;
-            }
-
-            serverLastPlayerHitByTarget[targetNetworkObjectId] = now;
-        }
-
-        float clampedDamage = Mathf.Clamp(damage, 0f, Mathf.Max(0.1f, serverMaxPlayerDamagePerHit));
-        if (clampedDamage <= 0f)
-        {
-            return;
-        }
-
-        targetSurvival.ApplyDamage(clampedDamage);
-    }
-
-    [ServerRpc(RequireOwnership = false)]
-    private void RequestTreeHitServerRpc(Vector3 hitPoint, float damage, ServerRpcParams rpcParams = default)
-    {
-        if (rpcParams.Receive.SenderClientId != OwnerClientId)
-        {
-            return;
-        }
-
-        if (enforceServerHitCooldown)
-        {
-            float now = Time.unscaledTime;
-            float minCooldown = Mathf.Max(0.01f, serverTreeHitCooldownSeconds);
-            if ((now - serverLastTreeHitTime) < minCooldown)
-            {
-                return;
-            }
-
-            serverLastTreeHitTime = now;
-        }
-
-        TreeChoppable[] trees = FindObjectsOfType<TreeChoppable>(true);
-        if (trees == null || trees.Length == 0)
-        {
-            return;
-        }
-
-        float resolveRadius = Mathf.Max(0.5f, serverTreeResolveRadius);
-        float maxDistance = Mathf.Max(resolveRadius, serverHitValidationDistance);
-        TreeChoppable bestTree = this.FindBestServerTreeCandidate(trees, hitPoint, transform.position, resolveRadius, maxDistance);
-
-        if (bestTree != null)
-        {
-            float appliedDamage = Mathf.Clamp(damage, 0f, Mathf.Max(0.1f, serverMaxTreeDamagePerHit));
-            if (appliedDamage <= 0f)
-            {
-                return;
-            }
-            bool accepted = bestTree.ApplyAxeHit(appliedDamage, gameObject);
-            if (accepted)
-            {
-                this.SyncTreeHitClientRpc(bestTree.transform.position, appliedDamage, bestTree.IsDepleted);
-            }
-            else if (logServerTreeHitDebug)
-            {
-                Debug.Log($"Server tree hit ignored by debounce on '{bestTree.name}'.");
-            }
-        }
-        else if (logServerTreeHitDebug)
-        {
-            Debug.Log(
-                $"Server gagal resolve tree hit. Sender={rpcParams.Receive.SenderClientId}, " +
-                $"hitPoint={hitPoint}, attacker={transform.position}, radius={resolveRadius}, maxDist={maxDistance}");
-        }
-    }
-
-    [ClientRpc]
-    private void SyncTreeHitClientRpc(Vector3 treePosition, float damage, bool depleted)
-    {
-        if (IsServer)
-        {
-            return;
-        }
-
-        if (this.TryFindTreeByPosition(treePosition, out TreeChoppable tree))
-        {
-            tree.ApplyReplicatedHit(damage, depleted);
-        }
     }
 
     private TreeChoppable FindBestServerTreeCandidate(
@@ -889,39 +753,11 @@ public class PlayerAxeCombat : NetworkBehaviour
 
     private void NotifySwingToRemoteClients()
     {
-        if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening || !IsSpawned || !IsOwner)
+        var fusionCombat = GetComponent<FusionPlayerCombat>();
+        if (fusionCombat != null)
         {
-            var fusionCombat = GetComponent<FusionPlayerCombat>();
-            if (fusionCombat != null)
-            {
-                fusionCombat.RequestSwing();
-            }
-            return;
+            fusionCombat.RequestSwing();
         }
-
-        this.BroadcastSwingServerRpc();
-    }
-
-    [ServerRpc(RequireOwnership = false)]
-    private void BroadcastSwingServerRpc(ServerRpcParams rpcParams = default)
-    {
-        if (rpcParams.Receive.SenderClientId != OwnerClientId)
-        {
-            return;
-        }
-
-        this.PlaySwingRemoteClientRpc();
-    }
-
-    [ClientRpc]
-    private void PlaySwingRemoteClientRpc()
-    {
-        if (IsOwner)
-        {
-            return;
-        }
-
-        this.PlaySwingAndScheduleRecovery();
     }
 
     private void CacheAnimationHashes()
@@ -973,13 +809,6 @@ public class PlayerAxeCombat : NetworkBehaviour
 
     private bool HasLocalAttackAuthority()
     {
-        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
-        {
-            if (!IsSpawned) return false;
-            return IsOwner;
-        }
-
-        // Fallback for Photon Fusion
         var fusionNo = GetComponent<Fusion.NetworkObject>();
         if (fusionNo != null)
         {

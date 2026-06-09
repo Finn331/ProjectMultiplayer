@@ -180,6 +180,18 @@ public class PlayerAnimatorDriver : MonoBehaviour
 
     private bool ShouldProcessAnimator()
     {
+        var fusionObject = GetComponent<Fusion.NetworkObject>();
+        if (fusionObject != null && fusionObject.IsValid)
+        {
+            return fusionObject.HasStateAuthority;
+        }
+
+        NetworkObject networkObject = GetComponent<NetworkObject>();
+        if (networkObject != null && NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+        {
+            return networkObject.IsOwner;
+        }
+
         return true;
     }
 
