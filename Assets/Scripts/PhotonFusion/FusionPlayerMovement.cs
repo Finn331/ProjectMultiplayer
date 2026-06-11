@@ -31,6 +31,14 @@ public class FusionPlayerMovement : NetworkBehaviour
     private float nextJumpButtonSearchTime;
     private bool jumpButtonBound;
     private bool warnedNonSharedMode;
+    private Vector3 animatorPlanarVelocity;
+    private Vector2 animatorMoveInput;
+    private float animatorSpeed;
+
+    public float MoveSpeed => moveSpeed;
+    public Vector3 AnimatorPlanarVelocity => animatorPlanarVelocity;
+    public Vector2 AnimatorMoveInput => animatorMoveInput;
+    public float AnimatorSpeed => animatorSpeed;
 
     public override void Spawned()
     {
@@ -128,6 +136,7 @@ public class FusionPlayerMovement : NetworkBehaviour
     {
         if (moveJoystick == null)
         {
+            ClearAnimatorMovementState();
             return;
         }
 
@@ -135,16 +144,29 @@ public class FusionPlayerMovement : NetworkBehaviour
         float inputMagnitude = Mathf.Clamp01(input.magnitude);
         if (inputMagnitude <= 0.0001f)
         {
+            ClearAnimatorMovementState();
             return;
         }
 
         Vector3 direction = transform.right * input.x + transform.forward * input.y;
         if (direction.sqrMagnitude <= 0.0001f)
         {
+            ClearAnimatorMovementState();
             return;
         }
 
-        controller.Move(direction.normalized * (moveSpeed * inputMagnitude * GetDeltaTime()));
+        animatorMoveInput = Vector2.ClampMagnitude(input, 1f);
+        animatorPlanarVelocity = direction.normalized * (moveSpeed * inputMagnitude);
+        animatorSpeed = Mathf.Clamp01(animatorPlanarVelocity.magnitude / Mathf.Max(0.01f, moveSpeed));
+
+        controller.Move(animatorPlanarVelocity * GetDeltaTime());
+    }
+
+    private void ClearAnimatorMovementState()
+    {
+        animatorPlanarVelocity = Vector3.zero;
+        animatorMoveInput = Vector2.zero;
+        animatorSpeed = 0f;
     }
 
     private Vector2 accumulatedLookDelta;

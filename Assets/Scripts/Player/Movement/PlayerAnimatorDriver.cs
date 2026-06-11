@@ -7,6 +7,7 @@ public class PlayerAnimatorDriver : MonoBehaviour
     [SerializeField] private Animator animator;
     [SerializeField] private CharacterController characterController;
     [SerializeField] private FPSControllerMobile movementController;
+    [SerializeField] private FusionPlayerMovement fusionMovementController;
     [SerializeField] private LowHealthInjuredAnimationController injuredAnimationController;
 
     [Header("Parameter Names")]
@@ -58,6 +59,11 @@ public class PlayerAnimatorDriver : MonoBehaviour
             movementController = GetComponent<FPSControllerMobile>();
         }
 
+        if (fusionMovementController == null)
+        {
+            fusionMovementController = GetComponent<FusionPlayerMovement>();
+        }
+
         if (injuredAnimationController == null)
         {
             injuredAnimationController = GetComponent<LowHealthInjuredAnimationController>();
@@ -96,6 +102,17 @@ public class PlayerAnimatorDriver : MonoBehaviour
         float speedNormalized = inputMagnitude;
         Vector2 moveInput = this.GetDirectionInput(referenceVelocity);
         float verticalVelocity = referenceVelocity.y;
+
+        if (fusionMovementController != null)
+        {
+            Vector3 fusionPlanarVelocity = fusionMovementController.AnimatorPlanarVelocity;
+            referenceVelocity = new Vector3(fusionPlanarVelocity.x, velocity.y, fusionPlanarVelocity.z);
+            inputMagnitude = fusionMovementController.AnimatorSpeed;
+            speedNormalized = inputMagnitude;
+            moveInput = fusionMovementController.AnimatorMoveInput;
+            verticalVelocity = referenceVelocity.y;
+        }
+
         bool rawGrounded = characterController.isGrounded;
         bool jumpPressedRecently = movementController != null && movementController.WasJumpPressedRecently(minAirTimeAfterJump + 0.08f);
         if (!rawGrounded && useGroundProbeFallback)
