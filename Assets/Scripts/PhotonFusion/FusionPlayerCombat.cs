@@ -82,6 +82,11 @@ public class FusionPlayerCombat : NetworkBehaviour
     [Rpc(RpcSources.InputAuthority, RpcTargets.All)]
     private void RPC_Swing(RpcInfo info = default)
     {
+        if (Runner != null && info.Source == Runner.LocalPlayer)
+        {
+            return;
+        }
+
         ResolveReferences();
         PlaySwingAnimation();
     }

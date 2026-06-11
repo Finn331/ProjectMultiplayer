@@ -23,6 +23,7 @@ public class StorageChestUI : MonoBehaviour
 
     private readonly StringBuilder builder = new StringBuilder(256);
     private StorageChest activeChest;
+    private FusionStorageChest activeFusionChest;
     private int selectedChestSlotIndex;
     private bool initialized;
 
@@ -78,6 +79,26 @@ public class StorageChestUI : MonoBehaviour
         this.Refresh();
     }
 
+    public void OpenChest(FusionStorageChest chest)
+    {
+        if (chest == null)
+        {
+            return;
+        }
+
+        this.EnsureUI();
+        if (activeFusionChest != chest)
+        {
+            this.UnbindChest();
+            activeFusionChest = chest;
+            activeFusionChest.ChestChanged += this.Refresh;
+        }
+
+        selectedChestSlotIndex = Mathf.Clamp(selectedChestSlotIndex, 0, chest.Slots - 1);
+        this.SetVisible(true);
+        this.Refresh();
+    }
+
     public void CloseChest()
     {
         this.UnbindChest();
@@ -86,29 +107,31 @@ public class StorageChestUI : MonoBehaviour
 
     public void SelectNextChestSlot()
     {
-        if (activeChest == null)
+        int slotCount = this.GetActiveSlotCount();
+        if (slotCount <= 0)
         {
             return;
         }
 
-        selectedChestSlotIndex = (selectedChestSlotIndex + 1) % activeChest.SlotCount;
+        selectedChestSlotIndex = (selectedChestSlotIndex + 1) % slotCount;
         this.Refresh();
     }
 
     public void SelectPreviousChestSlot()
     {
-        if (activeChest == null)
+        int slotCount = this.GetActiveSlotCount();
+        if (slotCount <= 0)
         {
             return;
         }
 
-        selectedChestSlotIndex = (selectedChestSlotIndex - 1 + activeChest.SlotCount) % activeChest.SlotCount;
+        selectedChestSlotIndex = (selectedChestSlotIndex - 1 + slotCount) % slotCount;
         this.Refresh();
     }
 
     public void StoreSelectedInventoryItem()
     {
-        if (activeChest == null || playerInventoryUI == null || playerInventory == null)
+        if ((activeChest == null && activeFusionChest == null) || playerInventoryUI == null || playerInventory == null)
         {
             return;
         }
@@ -119,17 +142,31 @@ public class StorageChestUI : MonoBehaviour
             return;
         }
 
+        if (activeFusionChest != null)
+        {
+            Fusion.NetworkObject playerObject = playerInventory.GetComponent<Fusion.NetworkObject>();
+            activeFusionChest.RequestDepositToChest(playerObject, selectedPlayerSlot, selectedChestSlotIndex);
+            return;
+        }
+
         activeChest.TryRequestStore(playerInventory, selectedPlayerSlot, selectedChestSlotIndex);
     }
 
     public void TakeSelectedChestItem()
     {
-        if (activeChest == null || playerInventory == null)
+        if ((activeChest == null && activeFusionChest == null) || playerInventory == null)
         {
             return;
         }
 
         int preferredPlayerSlot = playerInventoryUI != null ? playerInventoryUI.GetSelectedInventorySlotIndex() : -1;
+        if (activeFusionChest != null)
+        {
+            Fusion.NetworkObject playerObject = playerInventory.GetComponent<Fusion.NetworkObject>();
+            activeFusionChest.RequestTakeFromChest(playerObject, selectedChestSlotIndex, preferredPlayerSlot);
+            return;
+        }
+
         activeChest.TryRequestTake(playerInventory, selectedChestSlotIndex, preferredPlayerSlot);
     }
 
@@ -140,19 +177,20 @@ public class StorageChestUI : MonoBehaviour
             return;
         }
 
-        if (activeChest == null)
+        if (activeChest == null && activeFusionChest == null)
         {
             titleText.text = "Storage Chest";
             chestItemsText.text = "- Empty";
             return;
         }
 
-        titleText.text = activeChest.ChestName + " (" + activeChest.UsedSlotCount + "/" + activeChest.SlotCount + ")";
+        int slotCount = this.GetActiveSlotCount();
+        titleText.text = this.GetActiveChestName() + " (" + this.GetActiveUsedSlotCount() + "/" + slotCount + ")";
         builder.Clear();
-        for (int i = 0; i < activeChest.SlotCount; i++)
+        for (int i = 0; i < slotCount; i++)
         {
-            ItemType? itemType = activeChest.GetSlotItemType(i);
-            int amount = activeChest.GetSlotAmount(i);
+            ItemType? itemType = this.GetActiveSlotItemType(i);
+            int amount = this.GetActiveSlotAmount(i);
             builder.Append(i == selectedChestSlotIndex ? "> " : "  ");
             builder.Append("[").Append(i + 1).Append("] ");
             if (itemType == null || amount <= 0)
@@ -164,7 +202,7 @@ public class StorageChestUI : MonoBehaviour
                 builder.Append(itemType.Value).Append(" x").Append(amount);
             }
 
-            if (i < activeChest.SlotCount - 1)
+            if (i < slotCount - 1)
             {
                 builder.Append('\n');
             }
@@ -275,7 +313,7 @@ public class StorageChestUI : MonoBehaviour
 
     private bool ShouldKeepChestOpen()
     {
-        if (activeChest == null || panelRoot == null || !panelRoot.gameObject.activeSelf)
+        if ((activeChest == null && activeFusionChest == null) || panelRoot == null || !panelRoot.gameObject.activeSelf)
         {
             return true;
         }
@@ -290,8 +328,10 @@ public class StorageChestUI : MonoBehaviour
             return false;
         }
 
-        float maxDistance = activeChest.InteractDistance + Mathf.Max(0.05f, autoCloseDistancePadding);
-        return Vector3.Distance(playerInventory.transform.position, activeChest.transform.position) <= maxDistance;
+        Transform chestTransform = activeFusionChest != null ? activeFusionChest.transform : activeChest.transform;
+        float interactDistance = activeFusionChest != null ? activeFusionChest.InteractDistance : activeChest.InteractDistance;
+        float maxDistance = interactDistance + Mathf.Max(0.05f, autoCloseDistancePadding);
+        return Vector3.Distance(playerInventory.transform.position, chestTransform.position) <= maxDistance;
     }
 
     private void UnbindChest()
@@ -301,5 +341,51 @@ public class StorageChestUI : MonoBehaviour
             activeChest.ChestChanged -= this.Refresh;
             activeChest = null;
         }
+
+        if (activeFusionChest != null)
+        {
+            activeFusionChest.ChestChanged -= this.Refresh;
+            activeFusionChest = null;
+        }
+    }
+
+    private string GetActiveChestName()
+    {
+        return activeFusionChest != null ? activeFusionChest.ChestName : activeChest.ChestName;
+    }
+
+    private int GetActiveSlotCount()
+    {
+        if (activeFusionChest != null)
+        {
+            return activeFusionChest.Slots;
+        }
+
+        return activeChest != null ? activeChest.SlotCount : 0;
+    }
+
+    private int GetActiveUsedSlotCount()
+    {
+        return activeFusionChest != null ? activeFusionChest.UsedSlotCount : activeChest.UsedSlotCount;
+    }
+
+    private ItemType? GetActiveSlotItemType(int slotIndex)
+    {
+        if (activeFusionChest != null)
+        {
+            return activeFusionChest.TryReadSlot(slotIndex, out ItemType itemType, out _) ? itemType : (ItemType?)null;
+        }
+
+        return activeChest.GetSlotItemType(slotIndex);
+    }
+
+    private int GetActiveSlotAmount(int slotIndex)
+    {
+        if (activeFusionChest != null)
+        {
+            return activeFusionChest.TryReadSlot(slotIndex, out _, out int amount) ? amount : 0;
+        }
+
+        return activeChest.GetSlotAmount(slotIndex);
     }
 }

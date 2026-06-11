@@ -1,4 +1,5 @@
 using Fusion;
+using System;
 using UnityEngine;
 
 public class FusionStorageChest : NetworkBehaviour
@@ -8,18 +9,46 @@ public class FusionStorageChest : NetworkBehaviour
 
     [SerializeField] private int maxStackPerSlot = 16;
     [SerializeField] private float interactDistance = 3f;
+    [SerializeField] private string chestName = "Storage Chest";
+
+    private ChangeDetector changeDetector;
+    private bool hasChangeDetector;
+
+    public event Action ChestChanged;
 
     [Networked, Capacity(SlotCount)] private NetworkArray<int> ItemTypes => default;
     [Networked, Capacity(SlotCount)] private NetworkArray<int> Amounts => default;
 
+    public string ChestName => string.IsNullOrWhiteSpace(chestName) ? "Storage Chest" : chestName;
     public int Slots => SlotCount;
+    public int SlotCountValue => SlotCount;
     public int MaxStackPerSlot => Mathf.Max(1, maxStackPerSlot);
     public float InteractDistance => Mathf.Max(0f, interactDistance);
+    public int UsedSlotCount
+    {
+        get
+        {
+            int used = 0;
+            for (int i = 0; i < SlotCount; i++)
+            {
+                if (Amounts[i] > 0 && IsValidItemType(ItemTypes[i]))
+                {
+                    used++;
+                }
+            }
+
+            return used;
+        }
+    }
 
     public override void Spawned()
     {
+        changeDetector = GetChangeDetector(ChangeDetector.Source.SnapshotFrom);
+        hasChangeDetector = true;
+
         if (!HasFusionStateAuthority())
         {
+            ChestChanged?.Invoke();
             return;
         }
 
@@ -30,6 +59,47 @@ public class FusionStorageChest : NetworkBehaviour
                 ClearSlot(i);
             }
         }
+
+        ChestChanged?.Invoke();
+    }
+
+    public override void Render()
+    {
+        if (!hasChangeDetector)
+        {
+            return;
+        }
+
+        foreach (string changedProperty in changeDetector.DetectChanges(this))
+        {
+            if (changedProperty == nameof(ItemTypes) || changedProperty == nameof(Amounts))
+            {
+                ChestChanged?.Invoke();
+                break;
+            }
+        }
+    }
+
+    public bool TryInteract(PlayerInteractionSystem interactor)
+    {
+        if (interactor == null)
+        {
+            return false;
+        }
+
+        if (Vector3.Distance(interactor.transform.position, transform.position) > InteractDistance)
+        {
+            return false;
+        }
+
+        StorageChestUI chestUI = interactor.GetComponent<StorageChestUI>();
+        if (chestUI == null)
+        {
+            chestUI = interactor.gameObject.AddComponent<StorageChestUI>();
+        }
+
+        chestUI.OpenChest(this);
+        return true;
     }
 
     public bool TryReadSlot(int slot, out ItemType itemType, out int amount)
@@ -102,6 +172,8 @@ public class FusionStorageChest : NetworkBehaviour
         {
             ClearSlot(chestSlot);
         }
+
+        ChestChanged?.Invoke();
     }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
@@ -167,6 +239,8 @@ public class FusionStorageChest : NetworkBehaviour
         {
             RestoreRemovedItems(playerInventory, playerSlot, removedItemType, transferableAmount - acceptedAmount);
         }
+
+        ChestChanged?.Invoke();
     }
 
     public void SetSlotStateForStateAuthority(int slot, ItemType itemType, int amount)
@@ -192,6 +266,7 @@ public class FusionStorageChest : NetworkBehaviour
 
         ItemTypes.Set(slot, (int)itemType);
         Amounts.Set(slot, clampedAmount);
+        ChestChanged?.Invoke();
     }
 
     private bool CanSendTransaction(NetworkObject playerObject)
@@ -223,12 +298,12 @@ public class FusionStorageChest : NetworkBehaviour
             return false;
         }
 
-        if (playerObject != null && playerObject.IsValid)
+        if (playerObject.InputAuthority == info.Source)
         {
-            return playerObject.HasStateAuthority;
+            return true;
         }
 
-        return playerObject.InputAuthority == info.Source;
+        return playerObject.HasStateAuthority && info.Source.IsNone;
     }
 
     private void RestoreRemovedItems(PlayerInventory playerInventory, int preferredSlot, ItemType itemType, int amount)

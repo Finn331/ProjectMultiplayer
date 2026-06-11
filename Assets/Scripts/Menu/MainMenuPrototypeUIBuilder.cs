@@ -222,7 +222,7 @@ public class MainMenuPrototypeUIBuilder : MonoBehaviour
         refs.hostAddressInput = null;
         refs.hostPortInput = null;
 
-        TMP_Text hostInfo = CreateText(parent, "HostFixedInfo", "Semua room otomatis memakai VPS server.", 16f, FontStyles.Italic, TextAlignmentOptions.Left);
+        TMP_Text hostInfo = CreateText(parent, "HostFixedInfo", "Semua room memakai Photon Fusion.", 16f, FontStyles.Italic, TextAlignmentOptions.Left);
         hostInfo.color = new Color(0.84f, 0.94f, 1f, 1f);
         SetRect(hostInfo.rectTransform, new Vector2(0.03f, 0.22f), new Vector2(0.97f, 0.30f), Vector2.zero, Vector2.zero);
 
@@ -258,7 +258,7 @@ public class MainMenuPrototypeUIBuilder : MonoBehaviour
         refs.joinRoomCodeInput = CreateInput(parent, "JoinRoomCodeInput", "Room Code", "ROOM01", 0.40f);
         refs.joinPasswordInput = CreateInput(parent, "JoinPasswordInput", "Password", "", 0.30f);
 
-        TMP_Text vpsInfo = CreateText(parent, "JoinFixedInfo", "Endpoint server sudah fixed ke VPS.", 16f, FontStyles.Italic, TextAlignmentOptions.Left);
+        TMP_Text vpsInfo = CreateText(parent, "JoinFixedInfo", "Join room via Photon Fusion.", 16f, FontStyles.Italic, TextAlignmentOptions.Left);
         vpsInfo.color = new Color(0.84f, 0.94f, 1f, 1f);
         SetRect(vpsInfo.rectTransform, new Vector2(0.03f, 0.21f), new Vector2(0.97f, 0.27f), Vector2.zero, Vector2.zero);
 

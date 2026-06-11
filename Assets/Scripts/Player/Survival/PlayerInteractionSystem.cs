@@ -224,6 +224,13 @@ public class PlayerInteractionSystem : MonoBehaviour
             return;
         }
 
+        FusionStorageChest fusionChest = currentTarget.GetComponent<FusionStorageChest>();
+        if (fusionChest != null)
+        {
+            this.TryInteractFusionChest(fusionChest);
+            return;
+        }
+
         StorageChest chest = currentTarget.GetComponent<StorageChest>();
         if (chest != null)
         {
@@ -237,6 +244,19 @@ public class PlayerInteractionSystem : MonoBehaviour
 
         currentTarget.Interact();
         if (pickButton != null)
+        {
+            pickButton.SetActive(false);
+        }
+    }
+
+    private void TryInteractFusionChest(FusionStorageChest chest)
+    {
+        if (chest == null)
+        {
+            return;
+        }
+
+        if (chest.TryInteract(this) && pickButton != null)
         {
             pickButton.SetActive(false);
         }
