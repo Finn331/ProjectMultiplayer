@@ -82,6 +82,7 @@ public class FusionAnimatorSync : NetworkBehaviour
             IsRunning = running;
             MoveX = GetThresholdedValue(MoveX, moveX);
             MoveY = GetThresholdedValue(MoveY, moveY);
+            RPC_UpdateAnimatorState(speed, verticalVelocity, grounded, running, moveX, moveY);
             
             return;
         }
@@ -90,7 +91,24 @@ public class FusionAnimatorSync : NetworkBehaviour
         ApplyNetworkStateToAnimator();
     }
 
-    // Removed PushNetworkStateFromController since it is handled in FixedUpdateNetwork
+    [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
+    private void RPC_UpdateAnimatorState(float speed, float verticalVelocity, bool grounded, bool running, float moveX, float moveY, RpcInfo info = default)
+    {
+        if (HasFusionStateAuthority())
+        {
+            Speed = GetThresholdedValue(Speed, speed);
+            VerticalVelocity = GetThresholdedValue(VerticalVelocity, verticalVelocity);
+            IsGrounded = grounded;
+            IsRunning = running;
+            MoveX = GetThresholdedValue(MoveX, moveX);
+            MoveY = GetThresholdedValue(MoveY, moveY);
+        }
+
+        if (!HasFusionStateAuthority())
+        {
+            ApplyValuesToAnimator(speed, verticalVelocity, grounded, running, moveX, moveY);
+        }
+    }
 
     private void CaptureLocalControllerState(
         out float speed,

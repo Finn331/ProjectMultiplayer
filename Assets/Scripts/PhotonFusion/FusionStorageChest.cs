@@ -2,7 +2,7 @@ using Fusion;
 using System;
 using UnityEngine;
 
-public class FusionStorageChest : NetworkBehaviour
+public class FusionStorageChest : NetworkBehaviour, IStateAuthorityChanged
 {
     private const int EmptyItemType = -1;
     private const int SlotCount = 12;
@@ -13,11 +13,28 @@ public class FusionStorageChest : NetworkBehaviour
 
     private ChangeDetector changeDetector;
     private bool hasChangeDetector;
+    private PendingTransaction pendingTransaction;
 
     public event Action ChestChanged;
 
     [Networked, Capacity(SlotCount)] private NetworkArray<int> ItemTypes => default;
     [Networked, Capacity(SlotCount)] private NetworkArray<int> Amounts => default;
+
+    private enum PendingTransactionType
+    {
+        None,
+        Take,
+        Deposit
+    }
+
+    private struct PendingTransaction
+    {
+        public PendingTransactionType Type;
+        public NetworkObject PlayerObject;
+        public int PlayerSlot;
+        public int ChestSlot;
+        public int PreferredPlayerSlot;
+    }
 
     public string ChestName => string.IsNullOrWhiteSpace(chestName) ? "Storage Chest" : chestName;
     public int Slots => SlotCount;
@@ -43,6 +60,7 @@ public class FusionStorageChest : NetworkBehaviour
 
     public override void Spawned()
     {
+        EnsureStateAuthorityOverrideAllowed();
         changeDetector = GetChangeDetector(ChangeDetector.Source.SnapshotFrom);
         hasChangeDetector = true;
 
@@ -124,6 +142,18 @@ public class FusionStorageChest : NetworkBehaviour
             return false;
         }
 
+        if (!HasFusionStateAuthority())
+        {
+            RequestStateAuthorityForTransaction(new PendingTransaction
+            {
+                Type = PendingTransactionType.Take,
+                PlayerObject = playerObject,
+                ChestSlot = chestSlot,
+                PreferredPlayerSlot = preferredPlayerSlot
+            });
+            return true;
+        }
+
         RPC_TakeFromChest(playerObject, chestSlot, preferredPlayerSlot);
         return true;
     }
@@ -135,8 +165,28 @@ public class FusionStorageChest : NetworkBehaviour
             return false;
         }
 
+        if (!HasFusionStateAuthority())
+        {
+            RequestStateAuthorityForTransaction(new PendingTransaction
+            {
+                Type = PendingTransactionType.Deposit,
+                PlayerObject = playerObject,
+                PlayerSlot = playerSlot,
+                ChestSlot = chestSlot
+            });
+            return true;
+        }
+
         RPC_DepositToChest(playerObject, playerSlot, chestSlot);
         return true;
+    }
+
+    public void StateAuthorityChanged()
+    {
+        if (HasFusionStateAuthority())
+        {
+            ExecutePendingTransaction();
+        }
     }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
@@ -273,6 +323,40 @@ public class FusionStorageChest : NetworkBehaviour
     private bool CanSendTransaction(NetworkObject playerObject)
     {
         return Runner != null && Object != null && Object.IsValid && playerObject != null && playerObject.IsValid;
+    }
+
+    private void RequestStateAuthorityForTransaction(PendingTransaction transaction)
+    {
+        EnsureStateAuthorityOverrideAllowed();
+        pendingTransaction = transaction;
+        Object.RequestStateAuthority();
+    }
+
+    private void EnsureStateAuthorityOverrideAllowed()
+    {
+        if (Object == null)
+        {
+            return;
+        }
+
+        Object.Flags |= NetworkObjectFlags.AllowStateAuthorityOverride;
+    }
+
+    private void ExecutePendingTransaction()
+    {
+        PendingTransaction transaction = pendingTransaction;
+        pendingTransaction = default;
+
+        if (transaction.Type == PendingTransactionType.Take)
+        {
+            RPC_TakeFromChest(transaction.PlayerObject, transaction.ChestSlot, transaction.PreferredPlayerSlot);
+            return;
+        }
+
+        if (transaction.Type == PendingTransactionType.Deposit)
+        {
+            RPC_DepositToChest(transaction.PlayerObject, transaction.PlayerSlot, transaction.ChestSlot);
+        }
     }
 
     private bool TryGetPlayerInventory(NetworkObject playerObject, out PlayerInventory playerInventory)
