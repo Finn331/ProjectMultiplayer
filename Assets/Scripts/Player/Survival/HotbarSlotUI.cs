@@ -11,8 +11,11 @@ public class HotbarSlotUI : MonoBehaviour,
     [SerializeField] private bool enableHoldToDrop;
 
     private const float holdTime = 2f;
+    private const float splitHoldTime = 0.45f;
     private float timer;
     private bool isHolding;
+    private bool splitHoldAttempted;
+    private bool splitHoldAccepted;
 
     private static int dragFrom = -1;
 
@@ -28,7 +31,13 @@ public class HotbarSlotUI : MonoBehaviour,
     {
         if (hotbar == null)
         {
-            hotbar = MobileHotbarUI.ActiveLocalInstance;
+            hotbar = GetComponentInParent<MobileHotbarUI>();
+        }
+
+        MobileHotbarUI activeHotbar = MobileHotbarUI.ActiveLocalInstance;
+        if (activeHotbar != null && (hotbar == null || !hotbar.isActiveAndEnabled || hotbar != activeHotbar))
+        {
+            hotbar = activeHotbar;
         }
     }
 
@@ -36,17 +45,25 @@ public class HotbarSlotUI : MonoBehaviour,
     {
         ResolveHotbar();
 
-        if (isHolding)
+        if (!isHolding)
         {
-            timer += Time.deltaTime;
+            return;
+        }
 
-            if (enableHoldToDrop && timer >= holdTime)
+        timer += Time.deltaTime;
+
+        if (!splitHoldAttempted && timer >= splitHoldTime)
+        {
+            splitHoldAttempted = true;
+            splitHoldAccepted = hotbar != null && hotbar.NotifySlotLongPressForSplit(slotIndex);
+        }
+
+        if (!splitHoldAccepted && enableHoldToDrop && timer >= holdTime)
+        {
+            isHolding = false;
+            if (hotbar != null)
             {
-                isHolding = false;
-                if (hotbar != null)
-                {
-                    hotbar.DropFromSlot(slotIndex);
-                }
+                hotbar.DropFromSlot(slotIndex);
             }
         }
     }
@@ -55,6 +72,8 @@ public class HotbarSlotUI : MonoBehaviour,
     {
         ResolveHotbar();
         isHolding = true;
+        splitHoldAttempted = false;
+        splitHoldAccepted = false;
         timer = 0f;
     }
 
@@ -62,8 +81,12 @@ public class HotbarSlotUI : MonoBehaviour,
     {
         ResolveHotbar();
         isHolding = false;
+        if (hotbar != null)
+        {
+            hotbar.NotifySlotPointerUpForSplit(slotIndex);
+        }
 
-        if (timer < holdTime)
+        if (!splitHoldAccepted && timer < holdTime)
         {
             if (hotbar != null)
             {

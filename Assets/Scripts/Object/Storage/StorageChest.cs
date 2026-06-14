@@ -104,8 +104,13 @@ public class StorageChest : NetworkBehaviour
 
     public bool TryRequestStore(PlayerInventory playerInventory, int playerSlotIndex, int chestSlotIndex)
     {
+        return this.TryRequestStore(playerInventory, playerSlotIndex, chestSlotIndex, int.MaxValue);
+    }
+
+    public bool TryRequestStore(PlayerInventory playerInventory, int playerSlotIndex, int chestSlotIndex, int requestedAmount)
+    {
         this.EnsureSlotSetup();
-        if (playerInventory == null || !this.IsValidSlot(chestSlotIndex))
+        if (playerInventory == null || !this.IsValidSlot(chestSlotIndex) || requestedAmount <= 0)
         {
             return false;
         }
@@ -118,7 +123,7 @@ public class StorageChest : NetworkBehaviour
 
         if (!this.UseNetworkedChest())
         {
-            return this.StoreFromPlayer(playerInventory, playerSlotIndex, chestSlotIndex);
+            return this.StoreFromPlayer(playerInventory, playerSlotIndex, chestSlotIndex, requestedAmount);
         }
 
         if (!this.HasLocalAuthority())
@@ -126,14 +131,19 @@ public class StorageChest : NetworkBehaviour
             return false;
         }
 
-        this.RequestStoreServerRpc(playerSlotIndex, chestSlotIndex);
+        this.RequestStoreServerRpc(playerSlotIndex, chestSlotIndex, requestedAmount);
         return true;
     }
 
     public bool TryRequestTake(PlayerInventory playerInventory, int chestSlotIndex, int preferredPlayerSlotIndex)
     {
+        return this.TryRequestTake(playerInventory, chestSlotIndex, preferredPlayerSlotIndex, int.MaxValue);
+    }
+
+    public bool TryRequestTake(PlayerInventory playerInventory, int chestSlotIndex, int preferredPlayerSlotIndex, int requestedAmount)
+    {
         this.EnsureSlotSetup();
-        if (playerInventory == null || !this.IsValidSlot(chestSlotIndex))
+        if (playerInventory == null || !this.IsValidSlot(chestSlotIndex) || requestedAmount <= 0)
         {
             return false;
         }
@@ -146,7 +156,7 @@ public class StorageChest : NetworkBehaviour
 
         if (!this.UseNetworkedChest())
         {
-            return this.TakeToPlayer(playerInventory, chestSlotIndex, preferredPlayerSlotIndex);
+            return this.TakeToPlayer(playerInventory, chestSlotIndex, preferredPlayerSlotIndex, requestedAmount);
         }
 
         if (!this.HasLocalAuthority())
@@ -154,8 +164,64 @@ public class StorageChest : NetworkBehaviour
             return false;
         }
 
-        this.RequestTakeServerRpc(chestSlotIndex, preferredPlayerSlotIndex);
+        this.RequestTakeServerRpc(chestSlotIndex, preferredPlayerSlotIndex, requestedAmount);
         return true;
+    }
+
+    public int GetStoreCapacity(PlayerInventory playerInventory, int playerSlotIndex, int chestSlotIndex)
+    {
+        this.EnsureSlotSetup();
+        if (playerInventory == null || !this.IsValidSlot(chestSlotIndex))
+        {
+            return 0;
+        }
+
+        ItemType? sourceItemType = playerInventory.GetSlotItemType(playerSlotIndex);
+        int sourceAmount = playerInventory.GetSlotAmount(playerSlotIndex);
+        if (sourceItemType == null || sourceAmount <= 0)
+        {
+            return 0;
+        }
+
+        PlayerInventory.InventoryEntry targetEntry = slotEntries[chestSlotIndex];
+        if (targetEntry != null && !targetEntry.IsEmpty && targetEntry.itemType != sourceItemType.Value)
+        {
+            return 0;
+        }
+
+        int currentChestAmount = targetEntry == null || targetEntry.IsEmpty ? 0 : targetEntry.amount;
+        return Mathf.Clamp(MaxStackPerSlot - currentChestAmount, 0, sourceAmount);
+    }
+
+    public int GetTakeCapacity(PlayerInventory playerInventory, int chestSlotIndex, int preferredPlayerSlotIndex)
+    {
+        this.EnsureSlotSetup();
+        if (playerInventory == null || !this.IsValidSlot(chestSlotIndex))
+        {
+            return 0;
+        }
+
+        ItemType? itemType = this.GetSlotItemType(chestSlotIndex);
+        int chestAmount = this.GetSlotAmount(chestSlotIndex);
+        if (itemType == null || chestAmount <= 0)
+        {
+            return 0;
+        }
+
+        if (preferredPlayerSlotIndex < 0 || preferredPlayerSlotIndex >= playerInventory.TotalSlotCount)
+        {
+            return 0;
+        }
+
+        ItemType? targetItemType = playerInventory.GetSlotItemType(preferredPlayerSlotIndex);
+        int targetAmount = playerInventory.GetSlotAmount(preferredPlayerSlotIndex);
+        if (targetItemType != null && targetItemType.Value != itemType.Value)
+        {
+            return 0;
+        }
+
+        int targetCapacity = playerInventory.MaxStackPerSlot - targetAmount;
+        return Mathf.Clamp(targetCapacity, 0, chestAmount);
     }
 
     private void OnChestSnapshotChanged(FixedString512Bytes previousValue, FixedString512Bytes newValue)
@@ -163,10 +229,16 @@ public class StorageChest : NetworkBehaviour
         this.ApplySnapshot(newValue.ToString());
     }
 
-    private bool StoreFromPlayer(PlayerInventory playerInventory, int playerSlotIndex, int chestSlotIndex)
+    private bool StoreFromPlayer(PlayerInventory playerInventory, int playerSlotIndex, int chestSlotIndex, int requestedAmount)
     {
+        this.EnsureSlotSetup();
+        if (!this.IsValidSlot(chestSlotIndex))
+        {
+            return false;
+        }
+
         ItemType? itemType = playerInventory.GetSlotItemType(playerSlotIndex);
-        if (itemType == null)
+        if (itemType == null || requestedAmount <= 0)
         {
             return false;
         }
@@ -185,7 +257,7 @@ public class StorageChest : NetworkBehaviour
 
         int playerAmount = playerInventory.GetSlotAmount(playerSlotIndex);
         int currentChestAmount = targetEntry.IsEmpty ? 0 : targetEntry.amount;
-        int transferable = Mathf.Min(playerAmount, MaxStackPerSlot - currentChestAmount);
+        int transferable = Mathf.Min(playerAmount, requestedAmount, MaxStackPerSlot - currentChestAmount);
         if (transferable <= 0)
         {
             return false;
@@ -196,29 +268,62 @@ public class StorageChest : NetworkBehaviour
             return false;
         }
 
+        if (removedType != itemType.Value)
+        {
+            playerInventory.AddItemToSlot(removedType, transferable, playerSlotIndex);
+            return false;
+        }
+
         targetEntry.itemType = removedType;
         targetEntry.amount = currentChestAmount + transferable;
         this.MarkChanged();
         return true;
     }
 
-    private bool TakeToPlayer(PlayerInventory playerInventory, int chestSlotIndex, int preferredPlayerSlotIndex)
+    private bool TakeToPlayer(PlayerInventory playerInventory, int chestSlotIndex, int preferredPlayerSlotIndex, int requestedAmount)
     {
-        ItemType? itemType = this.GetSlotItemType(chestSlotIndex);
-        int chestAmount = this.GetSlotAmount(chestSlotIndex);
-        if (itemType == null || chestAmount <= 0)
+        this.EnsureSlotSetup();
+        if (!this.IsValidSlot(chestSlotIndex))
         {
             return false;
         }
 
-        bool includeHotbar = playerInventory.IsHotbarSlot(preferredPlayerSlotIndex);
-        int targetPlayerSlot = playerInventory.FindPreferredInventorySlot(itemType.Value, preferredPlayerSlotIndex, includeHotbar);
+        ItemType? itemType = this.GetSlotItemType(chestSlotIndex);
+        int chestAmount = this.GetSlotAmount(chestSlotIndex);
+        if (itemType == null || chestAmount <= 0 || requestedAmount <= 0)
+        {
+            return false;
+        }
+
+        int targetPlayerSlot = preferredPlayerSlotIndex;
+        if (requestedAmount == int.MaxValue)
+        {
+            bool includeHotbar = playerInventory.IsHotbarSlot(preferredPlayerSlotIndex);
+            targetPlayerSlot = playerInventory.FindPreferredInventorySlot(itemType.Value, preferredPlayerSlotIndex, includeHotbar);
+        }
+
         if (targetPlayerSlot < 0)
         {
             return false;
         }
 
-        int acceptedAmount = playerInventory.AddItemToSlot(itemType.Value, chestAmount, targetPlayerSlot);
+        if (requestedAmount != int.MaxValue)
+        {
+            if (targetPlayerSlot >= playerInventory.TotalSlotCount)
+            {
+                return false;
+            }
+
+            ItemType? targetItemType = playerInventory.GetSlotItemType(targetPlayerSlot);
+            int targetAmount = playerInventory.GetSlotAmount(targetPlayerSlot);
+            if ((targetItemType != null && targetItemType.Value != itemType.Value) || targetAmount >= playerInventory.MaxStackPerSlot)
+            {
+                return false;
+            }
+        }
+
+        int amountToMove = Mathf.Min(chestAmount, requestedAmount);
+        int acceptedAmount = playerInventory.AddItemToSlot(itemType.Value, amountToMove, targetPlayerSlot);
         if (acceptedAmount <= 0)
         {
             return false;
@@ -402,7 +507,7 @@ public class StorageChest : NetworkBehaviour
     }
 
     [ServerRpc(RequireOwnership = false)]
-    private void RequestStoreServerRpc(int playerSlotIndex, int chestSlotIndex, ServerRpcParams serverRpcParams = default)
+    private void RequestStoreServerRpc(int playerSlotIndex, int chestSlotIndex, int requestedAmount, ServerRpcParams serverRpcParams = default)
     {
         if (!this.TryGetPlayerInventoryForClient(serverRpcParams.Receive.SenderClientId, out PlayerInventory playerInventory))
         {
@@ -414,14 +519,11 @@ public class StorageChest : NetworkBehaviour
             return;
         }
 
-        if (this.StoreFromPlayer(playerInventory, playerSlotIndex, chestSlotIndex))
-        {
-            // Snapshot sudah dipush oleh MarkChanged() di StoreFromPlayer.
-        }
+        this.StoreFromPlayer(playerInventory, playerSlotIndex, chestSlotIndex, requestedAmount);
     }
 
     [ServerRpc(RequireOwnership = false)]
-    private void RequestTakeServerRpc(int chestSlotIndex, int preferredPlayerSlotIndex, ServerRpcParams serverRpcParams = default)
+    private void RequestTakeServerRpc(int chestSlotIndex, int preferredPlayerSlotIndex, int requestedAmount, ServerRpcParams serverRpcParams = default)
     {
         if (!this.TryGetPlayerInventoryForClient(serverRpcParams.Receive.SenderClientId, out PlayerInventory playerInventory))
         {
@@ -433,9 +535,6 @@ public class StorageChest : NetworkBehaviour
             return;
         }
 
-        if (this.TakeToPlayer(playerInventory, chestSlotIndex, preferredPlayerSlotIndex))
-        {
-            // Snapshot sudah dipush oleh MarkChanged() di TakeToPlayer.
-        }
+        this.TakeToPlayer(playerInventory, chestSlotIndex, preferredPlayerSlotIndex, requestedAmount);
     }
 }

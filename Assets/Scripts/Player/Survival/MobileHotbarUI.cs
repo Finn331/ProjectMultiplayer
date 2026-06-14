@@ -34,6 +34,8 @@ public class MobileHotbarUI : MonoBehaviour
     [SerializeField] private bool enableHotbarDrag;
     [HideInInspector] public Action<int, ItemType> OnSlotDragStart;
     [HideInInspector] public Action<ItemType, int> OnSlotDragEnd;
+    [HideInInspector] public Func<int, ItemType, bool> OnSlotLongPressForSplit;
+    [HideInInspector] public Action<int> OnSlotPointerUpForSplit;
 
     public event Action<int, ItemType?> SelectedSlotChanged;
 
@@ -238,6 +240,22 @@ public class MobileHotbarUI : MonoBehaviour
     {
         int globalSlotIndex = this.GetHotbarGlobalSlotIndex(hotbarSlotIndex);
         return globalSlotIndex >= 0 && inventory != null ? inventory.GetSlotAmount(globalSlotIndex) : 0;
+    }
+
+    public bool NotifySlotLongPressForSplit(int hotbarSlotIndex)
+    {
+        ItemType? slotItem = this.GetSlotItem(hotbarSlotIndex);
+        if (slotItem == null || this.GetSlotAmount(hotbarSlotIndex) <= 1)
+        {
+            return false;
+        }
+
+        return OnSlotLongPressForSplit != null && OnSlotLongPressForSplit.Invoke(hotbarSlotIndex, slotItem.Value);
+    }
+
+    public void NotifySlotPointerUpForSplit(int hotbarSlotIndex)
+    {
+        OnSlotPointerUpForSplit?.Invoke(hotbarSlotIndex);
     }
 
     public void Refresh()

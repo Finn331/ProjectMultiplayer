@@ -9,7 +9,7 @@ public enum StorageChestSlotKind
     Chest
 }
 
-public class StorageChestSlotUI : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IDropHandler
+public class StorageChestSlotUI : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IDropHandler, IPointerDownHandler, IPointerUpHandler
 {
     [SerializeField] private Image icon;
     [SerializeField] private TMP_Text countText;
@@ -74,5 +74,15 @@ public class StorageChestSlotUI : MonoBehaviour, IBeginDragHandler, IDragHandler
     public void OnDrop(PointerEventData eventData)
     {
         owner?.HandleSlotDrop(this);
+    }
+
+    public void OnPointerDown(PointerEventData eventData)
+    {
+        owner?.HandleSlotPointerDown(this);
+    }
+
+    public void OnPointerUp(PointerEventData eventData)
+    {
+        owner?.HandleSlotPointerUp(this);
     }
 }

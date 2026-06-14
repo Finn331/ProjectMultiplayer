@@ -19,6 +19,8 @@ public class StorageChestUI : MonoBehaviour
 
     [Header("Behavior")]
     [SerializeField] private float autoCloseDistancePadding = 0.35f;
+    [SerializeField] private float splitLongPressSeconds = 0.45f;
+    [SerializeField] private Color splitHighlightColor = new Color(0.25f, 0.7f, 1f, 1f);
 
     [Header("Layout")]
     [SerializeField] private Vector2 panelSize = new Vector2(760f, 440f);
@@ -45,6 +47,39 @@ public class StorageChestUI : MonoBehaviour
     private bool dragDropHandled;
     private bool createdPanelRoot;
     private bool initialized;
+    private StorageChestSlotUI pointerDownSlot;
+    private float pointerDownStartedAt;
+    private bool splitDragMode;
+    private bool hotbarSplitArmed;
+    private int hotbarSplitSlot = -1;
+    private RectTransform splitDialogRoot;
+    private TextMeshProUGUI splitDialogTitle;
+    private TextMeshProUGUI splitDialogInfoLabel;
+    private TMP_InputField splitQuantityInput;
+    private Button splitMinusButton;
+    private Button splitPlusButton;
+    private Button splitHalfButton;
+    private Button splitMaxButton;
+    private Button splitCancelButton;
+    private Button splitConfirmButton;
+    private SplitTransfer pendingSplitTransfer;
+
+    private enum SplitTransferDirection
+    {
+        None,
+        PlayerToChest,
+        ChestToPlayer
+    }
+
+    private struct SplitTransfer
+    {
+        public SplitTransferDirection Direction;
+        public int PlayerSlot;
+        public int ChestSlot;
+        public int MaxAmount;
+        public int SourceAmount;
+        public ItemType SourceItemType;
+    }
 
     private void Awake()
     {
@@ -74,7 +109,74 @@ public class StorageChestUI : MonoBehaviour
         if (!ShouldKeepChestOpen())
         {
             CloseChest();
+            return;
         }
+
+        UpdateSplitLongPress();
+    }
+
+    public void HandleSlotPointerDown(StorageChestSlotUI slot)
+    {
+        if (slot == null || !SlotHasItem(slot) || GetSlotAmount(slot) <= 1)
+        {
+            return;
+        }
+
+        pointerDownSlot = slot;
+        pointerDownStartedAt = Time.unscaledTime;
+    }
+
+    public void HandleSlotPointerUp(StorageChestSlotUI slot)
+    {
+        if (pointerDownSlot == slot)
+        {
+            if (splitDragMode && dragSourceSlot == null)
+            {
+                ClearSplitSlotState();
+                return;
+            }
+
+            pointerDownSlot = null;
+        }
+    }
+
+    private void UpdateSplitLongPress()
+    {
+        if (pointerDownSlot == null || splitDragMode)
+        {
+            return;
+        }
+
+        if (Time.unscaledTime - pointerDownStartedAt < splitLongPressSeconds)
+        {
+            return;
+        }
+
+        if (!SlotHasItem(pointerDownSlot) || GetSlotAmount(pointerDownSlot) <= 1)
+        {
+            pointerDownSlot = null;
+            return;
+        }
+
+        splitDragMode = true;
+        pointerDownSlot.SetHighlight(true, slotColor, splitHighlightColor);
+    }
+
+    private void ClearSplitSlotState()
+    {
+        if (pointerDownSlot != null)
+        {
+            pointerDownSlot.SetHighlight(false, slotColor, slotHighlightColor);
+        }
+
+        pointerDownSlot = null;
+        splitDragMode = false;
+    }
+
+    private void ClearHotbarSplitState()
+    {
+        hotbarSplitArmed = false;
+        hotbarSplitSlot = -1;
     }
 
     public void OpenChest(StorageChest chest)
@@ -87,6 +189,9 @@ public class StorageChestUI : MonoBehaviour
         EnsureUI();
         if (activeChest != chest)
         {
+            HideSplitDialog();
+            ClearSplitSlotState();
+            ClearHotbarSplitState();
             UnbindChest();
             activeChest = chest;
             activeChest.ChestChanged += Refresh;
@@ -107,6 +212,9 @@ public class StorageChestUI : MonoBehaviour
         EnsureUI();
         if (activeFusionChest != chest)
         {
+            HideSplitDialog();
+            ClearSplitSlotState();
+            ClearHotbarSplitState();
             UnbindChest();
             activeFusionChest = chest;
             activeFusionChest.ChestChanged += Refresh;
@@ -119,6 +227,9 @@ public class StorageChestUI : MonoBehaviour
 
     public void CloseChest()
     {
+        HideSplitDialog();
+        ClearSplitSlotState();
+        ClearHotbarSplitState();
         DestroyDragIcon();
         UnbindChest();
         SetVisible(false);
@@ -132,6 +243,11 @@ public class StorageChestUI : MonoBehaviour
         }
 
         dragSourceSlot = slot;
+        if (pointerDownSlot != slot)
+        {
+            splitDragMode = false;
+        }
+
         slot.SetHighlight(true, slotColor, slotHighlightColor);
         CreateDragIcon(GetSlotSprite(slot));
         UpdateSlotDrag(eventData);
@@ -160,8 +276,17 @@ public class StorageChestUI : MonoBehaviour
                 int targetHotbarSlot = FindHotbarSlotUnderPointer(eventData);
                 if (targetHotbarSlot >= 0)
                 {
-                    TakeChestSlotToHotbar(dragSourceSlot.SlotIndex, targetHotbarSlot);
-                    dragDropHandled = true;
+                    int targetPlayerSlot = hotbarUI != null ? hotbarUI.GetHotbarGlobalSlotIndex(targetHotbarSlot) : -1;
+                    if (splitDragMode)
+                    {
+                        TryOpenSplitDialog(SplitTransferDirection.ChestToPlayer, targetPlayerSlot, dragSourceSlot.SlotIndex);
+                        dragDropHandled = true;
+                    }
+                    else
+                    {
+                        TakeChestSlotToHotbar(dragSourceSlot.SlotIndex, targetHotbarSlot);
+                        dragDropHandled = true;
+                    }
                 }
             }
 
@@ -184,6 +309,7 @@ public class StorageChestUI : MonoBehaviour
 
         dragSourceSlot = null;
         dragDropHandled = false;
+        ClearSplitSlotState();
         Refresh();
     }
 
@@ -197,6 +323,12 @@ public class StorageChestUI : MonoBehaviour
         if (dragSourceSlot.Kind == StorageChestSlotKind.PlayerInventory && targetSlot.Kind == StorageChestSlotKind.Chest)
         {
             dragDropHandled = true;
+            if (splitDragMode)
+            {
+                TryOpenSplitDialog(SplitTransferDirection.PlayerToChest, dragSourceSlot.SlotIndex, targetSlot.SlotIndex);
+                return;
+            }
+
             DepositPlayerSlotToChest(dragSourceSlot.SlotIndex, targetSlot.SlotIndex);
             return;
         }
@@ -204,6 +336,12 @@ public class StorageChestUI : MonoBehaviour
         if (dragSourceSlot.Kind == StorageChestSlotKind.Chest && targetSlot.Kind == StorageChestSlotKind.PlayerInventory)
         {
             dragDropHandled = true;
+            if (splitDragMode)
+            {
+                TryOpenSplitDialog(SplitTransferDirection.ChestToPlayer, targetSlot.SlotIndex, dragSourceSlot.SlotIndex);
+                return;
+            }
+
             TakeChestSlotToPlayer(dragSourceSlot.SlotIndex, targetSlot.SlotIndex);
         }
     }
@@ -525,6 +663,12 @@ public class StorageChestUI : MonoBehaviour
     private void CleanupRuntimeUI()
     {
         DestroyDragIcon();
+        if (splitDialogRoot != null)
+        {
+            Destroy(splitDialogRoot.gameObject);
+            splitDialogRoot = null;
+        }
+
         UnbindChest();
         UnbindPlayerInventory();
         UnbindHotbarDrag();
@@ -533,6 +677,10 @@ public class StorageChestUI : MonoBehaviour
         hotbarDragSourceGlobalSlot = -1;
         hotbarDragItemType = null;
         dragDropHandled = false;
+        pointerDownSlot = null;
+        splitDragMode = false;
+        ClearHotbarSplitState();
+        pendingSplitTransfer = default;
         playerSlots.Clear();
         chestSlots.Clear();
 
@@ -583,6 +731,23 @@ public class StorageChestUI : MonoBehaviour
         activeChest?.TryRequestStore(playerInventory, playerSlot, chestSlot);
     }
 
+    private void DepositPlayerSlotToChest(int playerSlot, int chestSlot, int amount)
+    {
+        if (playerInventory == null || amount <= 0)
+        {
+            return;
+        }
+
+        if (activeFusionChest != null)
+        {
+            Fusion.NetworkObject playerObject = playerInventory.GetComponent<Fusion.NetworkObject>();
+            activeFusionChest.RequestDepositToChest(playerObject, playerSlot, chestSlot, amount);
+            return;
+        }
+
+        activeChest?.TryRequestStore(playerInventory, playerSlot, chestSlot, amount);
+    }
+
     private void OnHotbarDragStart(int hotbarSlotIndex, ItemType itemType)
     {
         if (!IsChestVisible() || hotbarUI == null || playerInventory == null)
@@ -611,6 +776,14 @@ public class StorageChestUI : MonoBehaviour
         StorageChestSlotUI targetSlot = FindSlotUnderPointer(Input.mousePosition);
         if (targetSlot != null && targetSlot.Kind == StorageChestSlotKind.Chest)
         {
+            bool shouldSplit = hotbarSplitArmed && hotbarSplitSlot == sourceHotbarSlot;
+            if (shouldSplit)
+            {
+                TryOpenSplitDialog(SplitTransferDirection.PlayerToChest, hotbarDragSourceGlobalSlot, targetSlot.SlotIndex);
+                ClearHotbarDragState();
+                return;
+            }
+
             DepositPlayerSlotToChest(hotbarDragSourceGlobalSlot, targetSlot.SlotIndex);
             Refresh();
         }
@@ -627,6 +800,33 @@ public class StorageChestUI : MonoBehaviour
     {
         hotbarDragSourceGlobalSlot = -1;
         hotbarDragItemType = null;
+        ClearHotbarSplitState();
+    }
+
+    private bool OnHotbarLongPressForSplit(int hotbarSlotIndex, ItemType itemType)
+    {
+        if (!IsChestVisible() || hotbarUI == null || playerInventory == null)
+        {
+            return false;
+        }
+
+        int globalSlotIndex = hotbarUI.GetHotbarGlobalSlotIndex(hotbarSlotIndex);
+        if (globalSlotIndex < 0 || playerInventory.GetSlotAmount(globalSlotIndex) <= 1)
+        {
+            return false;
+        }
+
+        hotbarSplitArmed = true;
+        hotbarSplitSlot = hotbarSlotIndex;
+        return true;
+    }
+
+    private void OnHotbarPointerUpForSplit(int hotbarSlotIndex)
+    {
+        if (hotbarSplitArmed && hotbarSplitSlot == hotbarSlotIndex && hotbarDragSourceGlobalSlot < 0)
+        {
+            ClearHotbarSplitState();
+        }
     }
 
     private void TakeChestSlotToPlayer(int chestSlot, int playerSlot)
@@ -644,6 +844,23 @@ public class StorageChestUI : MonoBehaviour
         }
 
         activeChest?.TryRequestTake(playerInventory, chestSlot, playerSlot);
+    }
+
+    private void TakeChestSlotToPlayer(int chestSlot, int playerSlot, int amount)
+    {
+        if (playerInventory == null || amount <= 0)
+        {
+            return;
+        }
+
+        if (activeFusionChest != null)
+        {
+            Fusion.NetworkObject playerObject = playerInventory.GetComponent<Fusion.NetworkObject>();
+            activeFusionChest.RequestTakeFromChest(playerObject, chestSlot, playerSlot, amount);
+            return;
+        }
+
+        activeChest?.TryRequestTake(playerInventory, chestSlot, playerSlot, amount);
     }
 
     private void TakeChestSlotToHotbar(int chestSlot, int hotbarSlot)
@@ -798,12 +1015,340 @@ public class StorageChestUI : MonoBehaviour
         return GetActiveSlotAmount(slot.SlotIndex) > 0;
     }
 
+    private int GetSlotAmount(StorageChestSlotUI slot)
+    {
+        if (slot == null)
+        {
+            return 0;
+        }
+
+        return slot.Kind == StorageChestSlotKind.PlayerInventory
+            ? playerInventory != null ? playerInventory.GetSlotAmount(slot.SlotIndex) : 0
+            : GetActiveSlotAmount(slot.SlotIndex);
+    }
+
+    private int GetActiveMaxStackPerSlot()
+    {
+        if (activeFusionChest != null)
+        {
+            return activeFusionChest.MaxStackPerSlot;
+        }
+
+        return activeChest != null ? activeChest.MaxStackPerSlot : 1;
+    }
+
+    private int GetSplitMaxAmount(SplitTransferDirection direction, int playerSlot, int chestSlot)
+    {
+        if (playerInventory == null)
+        {
+            return 0;
+        }
+
+        if (direction == SplitTransferDirection.PlayerToChest)
+        {
+            if (activeChest != null)
+            {
+                return activeChest.GetStoreCapacity(playerInventory, playerSlot, chestSlot);
+            }
+
+            if (playerSlot < 0 || playerSlot >= playerInventory.TotalSlotCount || chestSlot < 0 || chestSlot >= GetActiveSlotCount())
+            {
+                return 0;
+            }
+
+            ItemType? sourceItemType = playerInventory.GetSlotItemType(playerSlot);
+            int sourceAmount = playerInventory.GetSlotAmount(playerSlot);
+            if (sourceItemType == null || sourceAmount <= 0)
+            {
+                return 0;
+            }
+
+            ItemType? chestItemType = GetActiveSlotItemType(chestSlot);
+            int chestAmount = GetActiveSlotAmount(chestSlot);
+            if (chestItemType != null && chestItemType.Value != sourceItemType.Value)
+            {
+                return 0;
+            }
+
+            return Mathf.Clamp(GetActiveMaxStackPerSlot() - chestAmount, 0, sourceAmount);
+        }
+
+        if (direction == SplitTransferDirection.ChestToPlayer)
+        {
+            if (activeChest != null)
+            {
+                return activeChest.GetTakeCapacity(playerInventory, chestSlot, playerSlot);
+            }
+
+            if (chestSlot < 0 || chestSlot >= GetActiveSlotCount())
+            {
+                return 0;
+            }
+
+            ItemType? chestItemType = GetActiveSlotItemType(chestSlot);
+            int chestAmount = GetActiveSlotAmount(chestSlot);
+            if (chestItemType == null || chestAmount <= 0)
+            {
+                return 0;
+            }
+
+            if (playerSlot < 0 || playerSlot >= playerInventory.TotalSlotCount)
+            {
+                return 0;
+            }
+
+            ItemType? targetItemType = playerInventory.GetSlotItemType(playerSlot);
+            int targetAmount = playerInventory.GetSlotAmount(playerSlot);
+            if (targetItemType != null && targetItemType.Value != chestItemType.Value)
+            {
+                return 0;
+            }
+
+            return Mathf.Clamp(playerInventory.MaxStackPerSlot - targetAmount, 0, chestAmount);
+        }
+
+        return 0;
+    }
+
+    private int GetSplitSourceAmount(SplitTransferDirection direction, int playerSlot, int chestSlot)
+    {
+        if (direction == SplitTransferDirection.PlayerToChest)
+        {
+            return playerInventory != null ? playerInventory.GetSlotAmount(playerSlot) : 0;
+        }
+
+        return direction == SplitTransferDirection.ChestToPlayer ? GetActiveSlotAmount(chestSlot) : 0;
+    }
+
+    private ItemType? GetSplitSourceItemType(SplitTransferDirection direction, int playerSlot, int chestSlot)
+    {
+        if (direction == SplitTransferDirection.PlayerToChest)
+        {
+            return playerInventory != null ? playerInventory.GetSlotItemType(playerSlot) : null;
+        }
+
+        return direction == SplitTransferDirection.ChestToPlayer ? GetActiveSlotItemType(chestSlot) : null;
+    }
+
     private Sprite GetSlotSprite(StorageChestSlotUI slot)
     {
         ItemType? itemType = slot.Kind == StorageChestSlotKind.PlayerInventory
             ? playerInventory?.GetSlotItemType(slot.SlotIndex)
             : GetActiveSlotItemType(slot.SlotIndex);
         return itemType != null && iconDatabase != null ? iconDatabase.GetIcon(itemType.Value) : null;
+    }
+
+    private bool TryOpenSplitDialog(SplitTransferDirection direction, int playerSlot, int chestSlot)
+    {
+        int maxAmount = GetSplitMaxAmount(direction, playerSlot, chestSlot);
+        if (maxAmount < 1)
+        {
+            return false;
+        }
+
+        ItemType? sourceItemType = GetSplitSourceItemType(direction, playerSlot, chestSlot);
+        if (sourceItemType == null)
+        {
+            return false;
+        }
+
+        int sourceAmount = GetSplitSourceAmount(direction, playerSlot, chestSlot);
+        if (sourceAmount <= 0)
+        {
+            return false;
+        }
+
+        pendingSplitTransfer = new SplitTransfer
+        {
+            Direction = direction,
+            PlayerSlot = playerSlot,
+            ChestSlot = chestSlot,
+            MaxAmount = maxAmount,
+            SourceAmount = sourceAmount,
+            SourceItemType = sourceItemType.Value
+        };
+
+        EnsureSplitDialog();
+        if (splitDialogRoot == null)
+        {
+            pendingSplitTransfer = default;
+            return false;
+        }
+
+        int defaultAmount = Mathf.Clamp(Mathf.CeilToInt(sourceAmount * 0.5f), 1, maxAmount);
+        splitDialogTitle.text = direction == SplitTransferDirection.PlayerToChest ? "Move to Chest" : "Take from Chest";
+        if (splitDialogInfoLabel != null)
+        {
+            splitDialogInfoLabel.text = string.Format("{0} - Max {1}", sourceItemType.Value, maxAmount);
+        }
+
+        SetSplitQuantity(defaultAmount);
+        splitDialogRoot.gameObject.SetActive(true);
+        splitDialogRoot.SetAsLastSibling();
+        return true;
+    }
+
+    private void EnsureSplitDialog()
+    {
+        if (splitDialogRoot != null || targetCanvas == null)
+        {
+            return;
+        }
+
+        GameObject dialogObject = new GameObject("Split Quantity Dialog", typeof(RectTransform), typeof(Image));
+        splitDialogRoot = dialogObject.GetComponent<RectTransform>();
+        splitDialogRoot.SetParent(targetCanvas.transform, false);
+        splitDialogRoot.anchorMin = new Vector2(0.5f, 0.5f);
+        splitDialogRoot.anchorMax = new Vector2(0.5f, 0.5f);
+        splitDialogRoot.pivot = new Vector2(0.5f, 0.5f);
+        splitDialogRoot.sizeDelta = new Vector2(360f, 230f);
+        splitDialogRoot.anchoredPosition = Vector2.zero;
+        dialogObject.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.88f);
+
+        splitDialogTitle = CreateLabel("Split Title", splitDialogRoot, 22f, FontStyles.Bold, new Color(1f, 0.85f, 0.4f, 1f), TextAlignmentOptions.Center);
+        splitDialogTitle.rectTransform.anchorMin = new Vector2(0f, 1f);
+        splitDialogTitle.rectTransform.anchorMax = new Vector2(1f, 1f);
+        splitDialogTitle.rectTransform.pivot = new Vector2(0.5f, 1f);
+        splitDialogTitle.rectTransform.anchoredPosition = new Vector2(0f, -14f);
+        splitDialogTitle.rectTransform.sizeDelta = new Vector2(-24f, 30f);
+
+        splitDialogInfoLabel = CreateLabel("Split Info", splitDialogRoot, 16f, FontStyles.Normal, Color.white, TextAlignmentOptions.Center);
+        splitDialogInfoLabel.rectTransform.anchorMin = new Vector2(0f, 1f);
+        splitDialogInfoLabel.rectTransform.anchorMax = new Vector2(1f, 1f);
+        splitDialogInfoLabel.rectTransform.pivot = new Vector2(0.5f, 1f);
+        splitDialogInfoLabel.rectTransform.anchoredPosition = new Vector2(0f, -42f);
+        splitDialogInfoLabel.rectTransform.sizeDelta = new Vector2(-24f, 24f);
+
+        GameObject inputObject = new GameObject("Quantity Input", typeof(RectTransform), typeof(Image), typeof(TMP_InputField));
+        RectTransform inputRect = inputObject.GetComponent<RectTransform>();
+        inputRect.SetParent(splitDialogRoot, false);
+        inputRect.anchorMin = new Vector2(0.5f, 1f);
+        inputRect.anchorMax = new Vector2(0.5f, 1f);
+        inputRect.pivot = new Vector2(0.5f, 1f);
+        inputRect.anchoredPosition = new Vector2(0f, -72f);
+        inputRect.sizeDelta = new Vector2(140f, 42f);
+        inputObject.GetComponent<Image>().color = new Color(0.12f, 0.12f, 0.12f, 1f);
+        splitQuantityInput = inputObject.GetComponent<TMP_InputField>();
+        splitQuantityInput.contentType = TMP_InputField.ContentType.IntegerNumber;
+
+        TextMeshProUGUI inputText = CreateLabel("Text", inputRect, 22f, FontStyles.Bold, Color.white, TextAlignmentOptions.Center);
+        inputText.rectTransform.anchorMin = Vector2.zero;
+        inputText.rectTransform.anchorMax = Vector2.one;
+        inputText.rectTransform.offsetMin = new Vector2(8f, 2f);
+        inputText.rectTransform.offsetMax = new Vector2(-8f, -2f);
+        splitQuantityInput.textComponent = inputText;
+
+        splitMinusButton = CreateButton("Minus", splitDialogRoot, new Vector2(-120f, -112f), "-", () => AdjustSplitQuantity(-1));
+        splitPlusButton = CreateButton("Plus", splitDialogRoot, new Vector2(120f, -112f), "+", () => AdjustSplitQuantity(1));
+        splitHalfButton = CreateButton("Half", splitDialogRoot, new Vector2(-56f, -112f), "Half", () => SetSplitQuantity(Mathf.CeilToInt(pendingSplitTransfer.MaxAmount * 0.5f)));
+        splitMaxButton = CreateButton("Max", splitDialogRoot, new Vector2(56f, -112f), "Max", () => SetSplitQuantity(pendingSplitTransfer.MaxAmount));
+        splitCancelButton = CreateButton("Cancel", splitDialogRoot, new Vector2(-78f, -170f), "Cancel", CancelSplitDialog);
+        splitConfirmButton = CreateButton("Confirm", splitDialogRoot, new Vector2(78f, -170f), "Confirm", ConfirmSplitDialog);
+
+        ResizeDialogButton(splitMinusButton, 48f, 36f);
+        ResizeDialogButton(splitPlusButton, 48f, 36f);
+        ResizeDialogButton(splitHalfButton, 86f, 36f);
+        ResizeDialogButton(splitMaxButton, 86f, 36f);
+        ResizeDialogButton(splitCancelButton, 120f, 38f);
+        ResizeDialogButton(splitConfirmButton, 120f, 38f);
+        splitDialogRoot.gameObject.SetActive(false);
+    }
+
+    private void ResizeDialogButton(Button button, float width, float height)
+    {
+        if (button == null)
+        {
+            return;
+        }
+
+        RectTransform rect = button.GetComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0.5f, 1f);
+        rect.anchorMax = new Vector2(0.5f, 1f);
+        rect.pivot = new Vector2(0.5f, 1f);
+        rect.sizeDelta = new Vector2(width, height);
+    }
+
+    private void AdjustSplitQuantity(int delta)
+    {
+        SetSplitQuantity(GetSplitQuantityInputValue() + delta);
+    }
+
+    private void SetSplitQuantity(int value)
+    {
+        if (splitQuantityInput == null)
+        {
+            return;
+        }
+
+        int clamped = Mathf.Clamp(value, 1, Mathf.Max(1, pendingSplitTransfer.MaxAmount));
+        splitQuantityInput.SetTextWithoutNotify(clamped.ToString());
+    }
+
+    private int GetSplitQuantityInputValue()
+    {
+        if (splitQuantityInput == null || !int.TryParse(splitQuantityInput.text, out int value))
+        {
+            return 1;
+        }
+
+        return value;
+    }
+
+    private void CancelSplitDialog()
+    {
+        HideSplitDialog();
+    }
+
+    private void ConfirmSplitDialog()
+    {
+        ItemType? currentSourceItemType = GetSplitSourceItemType(pendingSplitTransfer.Direction, pendingSplitTransfer.PlayerSlot, pendingSplitTransfer.ChestSlot);
+        int currentSourceAmount = GetSplitSourceAmount(pendingSplitTransfer.Direction, pendingSplitTransfer.PlayerSlot, pendingSplitTransfer.ChestSlot);
+        if (currentSourceItemType == null
+            || currentSourceItemType.Value != pendingSplitTransfer.SourceItemType
+            || currentSourceAmount < 1
+            || currentSourceAmount != pendingSplitTransfer.SourceAmount)
+        {
+            HideSplitDialog();
+            Refresh();
+            return;
+        }
+
+        int maxAmount = GetSplitMaxAmount(pendingSplitTransfer.Direction, pendingSplitTransfer.PlayerSlot, pendingSplitTransfer.ChestSlot);
+        if (maxAmount < 1 || maxAmount != pendingSplitTransfer.MaxAmount)
+        {
+            HideSplitDialog();
+            Refresh();
+            return;
+        }
+
+        int amount = Mathf.Clamp(GetSplitQuantityInputValue(), 1, maxAmount);
+        if (amount <= 0)
+        {
+            HideSplitDialog();
+            return;
+        }
+
+        if (pendingSplitTransfer.Direction == SplitTransferDirection.PlayerToChest)
+        {
+            DepositPlayerSlotToChest(pendingSplitTransfer.PlayerSlot, pendingSplitTransfer.ChestSlot, amount);
+        }
+        else if (pendingSplitTransfer.Direction == SplitTransferDirection.ChestToPlayer)
+        {
+            TakeChestSlotToPlayer(pendingSplitTransfer.ChestSlot, pendingSplitTransfer.PlayerSlot, amount);
+        }
+
+        HideSplitDialog();
+        Refresh();
+    }
+
+    private void HideSplitDialog()
+    {
+        if (splitDialogRoot != null)
+        {
+            splitDialogRoot.gameObject.SetActive(false);
+        }
+
+        pendingSplitTransfer = default;
     }
 
     private void SetVisible(bool visible)
@@ -835,6 +1380,8 @@ public class StorageChestUI : MonoBehaviour
             subscribedHotbar.OnSlotDragEnd -= OnHotbarDragEnd;
             subscribedHotbar.OnSlotDragStart += OnHotbarDragStart;
             subscribedHotbar.OnSlotDragEnd += OnHotbarDragEnd;
+            subscribedHotbar.OnSlotLongPressForSplit = OnHotbarLongPressForSplit;
+            subscribedHotbar.OnSlotPointerUpForSplit = OnHotbarPointerUpForSplit;
         }
     }
 
@@ -844,6 +1391,16 @@ public class StorageChestUI : MonoBehaviour
         {
             subscribedHotbar.OnSlotDragStart -= OnHotbarDragStart;
             subscribedHotbar.OnSlotDragEnd -= OnHotbarDragEnd;
+            if (subscribedHotbar.OnSlotLongPressForSplit == OnHotbarLongPressForSplit)
+            {
+                subscribedHotbar.OnSlotLongPressForSplit = null;
+            }
+
+            if (subscribedHotbar.OnSlotPointerUpForSplit == OnHotbarPointerUpForSplit)
+            {
+                subscribedHotbar.OnSlotPointerUpForSplit = null;
+            }
+
             subscribedHotbar = null;
         }
     }

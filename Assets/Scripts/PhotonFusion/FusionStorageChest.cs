@@ -34,6 +34,7 @@ public class FusionStorageChest : NetworkBehaviour, IStateAuthorityChanged
         public int PlayerSlot;
         public int ChestSlot;
         public int PreferredPlayerSlot;
+        public int Amount;
     }
 
     public string ChestName => string.IsNullOrWhiteSpace(chestName) ? "Storage Chest" : chestName;
@@ -137,7 +138,12 @@ public class FusionStorageChest : NetworkBehaviour, IStateAuthorityChanged
 
     public bool RequestTakeFromChest(NetworkObject playerObject, int chestSlot, int preferredPlayerSlot)
     {
-        if (!CanSendTransaction(playerObject))
+        return RequestTakeFromChest(playerObject, chestSlot, preferredPlayerSlot, int.MaxValue);
+    }
+
+    public bool RequestTakeFromChest(NetworkObject playerObject, int chestSlot, int preferredPlayerSlot, int amount)
+    {
+        if (!CanSendTransaction(playerObject) || amount <= 0)
         {
             return false;
         }
@@ -149,18 +155,24 @@ public class FusionStorageChest : NetworkBehaviour, IStateAuthorityChanged
                 Type = PendingTransactionType.Take,
                 PlayerObject = playerObject,
                 ChestSlot = chestSlot,
-                PreferredPlayerSlot = preferredPlayerSlot
+                PreferredPlayerSlot = preferredPlayerSlot,
+                Amount = amount
             });
             return true;
         }
 
-        RPC_TakeFromChest(playerObject, chestSlot, preferredPlayerSlot);
+        RPC_TakeFromChest(playerObject, chestSlot, preferredPlayerSlot, amount);
         return true;
     }
 
     public bool RequestDepositToChest(NetworkObject playerObject, int playerSlot, int chestSlot)
     {
-        if (!CanSendTransaction(playerObject))
+        return RequestDepositToChest(playerObject, playerSlot, chestSlot, int.MaxValue);
+    }
+
+    public bool RequestDepositToChest(NetworkObject playerObject, int playerSlot, int chestSlot, int amount)
+    {
+        if (!CanSendTransaction(playerObject) || amount <= 0)
         {
             return false;
         }
@@ -172,12 +184,13 @@ public class FusionStorageChest : NetworkBehaviour, IStateAuthorityChanged
                 Type = PendingTransactionType.Deposit,
                 PlayerObject = playerObject,
                 PlayerSlot = playerSlot,
-                ChestSlot = chestSlot
+                ChestSlot = chestSlot,
+                Amount = amount
             });
             return true;
         }
 
-        RPC_DepositToChest(playerObject, playerSlot, chestSlot);
+        RPC_DepositToChest(playerObject, playerSlot, chestSlot, amount);
         return true;
     }
 
@@ -189,10 +202,16 @@ public class FusionStorageChest : NetworkBehaviour, IStateAuthorityChanged
         }
     }
 
-    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
     public void RPC_TakeFromChest(NetworkObject playerObject, int chestSlot, int preferredPlayerSlot, RpcInfo info = default)
     {
-        if (!IsAuthorizedForPlayer(playerObject, info) ||
+        RPC_TakeFromChest(playerObject, chestSlot, preferredPlayerSlot, int.MaxValue, info);
+    }
+
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    public void RPC_TakeFromChest(NetworkObject playerObject, int chestSlot, int preferredPlayerSlot, int requestedAmount, RpcInfo info = default)
+    {
+        if (requestedAmount <= 0 ||
+            !IsAuthorizedForPlayer(playerObject, info) ||
             !TryGetPlayerInventory(playerObject, out PlayerInventory playerInventory) ||
             !TryReadSlot(chestSlot, out ItemType itemType, out int chestAmount))
         {
@@ -204,14 +223,38 @@ public class FusionStorageChest : NetworkBehaviour, IStateAuthorityChanged
             return;
         }
 
-        bool includeHotbar = playerInventory.IsHotbarSlot(preferredPlayerSlot);
-        int targetPlayerSlot = playerInventory.FindPreferredInventorySlot(itemType, preferredPlayerSlot, includeHotbar);
+        int targetPlayerSlot = preferredPlayerSlot;
+        int targetRemainingCapacity = int.MaxValue;
+        if (requestedAmount == int.MaxValue)
+        {
+            bool includeHotbar = playerInventory.IsHotbarSlot(preferredPlayerSlot);
+            targetPlayerSlot = playerInventory.FindPreferredInventorySlot(itemType, preferredPlayerSlot, includeHotbar);
+        }
+
         if (targetPlayerSlot < 0)
         {
             return;
         }
 
-        int acceptedAmount = playerInventory.AddItemToSlot(itemType, chestAmount, targetPlayerSlot);
+        if (requestedAmount != int.MaxValue)
+        {
+            if (targetPlayerSlot >= playerInventory.TotalSlotCount)
+            {
+                return;
+            }
+
+            ItemType? targetItemType = playerInventory.GetSlotItemType(targetPlayerSlot);
+            int targetAmount = playerInventory.GetSlotAmount(targetPlayerSlot);
+            if ((targetItemType != null && targetItemType.Value != itemType) || targetAmount >= playerInventory.MaxStackPerSlot)
+            {
+                return;
+            }
+
+            targetRemainingCapacity = playerInventory.MaxStackPerSlot - targetAmount;
+        }
+
+        int amountToMove = Mathf.Min(chestAmount, requestedAmount, targetRemainingCapacity);
+        int acceptedAmount = playerInventory.AddItemToSlot(itemType, amountToMove, targetPlayerSlot);
         if (acceptedAmount <= 0)
         {
             return;
@@ -227,10 +270,15 @@ public class FusionStorageChest : NetworkBehaviour, IStateAuthorityChanged
         ChestChanged?.Invoke();
     }
 
-    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
     public void RPC_DepositToChest(NetworkObject playerObject, int playerSlot, int chestSlot, RpcInfo info = default)
     {
-        if (!IsAuthorizedForPlayer(playerObject, info) || !TryGetPlayerInventory(playerObject, out PlayerInventory playerInventory) || !IsValidSlot(chestSlot))
+        RPC_DepositToChest(playerObject, playerSlot, chestSlot, int.MaxValue, info);
+    }
+
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    public void RPC_DepositToChest(NetworkObject playerObject, int playerSlot, int chestSlot, int requestedAmount, RpcInfo info = default)
+    {
+        if (requestedAmount <= 0 || !IsAuthorizedForPlayer(playerObject, info) || !TryGetPlayerInventory(playerObject, out PlayerInventory playerInventory) || !IsValidSlot(chestSlot))
         {
             return;
         }
@@ -252,7 +300,7 @@ public class FusionStorageChest : NetworkBehaviour, IStateAuthorityChanged
             return;
         }
 
-        int transferableAmount = Mathf.Min(playerInventory.GetSlotAmount(playerSlot), MaxStackPerSlot - currentChestAmount);
+        int transferableAmount = Mathf.Min(playerInventory.GetSlotAmount(playerSlot), requestedAmount, MaxStackPerSlot - currentChestAmount);
         if (transferableAmount <= 0)
         {
             return;
@@ -349,13 +397,13 @@ public class FusionStorageChest : NetworkBehaviour, IStateAuthorityChanged
 
         if (transaction.Type == PendingTransactionType.Take)
         {
-            RPC_TakeFromChest(transaction.PlayerObject, transaction.ChestSlot, transaction.PreferredPlayerSlot);
+            RPC_TakeFromChest(transaction.PlayerObject, transaction.ChestSlot, transaction.PreferredPlayerSlot, transaction.Amount);
             return;
         }
 
         if (transaction.Type == PendingTransactionType.Deposit)
         {
-            RPC_DepositToChest(transaction.PlayerObject, transaction.PlayerSlot, transaction.ChestSlot);
+            RPC_DepositToChest(transaction.PlayerObject, transaction.PlayerSlot, transaction.ChestSlot, transaction.Amount);
         }
     }
 
