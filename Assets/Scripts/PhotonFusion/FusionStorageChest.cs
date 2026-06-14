@@ -154,7 +154,8 @@ public class FusionStorageChest : NetworkBehaviour
             return;
         }
 
-        int targetPlayerSlot = playerInventory.FindPreferredInventorySlot(itemType, preferredPlayerSlot, false);
+        bool includeHotbar = playerInventory.IsHotbarSlot(preferredPlayerSlot);
+        int targetPlayerSlot = playerInventory.FindPreferredInventorySlot(itemType, preferredPlayerSlot, includeHotbar);
         if (targetPlayerSlot < 0)
         {
             return;

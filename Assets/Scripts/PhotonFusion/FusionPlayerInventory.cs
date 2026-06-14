@@ -15,6 +15,7 @@ public class FusionPlayerInventory : NetworkBehaviour
     }
 
     [SerializeField] private PlayerInventory inventory;
+    [SerializeField] private PlayerSurvivalSystem survivalSystem;
     [SerializeField] private float pickupDistance = 4f;
     [SerializeField] private DropPrefabBinding[] dropPrefabs;
     [SerializeField] private NetworkPrefabRef fallbackDropPrefab;
@@ -54,6 +55,11 @@ public class FusionPlayerInventory : NetworkBehaviour
 
         item.itemType = fusionItem.ItemType;
         item.amount = fusionItem.ClampedAmount;
+        if (!CanSpawnFusionDrop(item.itemType))
+        {
+            CacheSceneDropTemplate(item);
+        }
+
         int requestedAmount = fusionItem.ClampedAmount;
         int acceptedAmount = inventory.AddItem(item);
 
@@ -165,6 +171,23 @@ public class FusionPlayerInventory : NetworkBehaviour
         return true;
     }
 
+    public bool RequestConsumeFromSlot(int slotIndex)
+    {
+        if (!IsNetworkReady() || !HasFusionInputAuthority() || inventory == null)
+        {
+            return false;
+        }
+
+        ItemType? itemType = inventory.GetSlotItemType(slotIndex);
+        if (itemType == null || !ConsumableItemCatalog.TryGetEffect(itemType.Value, out _))
+        {
+            return false;
+        }
+
+        RPC_RequestConsume(slotIndex, (int)itemType.Value);
+        return true;
+    }
+
     public bool SpawnTreeDrops(TreeChoppable tree)
     {
         if (!IsNetworkReady() || !HasFusionInputAuthority() || tree == null || !tree.HasDropPrefab)
@@ -251,6 +274,12 @@ public class FusionPlayerInventory : NetworkBehaviour
     private void RPC_ConfirmPickupDespawn(NetworkObject itemObject)
     {
         if (itemObject == null || Runner == null) return;
+
+        PickableItem item = itemObject.GetComponent<PickableItem>();
+        if (item != null && !CanSpawnFusionDrop(item.itemType))
+        {
+            CacheSceneDropTemplate(item);
+        }
         
         if (itemObject.HasStateAuthority || (Runner.IsSharedModeMasterClient && itemObject.StateAuthority == PlayerRef.None))
         {
@@ -419,7 +448,11 @@ public class FusionPlayerInventory : NetworkBehaviour
         PickableItem template = Instantiate(sourceItem);
         template.name = sourceItem.itemType + " FusionSceneDropTemplate";
         template.gameObject.SetActive(false);
-        DontDestroyOnLoad(template.gameObject);
+        if (Application.isPlaying)
+        {
+            DontDestroyOnLoad(template.gameObject);
+        }
+
         SceneDropTemplates[sourceItem.itemType] = template;
     }
 
@@ -533,11 +566,43 @@ public class FusionPlayerInventory : NetworkBehaviour
         }
     }
 
+    [Rpc(RpcSources.StateAuthority, RpcTargets.StateAuthority)]
+    private void RPC_RequestConsume(int slotIndex, int expectedItemTypeValue)
+    {
+        ResolveReferences();
+
+        if (inventory == null || survivalSystem == null || !System.Enum.IsDefined(typeof(ItemType), expectedItemTypeValue))
+        {
+            return;
+        }
+
+        ItemType itemType = (ItemType)expectedItemTypeValue;
+        if (inventory.GetSlotItemType(slotIndex) != itemType || !ConsumableItemCatalog.TryGetEffect(itemType, out _))
+        {
+            return;
+        }
+
+        if (!inventory.RemoveItemFromSlot(slotIndex, 1, out ItemType removedItemType))
+        {
+            return;
+        }
+
+        if (!ConsumableItemCatalog.TryApply(survivalSystem, removedItemType))
+        {
+            inventory.AddItemToSlot(removedItemType, 1, slotIndex);
+        }
+    }
+
     private void ResolveReferences()
     {
         if (inventory == null)
         {
             inventory = GetComponent<PlayerInventory>();
+        }
+
+        if (survivalSystem == null)
+        {
+            survivalSystem = GetComponent<PlayerSurvivalSystem>();
         }
 
         if (dropOrigin == null)

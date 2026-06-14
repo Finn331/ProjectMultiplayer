@@ -13,8 +13,8 @@ public class FusionPickableItem : NetworkBehaviour
 
     private PickableItem pickableItem;
 
-    public ItemType ItemType => IsValidItemTypeValue(ItemTypeValue) ? (ItemType)ItemTypeValue : defaultItemType;
-    public int ClampedAmount => Mathf.Max(1, Amount);
+    public ItemType ItemType => IsSpawnedNetworkObject() && IsInitialized && IsValidItemTypeValue(ItemTypeValue) ? (ItemType)ItemTypeValue : defaultItemType;
+    public int ClampedAmount => IsSpawnedNetworkObject() && Amount > 0 ? Mathf.Max(1, Amount) : Mathf.Max(1, defaultAmount);
 
     public override void Spawned()
     {
@@ -59,6 +59,11 @@ public class FusionPickableItem : NetworkBehaviour
     private bool HasFusionStateAuthority()
     {
         return Object != null && Object.HasStateAuthority;
+    }
+
+    private bool IsSpawnedNetworkObject()
+    {
+        return Object != null && Object.IsValid;
     }
 
     private void ResolveReferences()

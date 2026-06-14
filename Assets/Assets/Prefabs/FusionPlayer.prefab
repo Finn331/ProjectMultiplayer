@@ -43,8 +43,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 70b342d8ce5c2fd48b8fa3147d48d1d1, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
+  m_Name:
+  m_EditorClassIdentifier:
   m_Weight: 1
   m_Effectors: []
 --- !u!1 &2728737036619645707
@@ -203,6 +203,7 @@ GameObject:
   - component: {fileID: 2143775898492630770}
   - component: {fileID: 7103980233483436989}
   - component: {fileID: 2418521628232560225}
+  - component: {fileID: 8235419706021330797}
   m_Layer: 0
   m_Name: FusionPlayer
   m_TagString: Untagged
@@ -488,6 +489,7 @@ MonoBehaviour:
   animator: {fileID: 1638545557662441806}
   characterController: {fileID: 7770322371793891630}
   movementController: {fileID: 8542162098600954690}
+  fusionMovementController: {fileID: 0}
   injuredAnimationController: {fileID: 9217926100670740843}
   speedParam: Speed
   verticalVelocityParam: VerticalVelocity
@@ -758,7 +760,7 @@ MonoBehaviour:
   swipeThreshold: 50
   iconDatabase: {fileID: 11400000, guid: 2690faf9946f70d41b1c280c162af876, type: 2}
   slotCounts: []
-  enableHotbarDrag: 0
+  enableHotbarDrag: 1
 --- !u!114 &5881460033544063950
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -801,15 +803,6 @@ MonoBehaviour:
   treeMeleeAssistRadius: 1.9
   treeMeleeAssistForwardDot: -0.2
   logHitDebug: 0
-  serverTreeResolveRadius: 3.5
-  serverHitValidationDistance: 8
-  clientTreeSyncResolveRadius: 3.5
-  logServerTreeHitDebug: 0
-  enforceServerHitCooldown: 1
-  serverPlayerHitCooldownSeconds: 0.35
-  serverTreeHitCooldownSeconds: 0.28
-  serverMaxPlayerDamagePerHit: 35
-  serverMaxTreeDamagePerHit: 5
   treeDamagePerHit: 1
   playerDamagePerHit: 10
   heavySwingStateName: Standing Melee Attack Downward
@@ -937,6 +930,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   inventory: {fileID: 0}
+  survivalSystem: {fileID: 0}
   pickupDistance: 4
   dropPrefabs:
   - itemType: 0
@@ -1006,12 +1000,16 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   animator: {fileID: 0}
   controller: {fileID: 0}
+  movementController: {fileID: 0}
   speedParam: Speed
   verticalVelocityParam: VerticalVelocity
   isGroundedParam: IsGrounded
+  isRunningParam: IsRunning
   moveXParam: MoveX
   moveYParam: MoveY
   floatSyncThreshold: 0.01
+  fallbackMaxMoveSpeed: 5
+  runInputThreshold: 0.75
 --- !u!114 &7103980233483436989
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1046,6 +1044,28 @@ MonoBehaviour:
   hotbarUI: {fileID: 0}
   networkBridge: {fileID: 0}
   maxSlots: 12
+--- !u!114 &8235419706021330797
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4472293491055181419}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 09e42d2e126d2044cafed59d7cba9277, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  hotbarUI: {fileID: 0}
+  inventory: {fileID: 0}
+  fusionInventory: {fileID: 0}
+  networkInventoryBridge: {fileID: 0}
+  survivalSystem: {fileID: 0}
+  eatButton: {fileID: 0}
+  autoBindEatButton: 1
+  eatButtonNameContains: eat
+  hideWhenUnavailable: 1
+  consumeDebounceSeconds: 0.1
 --- !u!1 &7516938604735521551
 GameObject:
   m_ObjectHideFlags: 0

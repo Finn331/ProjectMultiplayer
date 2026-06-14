@@ -1,61 +1,79 @@
-using System.Text;
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 public class StorageChestUI : MonoBehaviour
 {
     [Header("References")]
     [SerializeField] private PlayerInventory playerInventory;
-    [SerializeField] private PlayerInventoryUI playerInventoryUI;
+    [SerializeField] private MobileHotbarUI hotbarUI;
     [SerializeField] private Canvas targetCanvas;
     [SerializeField] private RectTransform panelRoot;
+    [SerializeField] private RectTransform playerSlotsRoot;
+    [SerializeField] private RectTransform chestSlotsRoot;
     [SerializeField] private TextMeshProUGUI titleText;
-    [SerializeField] private TextMeshProUGUI chestItemsText;
-    [SerializeField] private Button previousSlotButton;
-    [SerializeField] private Button nextSlotButton;
-    [SerializeField] private Button storeButton;
-    [SerializeField] private Button takeButton;
     [SerializeField] private Button closeButton;
+    [SerializeField] private ItemIconDatabase iconDatabase;
 
     [Header("Behavior")]
     [SerializeField] private float autoCloseDistancePadding = 0.35f;
 
-    private readonly StringBuilder builder = new StringBuilder(256);
+    [Header("Layout")]
+    [SerializeField] private Vector2 panelSize = new Vector2(760f, 440f);
+    [SerializeField] private Vector2 slotSize = new Vector2(58f, 58f);
+    [SerializeField] private float slotSpacing = 8f;
+
+    [Header("Style")]
+    [SerializeField] private Color panelColor = new Color(0f, 0f, 0f, 0.72f);
+    [SerializeField] private Color slotColor = new Color(0.16f, 0.16f, 0.16f, 0.95f);
+    [SerializeField] private Color slotHighlightColor = new Color(0.95f, 0.78f, 0.25f, 1f);
+
+    private readonly List<StorageChestSlotUI> playerSlots = new List<StorageChestSlotUI>();
+    private readonly List<StorageChestSlotUI> chestSlots = new List<StorageChestSlotUI>();
+    private readonly List<GameObject> generatedPanelChildren = new List<GameObject>();
     private StorageChest activeChest;
     private FusionStorageChest activeFusionChest;
-    private int selectedChestSlotIndex;
+    private StorageChestSlotUI dragSourceSlot;
+    private GameObject dragIconObject;
+    private Image dragIconImage;
+    private PlayerInventory subscribedInventory;
+    private MobileHotbarUI subscribedHotbar;
+    private int hotbarDragSourceGlobalSlot = -1;
+    private ItemType? hotbarDragItemType;
+    private bool dragDropHandled;
+    private bool createdPanelRoot;
     private bool initialized;
 
     private void Awake()
     {
-        if (playerInventory == null)
-        {
-            playerInventory = GetComponent<PlayerInventory>();
-        }
-
-        if (playerInventoryUI == null)
-        {
-            playerInventoryUI = GetComponent<PlayerInventoryUI>();
-        }
+        ResolveReferences();
     }
 
     private void OnEnable()
     {
-        this.EnsureUI();
-        this.SetVisible(false);
+        EnsureUI();
+        BindPlayerInventory();
+        BindHotbarDrag();
+        SetVisible(false);
     }
 
     private void OnDisable()
     {
-        this.UnbindChest();
+        CleanupRuntimeUI();
+    }
+
+    private void OnDestroy()
+    {
+        CleanupRuntimeUI();
     }
 
     private void Update()
     {
-        if (!this.ShouldKeepChestOpen())
+        if (!ShouldKeepChestOpen())
         {
-            this.CloseChest();
+            CloseChest();
         }
     }
 
@@ -66,17 +84,17 @@ public class StorageChestUI : MonoBehaviour
             return;
         }
 
-        this.EnsureUI();
+        EnsureUI();
         if (activeChest != chest)
         {
-            this.UnbindChest();
+            UnbindChest();
             activeChest = chest;
-            activeChest.ChestChanged += this.Refresh;
+            activeChest.ChestChanged += Refresh;
+            RebuildChestSlots();
         }
 
-        selectedChestSlotIndex = Mathf.Clamp(selectedChestSlotIndex, 0, chest.SlotCount - 1);
-        this.SetVisible(true);
-        this.Refresh();
+        SetVisible(true);
+        Refresh();
     }
 
     public void OpenChest(FusionStorageChest chest)
@@ -86,129 +104,154 @@ public class StorageChestUI : MonoBehaviour
             return;
         }
 
-        this.EnsureUI();
+        EnsureUI();
         if (activeFusionChest != chest)
         {
-            this.UnbindChest();
+            UnbindChest();
             activeFusionChest = chest;
-            activeFusionChest.ChestChanged += this.Refresh;
+            activeFusionChest.ChestChanged += Refresh;
+            RebuildChestSlots();
         }
 
-        selectedChestSlotIndex = Mathf.Clamp(selectedChestSlotIndex, 0, chest.Slots - 1);
-        this.SetVisible(true);
-        this.Refresh();
+        SetVisible(true);
+        Refresh();
     }
 
     public void CloseChest()
     {
-        this.UnbindChest();
-        this.SetVisible(false);
+        DestroyDragIcon();
+        UnbindChest();
+        SetVisible(false);
     }
 
-    public void SelectNextChestSlot()
+    public void BeginSlotDrag(StorageChestSlotUI slot, PointerEventData eventData)
     {
-        int slotCount = this.GetActiveSlotCount();
-        if (slotCount <= 0)
+        if (slot == null || !SlotHasItem(slot))
         {
             return;
         }
 
-        selectedChestSlotIndex = (selectedChestSlotIndex + 1) % slotCount;
-        this.Refresh();
+        dragSourceSlot = slot;
+        slot.SetHighlight(true, slotColor, slotHighlightColor);
+        CreateDragIcon(GetSlotSprite(slot));
+        UpdateSlotDrag(eventData);
     }
 
-    public void SelectPreviousChestSlot()
+    public void UpdateSlotDrag(PointerEventData eventData)
     {
-        int slotCount = this.GetActiveSlotCount();
-        if (slotCount <= 0)
+        if (dragIconObject != null && eventData != null)
         {
-            return;
+            dragIconObject.transform.position = eventData.position;
         }
-
-        selectedChestSlotIndex = (selectedChestSlotIndex - 1 + slotCount) % slotCount;
-        this.Refresh();
     }
 
-    public void StoreSelectedInventoryItem()
+    public void EndSlotDrag(StorageChestSlotUI slot, PointerEventData eventData)
     {
-        if ((activeChest == null && activeFusionChest == null) || playerInventoryUI == null || playerInventory == null)
+        if (!dragDropHandled)
         {
-            return;
-        }
-
-        int selectedPlayerSlot = playerInventoryUI.GetSelectedInventorySlotIndex();
-        if (selectedPlayerSlot < 0)
-        {
-            return;
-        }
-
-        if (activeFusionChest != null)
-        {
-            Fusion.NetworkObject playerObject = playerInventory.GetComponent<Fusion.NetworkObject>();
-            activeFusionChest.RequestDepositToChest(playerObject, selectedPlayerSlot, selectedChestSlotIndex);
-            return;
-        }
-
-        activeChest.TryRequestStore(playerInventory, selectedPlayerSlot, selectedChestSlotIndex);
-    }
-
-    public void TakeSelectedChestItem()
-    {
-        if ((activeChest == null && activeFusionChest == null) || playerInventory == null)
-        {
-            return;
-        }
-
-        int preferredPlayerSlot = playerInventoryUI != null ? playerInventoryUI.GetSelectedInventorySlotIndex() : -1;
-        if (activeFusionChest != null)
-        {
-            Fusion.NetworkObject playerObject = playerInventory.GetComponent<Fusion.NetworkObject>();
-            activeFusionChest.RequestTakeFromChest(playerObject, selectedChestSlotIndex, preferredPlayerSlot);
-            return;
-        }
-
-        activeChest.TryRequestTake(playerInventory, selectedChestSlotIndex, preferredPlayerSlot);
-    }
-
-    private void Refresh()
-    {
-        if (!initialized || titleText == null || chestItemsText == null)
-        {
-            return;
-        }
-
-        if (activeChest == null && activeFusionChest == null)
-        {
-            titleText.text = "Storage Chest";
-            chestItemsText.text = "- Empty";
-            return;
-        }
-
-        int slotCount = this.GetActiveSlotCount();
-        titleText.text = this.GetActiveChestName() + " (" + this.GetActiveUsedSlotCount() + "/" + slotCount + ")";
-        builder.Clear();
-        for (int i = 0; i < slotCount; i++)
-        {
-            ItemType? itemType = this.GetActiveSlotItemType(i);
-            int amount = this.GetActiveSlotAmount(i);
-            builder.Append(i == selectedChestSlotIndex ? "> " : "  ");
-            builder.Append("[").Append(i + 1).Append("] ");
-            if (itemType == null || amount <= 0)
+            StorageChestSlotUI targetSlot = FindSlotUnderPointer(eventData);
+            if (targetSlot != null)
             {
-                builder.Append("Empty");
-            }
-            else
-            {
-                builder.Append(itemType.Value).Append(" x").Append(amount);
+                HandleSlotDrop(targetSlot);
             }
 
-            if (i < slotCount - 1)
+            if (!dragDropHandled && dragSourceSlot != null && dragSourceSlot.Kind == StorageChestSlotKind.Chest)
             {
-                builder.Append('\n');
+                int targetHotbarSlot = FindHotbarSlotUnderPointer(eventData);
+                if (targetHotbarSlot >= 0)
+                {
+                    TakeChestSlotToHotbar(dragSourceSlot.SlotIndex, targetHotbarSlot);
+                    dragDropHandled = true;
+                }
+            }
+
+            if (!dragDropHandled && dragSourceSlot != null && dragSourceSlot.Kind == StorageChestSlotKind.PlayerInventory)
+            {
+                int targetHotbarSlot = FindHotbarSlotUnderPointer(eventData);
+                if (targetHotbarSlot >= 0)
+                {
+                    MovePlayerSlotToHotbar(dragSourceSlot.SlotIndex, targetHotbarSlot);
+                    dragDropHandled = true;
+                }
             }
         }
 
-        chestItemsText.text = builder.ToString();
+        DestroyDragIcon();
+        if (dragSourceSlot != null)
+        {
+            dragSourceSlot.SetHighlight(false, slotColor, slotHighlightColor);
+        }
+
+        dragSourceSlot = null;
+        dragDropHandled = false;
+        Refresh();
+    }
+
+    public void HandleSlotDrop(StorageChestSlotUI targetSlot)
+    {
+        if (dragSourceSlot == null || targetSlot == null || dragSourceSlot == targetSlot)
+        {
+            return;
+        }
+
+        if (dragSourceSlot.Kind == StorageChestSlotKind.PlayerInventory && targetSlot.Kind == StorageChestSlotKind.Chest)
+        {
+            dragDropHandled = true;
+            DepositPlayerSlotToChest(dragSourceSlot.SlotIndex, targetSlot.SlotIndex);
+            return;
+        }
+
+        if (dragSourceSlot.Kind == StorageChestSlotKind.Chest && targetSlot.Kind == StorageChestSlotKind.PlayerInventory)
+        {
+            dragDropHandled = true;
+            TakeChestSlotToPlayer(dragSourceSlot.SlotIndex, targetSlot.SlotIndex);
+        }
+    }
+
+    private void ResolveReferences()
+    {
+        if (playerInventory == null)
+        {
+            playerInventory = GetComponent<PlayerInventory>();
+        }
+
+        if (iconDatabase == null)
+        {
+            iconDatabase = Resources.Load<ItemIconDatabase>("ItemIconDB");
+            if (iconDatabase == null)
+            {
+                ItemIconDatabase[] databases = Resources.FindObjectsOfTypeAll<ItemIconDatabase>();
+                if (databases != null && databases.Length > 0)
+                {
+                    iconDatabase = databases[0];
+                }
+            }
+        }
+
+        if (hotbarUI == null)
+        {
+            hotbarUI = GetComponent<MobileHotbarUI>();
+        }
+    }
+
+    private Canvas ResolveTargetCanvas()
+    {
+        Canvas[] canvases = Resources.FindObjectsOfTypeAll<Canvas>();
+        if (canvases == null)
+        {
+            return null;
+        }
+
+        for (int i = 0; i < canvases.Length; i++)
+        {
+            Canvas canvas = canvases[i];
+            if (canvas != null && canvas.gameObject.scene.IsValid())
+            {
+                return canvas;
+            }
+        }
+
+        return null;
     }
 
     private void EnsureUI()
@@ -218,9 +261,10 @@ public class StorageChestUI : MonoBehaviour
             return;
         }
 
+        ResolveReferences();
         if (targetCanvas == null)
         {
-            targetCanvas = FindObjectOfType<Canvas>(true);
+            targetCanvas = ResolveTargetCanvas();
         }
 
         if (targetCanvas == null)
@@ -230,39 +274,136 @@ public class StorageChestUI : MonoBehaviour
 
         if (panelRoot == null)
         {
-            GameObject panelObject = new GameObject("Storage Chest UI", typeof(RectTransform), typeof(Image));
-            panelRoot = panelObject.GetComponent<RectTransform>();
-            panelRoot.SetParent(targetCanvas.transform, false);
-            panelRoot.anchorMin = new Vector2(1f, 0.5f);
-            panelRoot.anchorMax = new Vector2(1f, 0.5f);
-            panelRoot.pivot = new Vector2(1f, 0.5f);
-            panelRoot.sizeDelta = new Vector2(360f, 420f);
-            panelRoot.anchoredPosition = new Vector2(-400f, 0f);
-            panelObject.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.7f);
+            panelRoot = CreatePanel(targetCanvas.transform as RectTransform);
+            createdPanelRoot = true;
         }
 
-        titleText = this.CreateLabel("Title", panelRoot, 26f, FontStyles.Bold, new Color(1f, 0.85f, 0.4f, 1f), TextAlignmentOptions.Center);
-        RectTransform titleRect = titleText.rectTransform;
-        titleRect.anchorMin = new Vector2(0f, 1f);
-        titleRect.anchorMax = new Vector2(1f, 1f);
-        titleRect.pivot = new Vector2(0.5f, 1f);
-        titleRect.anchoredPosition = new Vector2(0f, -12f);
-        titleRect.sizeDelta = new Vector2(-24f, 36f);
+        titleText = CreateLabel("Title", panelRoot, 24f, FontStyles.Bold, new Color(1f, 0.85f, 0.4f, 1f), TextAlignmentOptions.Center);
+        TrackGeneratedPanelChild(titleText.gameObject);
+        titleText.rectTransform.anchorMin = new Vector2(0f, 1f);
+        titleText.rectTransform.anchorMax = new Vector2(1f, 1f);
+        titleText.rectTransform.pivot = new Vector2(0.5f, 1f);
+        titleText.rectTransform.anchoredPosition = new Vector2(0f, -12f);
+        titleText.rectTransform.sizeDelta = new Vector2(-80f, 34f);
 
-        chestItemsText = this.CreateLabel("ChestItems", panelRoot, 22f, FontStyles.Normal, Color.white, TextAlignmentOptions.TopLeft);
-        RectTransform itemsRect = chestItemsText.rectTransform;
-        itemsRect.anchorMin = new Vector2(0f, 0f);
-        itemsRect.anchorMax = new Vector2(1f, 1f);
-        itemsRect.offsetMin = new Vector2(16f, 80f);
-        itemsRect.offsetMax = new Vector2(-16f, -56f);
+        closeButton = CreateButton("Close Chest Button", panelRoot, new Vector2(-28f, -14f), "X", CloseChest);
+        TrackGeneratedPanelChild(closeButton.gameObject);
+        RectTransform closeRect = closeButton.GetComponent<RectTransform>();
+        closeRect.anchorMin = new Vector2(1f, 1f);
+        closeRect.anchorMax = new Vector2(1f, 1f);
+        closeRect.pivot = new Vector2(1f, 1f);
+        closeRect.sizeDelta = new Vector2(44f, 34f);
 
-        previousSlotButton = this.CreateButton("Prev Chest Slot", panelRoot, new Vector2(-110f, 20f), "Prev", this.SelectPreviousChestSlot);
-        nextSlotButton = this.CreateButton("Next Chest Slot", panelRoot, new Vector2(110f, 20f), "Next", this.SelectNextChestSlot);
-        storeButton = this.CreateButton("Store Button", panelRoot, new Vector2(-110f, -32f), "Store", this.StoreSelectedInventoryItem);
-        takeButton = this.CreateButton("Take Button", panelRoot, new Vector2(0f, -32f), "Take", this.TakeSelectedChestItem);
-        closeButton = this.CreateButton("Close Chest Button", panelRoot, new Vector2(110f, -32f), "Close", this.CloseChest);
+        playerSlotsRoot = CreateSection("Inventory Slots", panelRoot, new Vector2(0f, 0f), new Vector2(0.5f, 1f), new Vector2(20f, 24f), new Vector2(-12f, -60f));
+        chestSlotsRoot = CreateSection("Chest Slots", panelRoot, new Vector2(0.5f, 0f), new Vector2(1f, 1f), new Vector2(12f, 24f), new Vector2(-20f, -60f));
+        TrackGeneratedPanelChild(playerSlotsRoot.gameObject);
+        TrackGeneratedPanelChild(chestSlotsRoot.gameObject);
 
+        BuildSlotGrids();
         initialized = true;
+        BindPlayerInventory();
+        BindHotbarDrag();
+    }
+
+    private RectTransform CreatePanel(RectTransform parent)
+    {
+        GameObject panelObject = new GameObject("Storage Chest UI", typeof(RectTransform), typeof(Image));
+        RectTransform rect = panelObject.GetComponent<RectTransform>();
+        rect.SetParent(parent, false);
+        rect.anchorMin = new Vector2(0.5f, 0.5f);
+        rect.anchorMax = new Vector2(0.5f, 0.5f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.sizeDelta = panelSize;
+        rect.anchoredPosition = Vector2.zero;
+        panelObject.GetComponent<Image>().color = panelColor;
+        return rect;
+    }
+
+    private RectTransform CreateSection(string name, RectTransform parent, Vector2 anchorMin, Vector2 anchorMax, Vector2 offsetMin, Vector2 offsetMax)
+    {
+        GameObject sectionObject = new GameObject(name, typeof(RectTransform));
+        RectTransform rect = sectionObject.GetComponent<RectTransform>();
+        rect.SetParent(parent, false);
+        rect.anchorMin = anchorMin;
+        rect.anchorMax = anchorMax;
+        rect.offsetMin = offsetMin;
+        rect.offsetMax = offsetMax;
+        return rect;
+    }
+
+    private void BuildSlotGrids()
+    {
+        playerSlots.Clear();
+        chestSlots.Clear();
+
+        int playerSlotCount = playerInventory != null ? playerInventory.InventorySlotCount : 12;
+        for (int i = 0; i < playerSlotCount; i++)
+        {
+            playerSlots.Add(CreateSlot(playerSlotsRoot, StorageChestSlotKind.PlayerInventory, i));
+        }
+
+        int chestSlotCount = Mathf.Max(1, GetActiveSlotCountFallback());
+        for (int i = 0; i < chestSlotCount; i++)
+        {
+            chestSlots.Add(CreateSlot(chestSlotsRoot, StorageChestSlotKind.Chest, i));
+        }
+    }
+
+    private int GetActiveSlotCountFallback()
+    {
+        if (activeFusionChest != null)
+        {
+            return activeFusionChest.Slots;
+        }
+
+        if (activeChest != null)
+        {
+            return activeChest.SlotCount;
+        }
+
+        return 12;
+    }
+
+    private StorageChestSlotUI CreateSlot(RectTransform parent, StorageChestSlotKind kind, int slotIndex)
+    {
+        GameObject slotObject = new GameObject(string.Format("{0} Slot {1}", kind, slotIndex), typeof(RectTransform), typeof(Image), typeof(StorageChestSlotUI));
+        RectTransform rect = slotObject.GetComponent<RectTransform>();
+        rect.SetParent(parent, false);
+        rect.sizeDelta = slotSize;
+
+        int columns = kind == StorageChestSlotKind.PlayerInventory ? 4 : 3;
+        int row = slotIndex / columns;
+        int column = slotIndex % columns;
+        rect.anchorMin = new Vector2(0f, 1f);
+        rect.anchorMax = new Vector2(0f, 1f);
+        rect.pivot = new Vector2(0f, 1f);
+        rect.anchoredPosition = new Vector2(column * (slotSize.x + slotSpacing), -row * (slotSize.y + slotSpacing));
+
+        Image background = slotObject.GetComponent<Image>();
+        background.color = slotColor;
+
+        GameObject iconObject = new GameObject("Icon", typeof(RectTransform), typeof(Image));
+        RectTransform iconRect = iconObject.GetComponent<RectTransform>();
+        iconRect.SetParent(rect, false);
+        iconRect.anchorMin = Vector2.zero;
+        iconRect.anchorMax = Vector2.one;
+        iconRect.offsetMin = new Vector2(8f, 8f);
+        iconRect.offsetMax = new Vector2(-8f, -8f);
+        Image icon = iconObject.GetComponent<Image>();
+        icon.preserveAspect = true;
+        icon.enabled = false;
+        icon.raycastTarget = false;
+
+        TextMeshProUGUI countText = CreateLabel("Count", rect, 16f, FontStyles.Bold, Color.white, TextAlignmentOptions.BottomRight);
+        countText.rectTransform.anchorMin = Vector2.zero;
+        countText.rectTransform.anchorMax = Vector2.one;
+        countText.rectTransform.offsetMin = new Vector2(4f, 2f);
+        countText.rectTransform.offsetMax = new Vector2(-4f, -2f);
+        countText.gameObject.SetActive(false);
+
+        StorageChestSlotUI slot = slotObject.GetComponent<StorageChestSlotUI>();
+        slot.Initialize(this, kind, slotIndex, icon, countText, background);
+        return slot;
     }
 
     private Button CreateButton(string name, RectTransform parent, Vector2 anchoredPosition, string label, UnityEngine.Events.UnityAction action)
@@ -270,21 +411,16 @@ public class StorageChestUI : MonoBehaviour
         GameObject buttonObject = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(Button));
         RectTransform rect = buttonObject.GetComponent<RectTransform>();
         rect.SetParent(parent, false);
-        rect.anchorMin = new Vector2(0.5f, 0f);
-        rect.anchorMax = new Vector2(0.5f, 0f);
-        rect.pivot = new Vector2(0.5f, 0f);
-        rect.sizeDelta = new Vector2(96f, 40f);
         rect.anchoredPosition = anchoredPosition;
         buttonObject.GetComponent<Image>().color = new Color(0.18f, 0.25f, 0.18f, 0.95f);
         Button button = buttonObject.GetComponent<Button>();
         button.onClick.AddListener(action);
 
-        TextMeshProUGUI labelText = this.CreateLabel("Label", rect, 18f, FontStyles.Bold, Color.white, TextAlignmentOptions.Center);
-        RectTransform labelRect = labelText.rectTransform;
-        labelRect.anchorMin = Vector2.zero;
-        labelRect.anchorMax = Vector2.one;
-        labelRect.offsetMin = new Vector2(6f, 4f);
-        labelRect.offsetMax = new Vector2(-6f, -4f);
+        TextMeshProUGUI labelText = CreateLabel("Label", rect, 18f, FontStyles.Bold, Color.white, TextAlignmentOptions.Center);
+        labelText.rectTransform.anchorMin = Vector2.zero;
+        labelText.rectTransform.anchorMax = Vector2.one;
+        labelText.rectTransform.offsetMin = new Vector2(4f, 2f);
+        labelText.rectTransform.offsetMax = new Vector2(-4f, -2f);
         labelText.text = label;
         return button;
     }
@@ -300,7 +436,374 @@ public class StorageChestUI : MonoBehaviour
         label.color = color;
         label.alignment = alignment;
         label.enableWordWrapping = false;
+        label.raycastTarget = false;
         return label;
+    }
+
+    private void TrackGeneratedPanelChild(GameObject child)
+    {
+        if (!createdPanelRoot && child != null)
+        {
+            generatedPanelChildren.Add(child);
+        }
+    }
+
+    private void RebuildChestSlots()
+    {
+        if (chestSlotsRoot == null)
+        {
+            return;
+        }
+
+        for (int i = chestSlotsRoot.childCount - 1; i >= 0; i--)
+        {
+            Destroy(chestSlotsRoot.GetChild(i).gameObject);
+        }
+
+        chestSlots.Clear();
+        int count = GetActiveSlotCount();
+        for (int i = 0; i < count; i++)
+        {
+            chestSlots.Add(CreateSlot(chestSlotsRoot, StorageChestSlotKind.Chest, i));
+        }
+    }
+
+    private void Refresh()
+    {
+        if (!initialized || titleText == null)
+        {
+            return;
+        }
+
+        int slotCount = GetActiveSlotCount();
+        titleText.text = string.Format("{0} ({1}/{2})", GetActiveChestName(), GetActiveUsedSlotCount(), slotCount);
+
+        for (int i = 0; i < playerSlots.Count; i++)
+        {
+            ItemType? itemType = playerInventory != null ? playerInventory.GetSlotItemType(i) : null;
+            int amount = playerInventory != null ? playerInventory.GetSlotAmount(i) : 0;
+            Sprite sprite = itemType != null && iconDatabase != null ? iconDatabase.GetIcon(itemType.Value) : null;
+            playerSlots[i].SetItem(sprite, amount);
+            playerSlots[i].SetHighlight(false, slotColor, slotHighlightColor);
+        }
+
+        for (int i = 0; i < chestSlots.Count; i++)
+        {
+            ItemType? itemType = GetActiveSlotItemType(i);
+            int amount = GetActiveSlotAmount(i);
+            Sprite sprite = itemType != null && iconDatabase != null ? iconDatabase.GetIcon(itemType.Value) : null;
+            chestSlots[i].SetItem(sprite, amount);
+            chestSlots[i].SetHighlight(false, slotColor, slotHighlightColor);
+        }
+    }
+
+    private void BindPlayerInventory()
+    {
+        ResolveReferences();
+        if (subscribedInventory == playerInventory)
+        {
+            return;
+        }
+
+        UnbindPlayerInventory();
+        if (playerInventory != null)
+        {
+            subscribedInventory = playerInventory;
+            subscribedInventory.InventoryChanged += Refresh;
+        }
+    }
+
+    private void UnbindPlayerInventory()
+    {
+        if (subscribedInventory != null)
+        {
+            subscribedInventory.InventoryChanged -= Refresh;
+            subscribedInventory = null;
+        }
+    }
+
+    private void CleanupRuntimeUI()
+    {
+        DestroyDragIcon();
+        UnbindChest();
+        UnbindPlayerInventory();
+        UnbindHotbarDrag();
+
+        dragSourceSlot = null;
+        hotbarDragSourceGlobalSlot = -1;
+        hotbarDragItemType = null;
+        dragDropHandled = false;
+        playerSlots.Clear();
+        chestSlots.Clear();
+
+        if (panelRoot != null)
+        {
+            if (createdPanelRoot)
+            {
+                Destroy(panelRoot.gameObject);
+                panelRoot = null;
+            }
+            else
+            {
+                for (int i = generatedPanelChildren.Count - 1; i >= 0; i--)
+                {
+                    if (generatedPanelChildren[i] != null)
+                    {
+                        Destroy(generatedPanelChildren[i]);
+                    }
+                }
+
+                panelRoot.gameObject.SetActive(false);
+            }
+        }
+
+        generatedPanelChildren.Clear();
+        playerSlotsRoot = null;
+        chestSlotsRoot = null;
+        titleText = null;
+        closeButton = null;
+        initialized = false;
+        createdPanelRoot = false;
+    }
+
+    private void DepositPlayerSlotToChest(int playerSlot, int chestSlot)
+    {
+        if (playerInventory == null)
+        {
+            return;
+        }
+
+        if (activeFusionChest != null)
+        {
+            Fusion.NetworkObject playerObject = playerInventory.GetComponent<Fusion.NetworkObject>();
+            activeFusionChest.RequestDepositToChest(playerObject, playerSlot, chestSlot);
+            return;
+        }
+
+        activeChest?.TryRequestStore(playerInventory, playerSlot, chestSlot);
+    }
+
+    private void OnHotbarDragStart(int hotbarSlotIndex, ItemType itemType)
+    {
+        if (!IsChestVisible() || hotbarUI == null || playerInventory == null)
+        {
+            return;
+        }
+
+        int globalSlotIndex = hotbarUI.GetHotbarGlobalSlotIndex(hotbarSlotIndex);
+        if (globalSlotIndex < 0 || playerInventory.GetSlotAmount(globalSlotIndex) <= 0)
+        {
+            return;
+        }
+
+        hotbarDragSourceGlobalSlot = globalSlotIndex;
+        hotbarDragItemType = itemType;
+    }
+
+    private void OnHotbarDragEnd(ItemType itemType, int sourceHotbarSlot)
+    {
+        if (hotbarDragItemType == null || hotbarDragSourceGlobalSlot < 0 || !IsChestVisible())
+        {
+            ClearHotbarDragState();
+            return;
+        }
+
+        StorageChestSlotUI targetSlot = FindSlotUnderPointer(Input.mousePosition);
+        if (targetSlot != null && targetSlot.Kind == StorageChestSlotKind.Chest)
+        {
+            DepositPlayerSlotToChest(hotbarDragSourceGlobalSlot, targetSlot.SlotIndex);
+            Refresh();
+        }
+        else if (targetSlot != null && targetSlot.Kind == StorageChestSlotKind.PlayerInventory)
+        {
+            MoveHotbarSlotToPlayerSlot(sourceHotbarSlot, targetSlot.SlotIndex);
+            Refresh();
+        }
+
+        ClearHotbarDragState();
+    }
+
+    private void ClearHotbarDragState()
+    {
+        hotbarDragSourceGlobalSlot = -1;
+        hotbarDragItemType = null;
+    }
+
+    private void TakeChestSlotToPlayer(int chestSlot, int playerSlot)
+    {
+        if (playerInventory == null)
+        {
+            return;
+        }
+
+        if (activeFusionChest != null)
+        {
+            Fusion.NetworkObject playerObject = playerInventory.GetComponent<Fusion.NetworkObject>();
+            activeFusionChest.RequestTakeFromChest(playerObject, chestSlot, playerSlot);
+            return;
+        }
+
+        activeChest?.TryRequestTake(playerInventory, chestSlot, playerSlot);
+    }
+
+    private void TakeChestSlotToHotbar(int chestSlot, int hotbarSlot)
+    {
+        if (hotbarUI == null || playerInventory == null)
+        {
+            return;
+        }
+
+        int targetPlayerSlot = hotbarUI.GetHotbarGlobalSlotIndex(hotbarSlot);
+        if (targetPlayerSlot < 0)
+        {
+            return;
+        }
+
+        TakeChestSlotToPlayer(chestSlot, targetPlayerSlot);
+        hotbarUI.SelectSlot(hotbarSlot);
+        hotbarUI.Refresh();
+    }
+
+    private void MovePlayerSlotToHotbar(int playerSlot, int hotbarSlot)
+    {
+        if (hotbarUI == null || playerInventory == null)
+        {
+            return;
+        }
+
+        hotbarUI.AssignInventorySlotToHotbar(playerSlot, hotbarSlot);
+        Refresh();
+    }
+
+    private void MoveHotbarSlotToPlayerSlot(int hotbarSlot, int playerSlot)
+    {
+        if (hotbarUI == null || playerInventory == null)
+        {
+            return;
+        }
+
+        hotbarUI.MoveHotbarSlotToInventory(hotbarSlot, playerSlot);
+        Refresh();
+    }
+
+    private StorageChestSlotUI FindSlotUnderPointer(PointerEventData eventData)
+    {
+        if (EventSystem.current == null || eventData == null)
+        {
+            return null;
+        }
+
+        List<RaycastResult> results = new List<RaycastResult>();
+        EventSystem.current.RaycastAll(eventData, results);
+        for (int i = 0; i < results.Count; i++)
+        {
+            if (results[i].gameObject == null)
+            {
+                continue;
+            }
+
+            StorageChestSlotUI slot = results[i].gameObject.GetComponentInParent<StorageChestSlotUI>();
+            if (slot != null)
+            {
+                return slot;
+            }
+        }
+
+        return null;
+    }
+
+    private int FindHotbarSlotUnderPointer(PointerEventData eventData)
+    {
+        if (EventSystem.current == null || eventData == null || hotbarUI == null)
+        {
+            return -1;
+        }
+
+        List<RaycastResult> results = new List<RaycastResult>();
+        EventSystem.current.RaycastAll(eventData, results);
+        for (int i = 0; i < results.Count; i++)
+        {
+            if (results[i].gameObject == null)
+            {
+                continue;
+            }
+
+            HotbarSlotUI hotbarSlot = results[i].gameObject.GetComponentInParent<HotbarSlotUI>();
+            if (hotbarSlot != null)
+            {
+                return hotbarSlot.slotIndex;
+            }
+
+            Button button = results[i].gameObject.GetComponentInParent<Button>();
+            int slotIndex = hotbarUI.GetSlotIndex(button);
+            if (slotIndex >= 0)
+            {
+                return slotIndex;
+            }
+        }
+
+        return -1;
+    }
+
+    private StorageChestSlotUI FindSlotUnderPointer(Vector2 pointerPosition)
+    {
+        if (EventSystem.current == null)
+        {
+            return null;
+        }
+
+        PointerEventData pointerData = new PointerEventData(EventSystem.current)
+        {
+            position = pointerPosition
+        };
+        return FindSlotUnderPointer(pointerData);
+    }
+
+    private void CreateDragIcon(Sprite sprite)
+    {
+        DestroyDragIcon();
+        if (sprite == null || targetCanvas == null)
+        {
+            return;
+        }
+
+        dragIconObject = new GameObject("Chest Drag Icon", typeof(RectTransform), typeof(Image));
+        dragIconObject.transform.SetParent(targetCanvas.transform, false);
+        dragIconObject.transform.SetAsLastSibling();
+        RectTransform rect = dragIconObject.GetComponent<RectTransform>();
+        rect.sizeDelta = slotSize;
+        dragIconImage = dragIconObject.GetComponent<Image>();
+        dragIconImage.sprite = sprite;
+        dragIconImage.preserveAspect = true;
+        dragIconImage.raycastTarget = false;
+    }
+
+    private void DestroyDragIcon()
+    {
+        if (dragIconObject != null)
+        {
+            Destroy(dragIconObject);
+            dragIconObject = null;
+            dragIconImage = null;
+        }
+    }
+
+    private bool SlotHasItem(StorageChestSlotUI slot)
+    {
+        if (slot.Kind == StorageChestSlotKind.PlayerInventory)
+        {
+            return playerInventory != null && playerInventory.GetSlotAmount(slot.SlotIndex) > 0;
+        }
+
+        return GetActiveSlotAmount(slot.SlotIndex) > 0;
+    }
+
+    private Sprite GetSlotSprite(StorageChestSlotUI slot)
+    {
+        ItemType? itemType = slot.Kind == StorageChestSlotKind.PlayerInventory
+            ? playerInventory?.GetSlotItemType(slot.SlotIndex)
+            : GetActiveSlotItemType(slot.SlotIndex);
+        return itemType != null && iconDatabase != null ? iconDatabase.GetIcon(itemType.Value) : null;
     }
 
     private void SetVisible(bool visible)
@@ -308,6 +811,40 @@ public class StorageChestUI : MonoBehaviour
         if (panelRoot != null)
         {
             panelRoot.gameObject.SetActive(visible);
+        }
+    }
+
+    private bool IsChestVisible()
+    {
+        return panelRoot != null && panelRoot.gameObject.activeSelf && (activeChest != null || activeFusionChest != null);
+    }
+
+    private void BindHotbarDrag()
+    {
+        ResolveReferences();
+        if (subscribedHotbar == hotbarUI)
+        {
+            return;
+        }
+
+        UnbindHotbarDrag();
+        if (hotbarUI != null)
+        {
+            subscribedHotbar = hotbarUI;
+            subscribedHotbar.OnSlotDragStart -= OnHotbarDragStart;
+            subscribedHotbar.OnSlotDragEnd -= OnHotbarDragEnd;
+            subscribedHotbar.OnSlotDragStart += OnHotbarDragStart;
+            subscribedHotbar.OnSlotDragEnd += OnHotbarDragEnd;
+        }
+    }
+
+    private void UnbindHotbarDrag()
+    {
+        if (subscribedHotbar != null)
+        {
+            subscribedHotbar.OnSlotDragStart -= OnHotbarDragStart;
+            subscribedHotbar.OnSlotDragEnd -= OnHotbarDragEnd;
+            subscribedHotbar = null;
         }
     }
 
@@ -338,20 +875,25 @@ public class StorageChestUI : MonoBehaviour
     {
         if (activeChest != null)
         {
-            activeChest.ChestChanged -= this.Refresh;
+            activeChest.ChestChanged -= Refresh;
             activeChest = null;
         }
 
         if (activeFusionChest != null)
         {
-            activeFusionChest.ChestChanged -= this.Refresh;
+            activeFusionChest.ChestChanged -= Refresh;
             activeFusionChest = null;
         }
     }
 
     private string GetActiveChestName()
     {
-        return activeFusionChest != null ? activeFusionChest.ChestName : activeChest.ChestName;
+        if (activeFusionChest != null)
+        {
+            return activeFusionChest.ChestName;
+        }
+
+        return activeChest != null ? activeChest.ChestName : "Storage Chest";
     }
 
     private int GetActiveSlotCount()
@@ -366,7 +908,12 @@ public class StorageChestUI : MonoBehaviour
 
     private int GetActiveUsedSlotCount()
     {
-        return activeFusionChest != null ? activeFusionChest.UsedSlotCount : activeChest.UsedSlotCount;
+        if (activeFusionChest != null)
+        {
+            return activeFusionChest.UsedSlotCount;
+        }
+
+        return activeChest != null ? activeChest.UsedSlotCount : 0;
     }
 
     private ItemType? GetActiveSlotItemType(int slotIndex)
@@ -376,7 +923,7 @@ public class StorageChestUI : MonoBehaviour
             return activeFusionChest.TryReadSlot(slotIndex, out ItemType itemType, out _) ? itemType : (ItemType?)null;
         }
 
-        return activeChest.GetSlotItemType(slotIndex);
+        return activeChest != null ? activeChest.GetSlotItemType(slotIndex) : null;
     }
 
     private int GetActiveSlotAmount(int slotIndex)
@@ -386,6 +933,6 @@ public class StorageChestUI : MonoBehaviour
             return activeFusionChest.TryReadSlot(slotIndex, out _, out int amount) ? amount : 0;
         }
 
-        return activeChest.GetSlotAmount(slotIndex);
+        return activeChest != null ? activeChest.GetSlotAmount(slotIndex) : 0;
     }
 }

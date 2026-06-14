@@ -104,6 +104,7 @@ public class StorageChest : NetworkBehaviour
 
     public bool TryRequestStore(PlayerInventory playerInventory, int playerSlotIndex, int chestSlotIndex)
     {
+        this.EnsureSlotSetup();
         if (playerInventory == null || !this.IsValidSlot(chestSlotIndex))
         {
             return false;
@@ -131,6 +132,7 @@ public class StorageChest : NetworkBehaviour
 
     public bool TryRequestTake(PlayerInventory playerInventory, int chestSlotIndex, int preferredPlayerSlotIndex)
     {
+        this.EnsureSlotSetup();
         if (playerInventory == null || !this.IsValidSlot(chestSlotIndex))
         {
             return false;
@@ -209,7 +211,8 @@ public class StorageChest : NetworkBehaviour
             return false;
         }
 
-        int targetPlayerSlot = playerInventory.FindPreferredInventorySlot(itemType.Value, preferredPlayerSlotIndex, false);
+        bool includeHotbar = playerInventory.IsHotbarSlot(preferredPlayerSlotIndex);
+        int targetPlayerSlot = playerInventory.FindPreferredInventorySlot(itemType.Value, preferredPlayerSlotIndex, includeHotbar);
         if (targetPlayerSlot < 0)
         {
             return false;

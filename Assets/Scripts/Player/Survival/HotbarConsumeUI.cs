@@ -7,6 +7,7 @@ public class HotbarConsumeUI : MonoBehaviour
     [Header("References")]
     [SerializeField] private MobileHotbarUI hotbarUI;
     [SerializeField] private PlayerInventory inventory;
+    [SerializeField] private FusionPlayerInventory fusionInventory;
     [SerializeField] private NetworkInventoryBridge networkInventoryBridge;
     [SerializeField] private PlayerSurvivalSystem survivalSystem;
 
@@ -71,7 +72,11 @@ public class HotbarConsumeUI : MonoBehaviour
         }
 
         bool consumed = false;
-        if (networkInventoryBridge != null)
+        if (fusionInventory != null && fusionInventory.RequestConsumeFromSlot(selectedGlobalSlot))
+        {
+            consumed = true;
+        }
+        else if (networkInventoryBridge != null)
         {
             consumed = networkInventoryBridge.TryRequestConsumeFromSlot(selectedGlobalSlot);
         }
@@ -115,6 +120,11 @@ public class HotbarConsumeUI : MonoBehaviour
         if (networkInventoryBridge == null)
         {
             networkInventoryBridge = GetComponent<NetworkInventoryBridge>();
+        }
+
+        if (fusionInventory == null)
+        {
+            fusionInventory = GetComponent<FusionPlayerInventory>();
         }
 
         if (survivalSystem == null)
