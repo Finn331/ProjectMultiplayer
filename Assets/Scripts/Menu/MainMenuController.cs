@@ -75,6 +75,7 @@ public class MainMenuController : MonoBehaviour
 
     private bool hostControlMode;
     private float nextHostUiRefreshTime;
+    private const string LegacyDefaultRoomCode = "ROOM01";
 
     private void Awake()
     {
@@ -201,12 +202,12 @@ public class MainMenuController : MonoBehaviour
 
         this.SetInputIfEmpty(playerNameInput, "Player");
         this.SetInputIfEmpty(roomNameInput, "Room Survival");
-        this.SetInputIfEmpty(roomCodeInput, "ROOM01");
         this.SetInputIfEmpty(hostAddressInput, defaultHostAddress);
         this.SetInputIfEmpty(hostPortInput, defaultHostPort.ToString());
         this.SetInputIfEmpty(joinAddressInput, defaultJoinAddress);
         this.SetInputIfEmpty(joinPortInput, defaultJoinPort.ToString());
-        this.SetInputIfEmpty(joinRoomCodeInput, "ROOM01");
+        this.ClearLegacyRoomCodeDefault(roomCodeInput);
+        this.ClearLegacyRoomCodeDefault(joinRoomCodeInput);
         if (publicRoomSearchInput != null)
         {
             publicRoomSearchInput.text = string.Empty;
@@ -255,6 +256,14 @@ public class MainMenuController : MonoBehaviour
         if (string.IsNullOrWhiteSpace(input.text))
         {
             input.text = value;
+        }
+    }
+
+    private void ClearLegacyRoomCodeDefault(TMP_InputField input)
+    {
+        if (input != null && string.Equals(input.text, LegacyDefaultRoomCode, System.StringComparison.OrdinalIgnoreCase))
+        {
+            input.text = string.Empty;
         }
     }
 
@@ -309,7 +318,7 @@ public class MainMenuController : MonoBehaviour
 
         string playerName = this.ReadPlayerName();
         
-        bootstrap.CreateRoom("SOLO", playerName, 1);
+        bootstrap.CreateRoom(string.Empty, playerName, 1, isPrivate: true);
         this.SetStatus("Masuk Solo mode (Photon Shared)...");
         this.SetHostControlMode(true);
     }
@@ -324,11 +333,18 @@ public class MainMenuController : MonoBehaviour
         }
 
         string playerName = this.ReadPlayerName();
-        string roomCode = this.ReadOrDefault(roomCodeInput, "ROOM01");
+        string roomCode = this.ReadOrDefault(roomCodeInput, string.Empty);
         int maxPlayers = this.ReadMaxPlayers();
+        bool isPrivate = privateRoomToggle != null && privateRoomToggle.isOn;
 
-        bootstrap.CreateRoom(roomCode, playerName, maxPlayers);
-        this.SetStatus("Membuat room Photon...");
+        bootstrap.CreateRoom(roomCode, playerName, maxPlayers, isPrivate);
+        if (roomCodeInput != null && PhotonFusionSessionState.HasSession)
+        {
+            roomCodeInput.text = PhotonFusionSessionState.Active.RoomCode;
+        }
+
+        string createdRoomCode = PhotonFusionSessionState.HasSession ? PhotonFusionSessionState.Active.RoomCode : "-";
+        this.SetStatus("Membuat room Photon: " + createdRoomCode);
         this.SetHostControlMode(true);
     }
 
@@ -342,7 +358,13 @@ public class MainMenuController : MonoBehaviour
         }
 
         string playerName = this.ReadPlayerName();
-        string joinCode = this.ReadOrDefault(joinRoomCodeInput, "ROOM01");
+        string joinCode = this.ReadOrDefault(joinRoomCodeInput, string.Empty);
+        if (string.IsNullOrWhiteSpace(joinCode))
+        {
+            this.SetStatus("Masukkan room code untuk join.");
+            this.SetHostControlMode(false);
+            return;
+        }
 
         bootstrap.JoinRoom(joinCode, playerName);
         this.SetStatus("Join room Photon...");

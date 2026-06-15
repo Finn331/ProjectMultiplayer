@@ -17,6 +17,7 @@ public class PhotonFusionBootstrap : MonoBehaviour, INetworkRunnerCallbacks
     private NetworkRunner runner;
     private NetworkRunner lobbyRunner;
     private bool startInProgress;
+    private const string LegacyDefaultRoomCode = "ROOM01";
 
     public event Action<string> StatusChanged;
     public event Action<NetworkRunner> RunnerStarted;
@@ -54,13 +55,18 @@ public class PhotonFusionBootstrap : MonoBehaviour, INetworkRunnerCallbacks
 
     public async void CreateRoom(string roomCode, string playerName, int maxPlayers)
     {
+        CreateRoom(roomCode, playerName, maxPlayers, isPrivate: false);
+    }
+
+    public async void CreateRoom(string roomCode, string playerName, int maxPlayers, bool isPrivate)
+    {
         if (startInProgress)
         {
             SetStatus("Photon room start already in progress.");
             return;
         }
 
-        string normalizedRoomCode = NormalizeRoomCode(roomCode);
+        string normalizedRoomCode = NormalizeRoomCodeForCreate(roomCode);
 
         PhotonFusionSessionState.Set(new PhotonFusionSessionState.Session
         {
@@ -69,10 +75,11 @@ public class PhotonFusionBootstrap : MonoBehaviour, INetworkRunnerCallbacks
             RoomName = normalizedRoomCode,
             MaxPlayers = Mathf.Clamp(maxPlayers, 1, 8),
             Stage = PhotonFusionRoomStage.Waiting,
-            IsRoomCreator = true
+            IsRoomCreator = true,
+            IsPrivate = isPrivate
         });
 
-        await StartSharedRunner(normalizedRoomCode);
+        await StartSharedRunner(normalizedRoomCode, allowSessionCreation: true);
     }
 
     public async void JoinRoom(string roomCode, string playerName)
@@ -83,7 +90,12 @@ public class PhotonFusionBootstrap : MonoBehaviour, INetworkRunnerCallbacks
             return;
         }
 
-        string normalizedRoomCode = NormalizeRoomCode(roomCode);
+        string normalizedRoomCode = NormalizeRoomCodeForJoin(roomCode);
+        if (string.IsNullOrEmpty(normalizedRoomCode))
+        {
+            SetStatus("Masukkan room code untuk join.");
+            return;
+        }
 
         PhotonFusionSessionState.Set(new PhotonFusionSessionState.Session
         {
@@ -92,10 +104,11 @@ public class PhotonFusionBootstrap : MonoBehaviour, INetworkRunnerCallbacks
             RoomName = normalizedRoomCode,
             MaxPlayers = 8,
             Stage = PhotonFusionRoomStage.Waiting,
-            IsRoomCreator = false
+            IsRoomCreator = false,
+            IsPrivate = false
         });
 
-        await StartSharedRunner(normalizedRoomCode);
+        await StartSharedRunner(normalizedRoomCode, allowSessionCreation: false);
     }
 
     public async void LeaveRoom()
@@ -125,7 +138,7 @@ public class PhotonFusionBootstrap : MonoBehaviour, INetworkRunnerCallbacks
         SetStatus("Disconnected from Photon room.");
     }
 
-    private async Task StartSharedRunner(string sessionName)
+    private async Task StartSharedRunner(string sessionName, bool allowSessionCreation)
     {
         startInProgress = true;
 
@@ -156,7 +169,10 @@ public class PhotonFusionBootstrap : MonoBehaviour, INetworkRunnerCallbacks
             {
                 GameMode = GameMode.Shared,
                 SessionName = sessionName,
+                EnableClientSessionCreation = allowSessionCreation,
                 PlayerCount = PhotonFusionSessionState.Active.MaxPlayers,
+                IsOpen = true,
+                IsVisible = !PhotonFusionSessionState.Active.IsPrivate,
                 Scene = new NetworkSceneInfo(),
                 SceneManager = sceneManager
             });
@@ -245,9 +261,27 @@ public class PhotonFusionBootstrap : MonoBehaviour, INetworkRunnerCallbacks
         return string.IsNullOrWhiteSpace(playerName) ? "Player" : playerName.Trim();
     }
 
+    private static string NormalizeRoomCodeForCreate(string roomCode)
+    {
+        string normalized = NormalizeRoomCode(roomCode);
+        return string.IsNullOrEmpty(normalized) || normalized == LegacyDefaultRoomCode
+            ? GenerateRoomCode()
+            : normalized;
+    }
+
+    private static string NormalizeRoomCodeForJoin(string roomCode)
+    {
+        return NormalizeRoomCode(roomCode);
+    }
+
     private static string NormalizeRoomCode(string roomCode)
     {
-        return string.IsNullOrWhiteSpace(roomCode) ? "ROOM01" : roomCode.Trim().ToUpperInvariant();
+        return string.IsNullOrWhiteSpace(roomCode) ? string.Empty : roomCode.Trim().ToUpperInvariant();
+    }
+
+    private static string GenerateRoomCode()
+    {
+        return "ROOM-" + Guid.NewGuid().ToString("N").Substring(0, 6).ToUpperInvariant();
     }
 
     private void SetStatus(string message)

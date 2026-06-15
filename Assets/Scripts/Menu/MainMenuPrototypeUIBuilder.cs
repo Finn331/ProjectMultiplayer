@@ -213,7 +213,7 @@ public class MainMenuPrototypeUIBuilder : MonoBehaviour
 
         refs.playerNameInput = CreateInput(parent, "PlayerNameInput", "Player Name", "Player", 0.84f);
         refs.roomNameInput = CreateInput(parent, "RoomNameInput", "Room Name", "Room Survival", 0.74f);
-        refs.roomCodeInput = CreateInput(parent, "RoomCodeInput", "Room Code", "ROOM01", 0.64f);
+        refs.roomCodeInput = CreateInput(parent, "RoomCodeInput", "Room Code (kosong = auto)", "AUTO", 0.64f);
         refs.roomPasswordInput = CreateInput(parent, "RoomPasswordInput", "Password (private)", "", 0.54f);
 
         refs.privateRoomToggle = CreateToggle(parent, "PrivateRoomToggle", "Private Room", 0.46f);
@@ -255,7 +255,7 @@ public class MainMenuPrototypeUIBuilder : MonoBehaviour
 
         refs.joinAddressInput = null;
         refs.joinPortInput = null;
-        refs.joinRoomCodeInput = CreateInput(parent, "JoinRoomCodeInput", "Room Code", "ROOM01", 0.40f);
+        refs.joinRoomCodeInput = CreateInput(parent, "JoinRoomCodeInput", "Room Code", "Masukkan kode host", 0.40f);
         refs.joinPasswordInput = CreateInput(parent, "JoinPasswordInput", "Password", "", 0.30f);
 
         TMP_Text vpsInfo = CreateText(parent, "JoinFixedInfo", "Join room via Photon Fusion.", 16f, FontStyles.Italic, TextAlignmentOptions.Left);

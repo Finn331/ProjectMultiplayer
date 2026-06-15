@@ -116,7 +116,7 @@ public class PhotonFusionRoomController : MonoBehaviour
     {
         return roomCodeInput != null && !string.IsNullOrWhiteSpace(roomCodeInput.text)
             ? roomCodeInput.text.Trim().ToUpperInvariant()
-            : "ROOM01";
+            : string.Empty;
     }
 
     private int ReadMaxPlayers()

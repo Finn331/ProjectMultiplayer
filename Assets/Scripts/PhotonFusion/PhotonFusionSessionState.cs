@@ -19,6 +19,7 @@ public static class PhotonFusionSessionState
         public int MaxPlayers;
         public PhotonFusionRoomStage Stage;
         public bool IsRoomCreator;
+        public bool IsPrivate;
     }
 
     public static bool HasSession { get; private set; }
