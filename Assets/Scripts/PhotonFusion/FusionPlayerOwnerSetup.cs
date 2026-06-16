@@ -5,10 +5,19 @@ using UnityBehaviour = UnityEngine.Behaviour;
 
 public class FusionPlayerOwnerSetup : NetworkBehaviour
 {
+    private static readonly UnityBehaviour[] EmptyBehaviours = new UnityBehaviour[0];
+    private static readonly GameObject[] EmptyObjects = new GameObject[0];
+
     [SerializeField] private UnityBehaviour[] ownerOnlyBehaviours;
     [SerializeField] private Camera[] ownerOnlyCameras;
     [SerializeField] private AudioListener[] ownerOnlyAudioListeners;
     [SerializeField] private GameObject[] ownerOnlyObjects;
+
+    private UnityBehaviour[] runtimeOwnerOnlyBehaviours;
+    private Camera[] runtimeOwnerOnlyCameras;
+    private AudioListener[] runtimeOwnerOnlyAudioListeners;
+    private GameObject[] runtimeOwnerOnlyObjects;
+    private readonly List<AudioListener> disabledExternalAudioListeners = new List<AudioListener>();
 
     private bool hasAppliedOwnerState;
     private bool lastOwnerState;
@@ -55,7 +64,7 @@ public class FusionPlayerOwnerSetup : NetworkBehaviour
 
     public void RefreshOwnerOnlyReferencesForDiagnostics()
     {
-        EnsureOwnerOnlyReferences();
+        EnsureOwnerOnlyReferences(true);
     }
 
     public void ApplyOwnerStateForDiagnostics(bool isOwner)
@@ -67,29 +76,29 @@ public class FusionPlayerOwnerSetup : NetworkBehaviour
     public int GetOwnerOnlyCameraCountForDiagnostics()
     {
         EnsureOwnerOnlyReferences();
-        return ownerOnlyCameras != null ? ownerOnlyCameras.Length : 0;
+        return runtimeOwnerOnlyCameras != null ? runtimeOwnerOnlyCameras.Length : 0;
     }
 
     public int GetOwnerOnlyAudioListenerCountForDiagnostics()
     {
         EnsureOwnerOnlyReferences();
-        return ownerOnlyAudioListeners != null ? ownerOnlyAudioListeners.Length : 0;
+        return runtimeOwnerOnlyAudioListeners != null ? runtimeOwnerOnlyAudioListeners.Length : 0;
     }
 
     public string[] GetOwnerOnlyBehaviourTypeNamesForDiagnostics()
     {
         EnsureOwnerOnlyReferences();
-        if (ownerOnlyBehaviours == null)
+        if (runtimeOwnerOnlyBehaviours == null)
         {
             return new string[0];
         }
 
         List<string> names = new List<string>();
-        for (int i = 0; i < ownerOnlyBehaviours.Length; i++)
+        for (int i = 0; i < runtimeOwnerOnlyBehaviours.Length; i++)
         {
-            if (ownerOnlyBehaviours[i] != null)
+            if (runtimeOwnerOnlyBehaviours[i] != null)
             {
-                names.Add(ownerOnlyBehaviours[i].GetType().Name);
+                names.Add(runtimeOwnerOnlyBehaviours[i].GetType().Name);
             }
         }
 
@@ -101,37 +110,48 @@ public class FusionPlayerOwnerSetup : NetworkBehaviour
         return Object != null && Object.HasStateAuthority;
     }
 
-    private void EnsureOwnerOnlyReferences()
+    private void EnsureOwnerOnlyReferences(bool forceRefresh = false)
     {
-        if (ownerOnlyBehaviours == null || ownerOnlyBehaviours.Length == 0)
+        if (forceRefresh || runtimeOwnerOnlyBehaviours == null)
         {
-            List<UnityBehaviour> behaviours = new List<UnityBehaviour>();
-            AddComponentsInChildren<FPSControllerMobile>(behaviours);
-            AddComponentsInChildren<PlayerInteractionSystem>(behaviours);
-            AddComponentsInChildren<PlayerInventoryUI>(behaviours);
-            AddComponentsInChildren<GridInventoryUI>(behaviours);
-            AddComponentsInChildren<DraggableInventoryUI>(behaviours);
-            AddComponentsInChildren<MobileHotbarUI>(behaviours);
-            AddComponentsInChildren<HotbarConsumeUI>(behaviours);
-            AddComponentsInChildren<PlayerAxeCombat>(behaviours);
-            AddComponentsInChildren<PlayerProceduralAnimation>(behaviours);
-            ownerOnlyBehaviours = behaviours.ToArray();
+            runtimeOwnerOnlyBehaviours = HasEntries(ownerOnlyBehaviours) ? ownerOnlyBehaviours : DiscoverOwnerOnlyBehaviours();
         }
 
-        if (ownerOnlyCameras == null || ownerOnlyCameras.Length == 0)
+        if (forceRefresh || runtimeOwnerOnlyCameras == null)
         {
-            ownerOnlyCameras = GetComponentsInChildren<Camera>(true);
+            runtimeOwnerOnlyCameras = HasEntries(ownerOnlyCameras) ? ownerOnlyCameras : GetComponentsInChildren<Camera>(true);
         }
 
-        if (ownerOnlyAudioListeners == null || ownerOnlyAudioListeners.Length == 0)
+        if (forceRefresh || runtimeOwnerOnlyAudioListeners == null)
         {
-            ownerOnlyAudioListeners = GetComponentsInChildren<AudioListener>(true);
+            runtimeOwnerOnlyAudioListeners = HasEntries(ownerOnlyAudioListeners) ? ownerOnlyAudioListeners : GetComponentsInChildren<AudioListener>(true);
         }
 
-        if (ownerOnlyObjects == null)
+        if (forceRefresh || runtimeOwnerOnlyObjects == null)
         {
-            ownerOnlyObjects = new GameObject[0];
+            runtimeOwnerOnlyObjects = ownerOnlyObjects != null ? ownerOnlyObjects : EmptyObjects;
         }
+    }
+
+    private UnityBehaviour[] DiscoverOwnerOnlyBehaviours()
+    {
+        List<UnityBehaviour> behaviours = new List<UnityBehaviour>();
+        AddComponentsInChildren<FPSControllerMobile>(behaviours);
+        AddComponentsInChildren<PlayerInteractionSystem>(behaviours);
+        AddComponentsInChildren<PlayerInventoryUI>(behaviours);
+        AddComponentsInChildren<GridInventoryUI>(behaviours);
+        AddComponentsInChildren<DraggableInventoryUI>(behaviours);
+        AddComponentsInChildren<MobileHotbarUI>(behaviours);
+        AddComponentsInChildren<HotbarConsumeUI>(behaviours);
+        AddComponentsInChildren<PlayerAxeCombat>(behaviours);
+        AddComponentsInChildren<PlayerProceduralAnimation>(behaviours);
+
+        return behaviours.Count > 0 ? behaviours.ToArray() : EmptyBehaviours;
+    }
+
+    private static bool HasEntries<T>(T[] items)
+    {
+        return items != null && items.Length > 0;
     }
 
     private static void AddIfPresent(List<UnityBehaviour> behaviours, UnityBehaviour behaviour)
@@ -157,15 +177,19 @@ public class FusionPlayerOwnerSetup : NetworkBehaviour
         hasAppliedOwnerState = true;
         lastOwnerState = isOwner;
 
-        SetBehavioursEnabled(ownerOnlyBehaviours, isOwner);
-        SetCamerasEnabled(ownerOnlyCameras, isOwner);
-        SetAudioListenersEnabled(ownerOnlyAudioListeners, isOwner);
-        SetObjectsActive(ownerOnlyObjects, isOwner);
+        SetBehavioursEnabled(runtimeOwnerOnlyBehaviours, isOwner);
+        SetCamerasEnabled(runtimeOwnerOnlyCameras, isOwner);
+        SetAudioListenersEnabled(runtimeOwnerOnlyAudioListeners, isOwner);
+        SetObjectsActive(runtimeOwnerOnlyObjects, isOwner);
 
         if (isOwner)
         {
             WarnIfMissingOwnerCamera();
             EnsureSingleActiveAudioListener();
+        }
+        else
+        {
+            RestoreExternalAudioListeners();
         }
     }
 
@@ -235,7 +259,7 @@ public class FusionPlayerOwnerSetup : NetworkBehaviour
 
     private void WarnIfMissingOwnerCamera()
     {
-        if (warnedMissingOwnerCamera || ownerOnlyCameras == null || ownerOnlyCameras.Length > 0)
+        if (warnedMissingOwnerCamera || runtimeOwnerOnlyCameras == null || runtimeOwnerOnlyCameras.Length > 0)
         {
             return;
         }
@@ -247,11 +271,11 @@ public class FusionPlayerOwnerSetup : NetworkBehaviour
     private void EnsureSingleActiveAudioListener()
     {
         AudioListener primaryListener = null;
-        if (ownerOnlyAudioListeners != null)
+        if (runtimeOwnerOnlyAudioListeners != null)
         {
-            for (int i = 0; i < ownerOnlyAudioListeners.Length; i++)
+            for (int i = 0; i < runtimeOwnerOnlyAudioListeners.Length; i++)
             {
-                AudioListener candidate = ownerOnlyAudioListeners[i];
+                AudioListener candidate = runtimeOwnerOnlyAudioListeners[i];
                 if (candidate != null && candidate.enabled && candidate.gameObject.activeInHierarchy)
                 {
                     primaryListener = candidate;
@@ -276,6 +300,11 @@ public class FusionPlayerOwnerSetup : NetworkBehaviour
             }
 
             listener.enabled = false;
+            if (!IsOwnerOnlyAudioListener(listener) && !disabledExternalAudioListeners.Contains(listener))
+            {
+                disabledExternalAudioListeners.Add(listener);
+            }
+
             disabledCount++;
         }
 
@@ -283,6 +312,43 @@ public class FusionPlayerOwnerSetup : NetworkBehaviour
         {
             Debug.LogWarning("FusionPlayerOwnerSetup disabled " + disabledCount + " extra AudioListener component(s) to keep one local listener active.", this);
         }
+    }
+
+    private bool IsOwnerOnlyAudioListener(AudioListener listener)
+    {
+        if (runtimeOwnerOnlyAudioListeners == null)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < runtimeOwnerOnlyAudioListeners.Length; i++)
+        {
+            if (runtimeOwnerOnlyAudioListeners[i] == listener)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void RestoreExternalAudioListeners()
+    {
+        if (disabledExternalAudioListeners.Count == 0)
+        {
+            return;
+        }
+
+        for (int i = 0; i < disabledExternalAudioListeners.Count; i++)
+        {
+            AudioListener listener = disabledExternalAudioListeners[i];
+            if (listener != null)
+            {
+                listener.enabled = true;
+            }
+        }
+
+        disabledExternalAudioListeners.Clear();
     }
 
     private static string GetHierarchyPath(Transform target)
