@@ -585,18 +585,30 @@ public class MainMenuController : MonoBehaviour
                 string memberName = isLocal 
                     ? "You (Player " + player.PlayerId + ")" 
                     : "Player " + player.PlayerId;
-                this.CreateKickRowVisual(player.PlayerId, memberName);
+                double pingMs = 0;
+                if (bootstrap.Runner != null && !isLocal)
+                {
+                    try
+                    {
+                        pingMs = bootstrap.Runner.GetPlayerRtt(player);
+                    }
+                    catch
+                    {
+                        pingMs = 0;
+                    }
+                }
+                this.CreateKickRowVisual(player.PlayerId, memberName, pingMs, isLocal);
             }
         }
         else
         {
             // Fallback: if we know we're in host mode, at least show ourselves
             this.CreateKickSectionHeader("Connected Players (1)");
-            this.CreateKickRowVisual(0, "You (Host)");
+            this.CreateKickRowVisual(0, "You (Host)", 0, true);
         }
     }
 
-    private void CreateKickRowVisual(int playerId, string text)
+    private void CreateKickRowVisual(int playerId, string text, double pingMs, bool isLocal)
     {
         GameObject row = new GameObject("KickRow_" + playerId, typeof(RectTransform), typeof(Image));
         RectTransform rowRect = row.GetComponent<RectTransform>();
@@ -624,6 +636,21 @@ public class MainMenuController : MonoBehaviour
         label.text = text;
         LayoutElement labelLayout = labelObj.AddComponent<LayoutElement>();
         labelLayout.flexibleWidth = 1f;
+
+        if (!isLocal && pingMs > 0)
+        {
+            GameObject pingObj = new GameObject("Ping", typeof(RectTransform), typeof(TextMeshProUGUI));
+            pingObj.transform.SetParent(rowRect, false);
+            TextMeshProUGUI pingLabel = pingObj.GetComponent<TextMeshProUGUI>();
+            pingLabel.fontSize = 13f;
+            pingLabel.alignment = TextAlignmentOptions.Right;
+            Color pingColor = pingMs < 100 ? new Color(0.3f, 1f, 0.3f) : pingMs < 200 ? new Color(1f, 0.9f, 0.2f) : new Color(1f, 0.3f, 0.3f);
+            pingLabel.color = pingColor;
+            pingLabel.text = Mathf.RoundToInt((float)pingMs) + " ms";
+            LayoutElement pingLayout = pingObj.AddComponent<LayoutElement>();
+            pingLayout.preferredWidth = 60f;
+            pingLayout.minWidth = 50f;
+        }
 
         kickEntryRows.Add(row);
     }
