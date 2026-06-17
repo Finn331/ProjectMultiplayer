@@ -52,7 +52,7 @@ public class GameplayPingIndicator : MonoBehaviour
         try
         {
             double rtt = runner.GetPlayerRtt(runner.LocalPlayer);
-            int pingMs = Mathf.RoundToInt((float)rtt);
+            int pingMs = Mathf.RoundToInt((float)(rtt * 1000.0));
 
             pingText.text = $"Ping: {pingMs} ms";
 
