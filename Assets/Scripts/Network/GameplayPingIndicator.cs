@@ -4,27 +4,18 @@ using UnityEngine.UI;
 
 public class GameplayPingIndicator : MonoBehaviour
 {
-    [Header("References")]
-    [SerializeField] private NetworkRunner runner;
-    [SerializeField] private Text pingText;
-
     [Header("Settings")]
     [SerializeField] private float updateInterval = 1f;
     [SerializeField] private int warningThresholdMs = 100;
     [SerializeField] private int criticalThresholdMs = 200;
 
+    private Text pingText;
+    private NetworkRunner runner;
     private float nextUpdateTime;
 
     private void Awake()
     {
-        if (runner == null)
-        {
-            runner = FindObjectOfType<NetworkRunner>();
-        }
-        if (pingText == null)
-        {
-            pingText = GetComponent<Text>();
-        }
+        pingText = GetComponent<Text>();
         if (pingText != null)
         {
             pingText.text = "Ping: -- ms";
@@ -33,6 +24,12 @@ public class GameplayPingIndicator : MonoBehaviour
 
     private void Update()
     {
+        // Find runner if not found yet
+        if (runner == null)
+        {
+            runner = FindObjectOfType<NetworkRunner>();
+        }
+
         if (runner == null || !runner.IsRunning || pingText == null)
         {
             return;
