@@ -103,35 +103,40 @@ public class FusionPlayerSurvival : NetworkBehaviour
 
     public bool RequestReviveFrom(Vector3 reviverPosition, float reviveRange, float reviveHealthPercent)
     {
+        return RequestReviveFrom(reviverPosition, reviveRange, reviveHealthPercent, 0);
+    }
+
+    public bool RequestReviveFrom(Vector3 reviverPosition, float reviveRange, float reviveHealthPercent, int requestId)
+    {
         if (Runner == null || Object == null || !Object.IsValid)
         {
             return false;
         }
 
-        RPC_RequestRevive(reviverPosition, reviveRange, reviveHealthPercent);
+        RPC_RequestRevive(reviverPosition, reviveRange, reviveHealthPercent, requestId);
         return true;
     }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
-    private void RPC_RequestRevive(Vector3 reviverPosition, float reviveRange, float reviveHealthPercent, RpcInfo info = default)
+    private void RPC_RequestRevive(Vector3 reviverPosition, float reviveRange, float reviveHealthPercent, int requestId, RpcInfo info = default)
     {
         ResolveReferences();
         if (survivalSystem == null || !IsDowned)
         {
-            RejectRevive(info.Source);
+            RejectRevive(info.Source, requestId);
             return;
         }
 
         if (Runner == null || !Runner.TryGetPlayerObject(info.Source, out NetworkObject reviverObject))
         {
-            RejectRevive(info.Source);
+            RejectRevive(info.Source, requestId);
             return;
         }
 
         FusionPlayerSurvival reviverSurvival = reviverObject.GetComponent<FusionPlayerSurvival>();
         if (reviverSurvival == null || reviverSurvival.IsDowned)
         {
-            RejectRevive(info.Source);
+            RejectRevive(info.Source, requestId);
             return;
         }
 
@@ -139,7 +144,7 @@ public class FusionPlayerSurvival : NetworkBehaviour
         float allowedRange = Mathf.Clamp(reviveRange, 0.5f, 4f) + 0.5f;
         if ((transform.position - reviverObject.transform.position).sqrMagnitude > allowedRange * allowedRange)
         {
-            RejectRevive(info.Source);
+            RejectRevive(info.Source, requestId);
             return;
         }
 
@@ -147,20 +152,26 @@ public class FusionPlayerSurvival : NetworkBehaviour
         IsDowned = false;
         QueueSnapshot(survivalSystem.CurrentHealth, survivalSystem.CurrentHunger, survivalSystem.CurrentThirst);
         TryFlushSnapshot(true);
+        ResolveRevive(info.Source, requestId, true);
     }
 
-    private void RejectRevive(PlayerRef reviver)
+    private void RejectRevive(PlayerRef reviver, int requestId)
+    {
+        ResolveRevive(reviver, requestId, false);
+    }
+
+    private void ResolveRevive(PlayerRef reviver, int requestId, bool accepted)
     {
         if (reviver.IsNone)
         {
             return;
         }
 
-        RPC_ReviveRequestRejected(reviver);
+        RPC_ReviveRequestResolved(reviver, requestId, accepted);
     }
 
     [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
-    private void RPC_ReviveRequestRejected(PlayerRef reviver, RpcInfo info = default)
+    private void RPC_ReviveRequestResolved(PlayerRef reviver, int requestId, bool accepted, RpcInfo info = default)
     {
         if (Runner == null || Runner.LocalPlayer != reviver)
         {
@@ -175,7 +186,7 @@ public class FusionPlayerSurvival : NetworkBehaviour
         FusionPlayerReviveInteractor reviveInteractor = localPlayerObject.GetComponent<FusionPlayerReviveInteractor>();
         if (reviveInteractor != null)
         {
-            reviveInteractor.HandleReviveRejected(this);
+            reviveInteractor.HandleReviveResolved(this, requestId, accepted);
         }
     }
 

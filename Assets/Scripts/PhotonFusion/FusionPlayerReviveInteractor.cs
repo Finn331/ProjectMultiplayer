@@ -15,6 +15,8 @@ public class FusionPlayerReviveInteractor : NetworkBehaviour
     private FusionPlayerSurvival pendingReviveTarget;
     private float reviveProgressSeconds;
     private bool hasPendingBandageConsume;
+    private int nextReviveRequestId;
+    private int pendingReviveRequestId;
 
     public override void Spawned()
     {
@@ -119,7 +121,8 @@ public class FusionPlayerReviveInteractor : NetworkBehaviour
 
         pendingReviveTarget = currentTarget;
         hasPendingBandageConsume = true;
-        bool requested = currentTarget.RequestReviveFrom(transform.position, reviveRange, reviveHealthPercent);
+        pendingReviveRequestId = ++nextReviveRequestId;
+        bool requested = currentTarget.RequestReviveFrom(transform.position, reviveRange, reviveHealthPercent, pendingReviveRequestId);
         if (!requested)
         {
             RefundPendingBandage(currentTarget);
@@ -135,12 +138,25 @@ public class FusionPlayerReviveInteractor : NetworkBehaviour
 
     public void HandleReviveRejected(FusionPlayerSurvival rejectedTarget)
     {
-        if (!hasPendingBandageConsume || pendingReviveTarget != rejectedTarget)
+        HandleReviveResolved(rejectedTarget, pendingReviveRequestId, false);
+    }
+
+    public void HandleReviveResolved(FusionPlayerSurvival resolvedTarget, int requestId, bool accepted)
+    {
+        if (!hasPendingBandageConsume || pendingReviveTarget != resolvedTarget || pendingReviveRequestId != requestId)
         {
             return;
         }
 
-        RefundPendingBandage(rejectedTarget);
+        if (!accepted)
+        {
+            RefundPendingBandage(resolvedTarget);
+            return;
+        }
+
+        hasPendingBandageConsume = false;
+        pendingReviveTarget = null;
+        pendingReviveRequestId = 0;
     }
 
     private FusionPlayerSurvival FindBestDownedTarget()
@@ -182,16 +198,7 @@ public class FusionPlayerReviveInteractor : NetworkBehaviour
         if (pendingReviveTarget == null)
         {
             RefundPendingBandage(null);
-            return;
         }
-
-        if (pendingReviveTarget.IsDowned)
-        {
-            return;
-        }
-
-        hasPendingBandageConsume = false;
-        pendingReviveTarget = null;
     }
 
     private void RefundPendingBandage(FusionPlayerSurvival target)
@@ -217,6 +224,7 @@ public class FusionPlayerReviveInteractor : NetworkBehaviour
 
         hasPendingBandageConsume = false;
         pendingReviveTarget = null;
+        pendingReviveRequestId = 0;
     }
 
     private void ResetReviveState()
