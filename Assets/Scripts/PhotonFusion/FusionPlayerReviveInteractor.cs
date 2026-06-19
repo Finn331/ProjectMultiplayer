@@ -38,7 +38,7 @@ public class FusionPlayerReviveInteractor : NetworkBehaviour
 
         if (selfSurvival != null && selfSurvival.IsDowned)
         {
-            ResetReviveUI();
+            ResetReviveState();
             return;
         }
 
@@ -174,7 +174,18 @@ public class FusionPlayerReviveInteractor : NetworkBehaviour
 
     private void ResolvePendingReviveResult()
     {
-        if (!hasPendingBandageConsume || pendingReviveTarget == null || pendingReviveTarget.IsDowned)
+        if (!hasPendingBandageConsume)
+        {
+            return;
+        }
+
+        if (pendingReviveTarget == null)
+        {
+            RefundPendingBandage(null);
+            return;
+        }
+
+        if (pendingReviveTarget.IsDowned)
         {
             return;
         }
@@ -185,7 +196,12 @@ public class FusionPlayerReviveInteractor : NetworkBehaviour
 
     private void RefundPendingBandage(FusionPlayerSurvival target)
     {
-        if (!hasPendingBandageConsume || pendingReviveTarget != target)
+        if (!hasPendingBandageConsume)
+        {
+            return;
+        }
+
+        if ((target != null && pendingReviveTarget != target) || (target == null && pendingReviveTarget != null))
         {
             return;
         }
@@ -203,10 +219,15 @@ public class FusionPlayerReviveInteractor : NetworkBehaviour
         pendingReviveTarget = null;
     }
 
-    private void ResetReviveUI()
+    private void ResetReviveState()
     {
         reviveProgressSeconds = 0f;
         currentTarget = null;
+    }
+
+    private void ResetReviveUI()
+    {
+        ResetReviveState();
         GameplayReviveHUD hud = GameplayReviveHUD.Instance;
         if (hud != null)
         {
