@@ -203,6 +203,7 @@ GameObject:
   - component: {fileID: 7103980233483436989}
   - component: {fileID: 2418521628232560225}
   - component: {fileID: 8235419706021330797}
+  - component: {fileID: 1523808440579855256}
   m_Layer: 0
   m_Name: FusionPlayer
   m_TagString: Untagged
@@ -850,6 +851,7 @@ MonoBehaviour:
   - {fileID: 3670379303215142028}
   - {fileID: 2143775898492630770}
   - {fileID: 7103980233483436989}
+  - {fileID: 1523808440579855256}
   ForceRemoteRenderTimeframe: 0
 --- !u!114 &4243588901381709582
 MonoBehaviour:
@@ -943,6 +945,8 @@ MonoBehaviour:
   _Hunger: 0
   _Thirst: 0
   _Injured:
+    _value: 0
+  _IsDowned:
     _value: 0
   _IsInitialized:
     _value: 0
@@ -1042,6 +1046,21 @@ MonoBehaviour:
   eatButtonNameContains: eat
   hideWhenUnavailable: 1
   consumeDebounceSeconds: 0.1
+--- !u!114 &1523808440579855256
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4472293491055181419}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4a50c1193038a65479d867ac5ac8c247, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  survival: {fileID: 0}
+  movement: {fileID: 0}
+  axeCombat: {fileID: 0}
 --- !u!1 &7516938604735521551
 GameObject:
   m_ObjectHideFlags: 0

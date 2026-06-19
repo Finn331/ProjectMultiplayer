@@ -6,8 +6,6 @@ public class FusionPlayerDownedState : NetworkBehaviour
 {
     [SerializeField] private FusionPlayerSurvival survival;
     [SerializeField] private FusionPlayerMovement movement;
-    [SerializeField] private PlayerInteractionSystem interaction;
-    [SerializeField] private HotbarConsumeUI consumeUI;
     [SerializeField] private PlayerAxeCombat axeCombat;
 
     private bool lastAppliedDowned;
@@ -27,7 +25,7 @@ public class FusionPlayerDownedState : NetworkBehaviour
     private void Update()
     {
         bool downed = IsDowned();
-        if (!hasApplied || downed != lastAppliedDowned)
+        if (!hasApplied || downed != lastAppliedDowned || downed)
         {
             ApplyDownedState(downed);
         }
@@ -48,22 +46,9 @@ public class FusionPlayerDownedState : NetworkBehaviour
             movement.ControlsBlocked = downed;
         }
 
-        if (Object != null && Object.HasStateAuthority)
+        if (axeCombat != null)
         {
-            if (interaction != null)
-            {
-                interaction.enabled = !downed;
-            }
-
-            if (consumeUI != null)
-            {
-                consumeUI.enabled = !downed;
-            }
-
-            if (axeCombat != null)
-            {
-                axeCombat.enabled = !downed;
-            }
+            axeCombat.ControlsBlocked = downed;
         }
     }
 
@@ -77,16 +62,6 @@ public class FusionPlayerDownedState : NetworkBehaviour
         if (movement == null)
         {
             movement = GetComponent<FusionPlayerMovement>();
-        }
-
-        if (interaction == null)
-        {
-            interaction = GetComponent<PlayerInteractionSystem>();
-        }
-
-        if (consumeUI == null)
-        {
-            consumeUI = GetComponent<HotbarConsumeUI>();
         }
 
         if (axeCombat == null)

@@ -99,6 +99,8 @@ public class PlayerAxeCombat : MonoBehaviour
     private float runtimePlayerDamageMultiplier = 1f;
     private bool suppressFusionEquipNotify;
 
+    public bool ControlsBlocked { get; set; }
+
     private void Awake()
     {
         if (animator == null)
@@ -145,6 +147,12 @@ public class PlayerAxeCombat : MonoBehaviour
     private void Update()
     {
         if (!this.HasLocalAttackAuthority())
+        {
+            this.UpdateAttackButtonVisibility(false);
+            return;
+        }
+
+        if (ControlsBlocked)
         {
             this.UpdateAttackButtonVisibility(false);
             return;
@@ -238,6 +246,12 @@ public class PlayerAxeCombat : MonoBehaviour
             return;
         }
 
+        if (ControlsBlocked)
+        {
+            this.UpdateAttackButtonVisibility(false);
+            return;
+        }
+
         if (!this.IsAxeEquipped())
         {
             if (PickupUIManager.instance != null)
@@ -274,7 +288,7 @@ public class PlayerAxeCombat : MonoBehaviour
             yield return new WaitForSeconds(wait);
         }
 
-        if (!this.HasLocalAttackAuthority() || !this.IsAxeEquipped())
+        if (ControlsBlocked || !this.HasLocalAttackAuthority() || !this.IsAxeEquipped())
         {
             yield break;
         }
