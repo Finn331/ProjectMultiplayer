@@ -100,6 +100,17 @@ public class FusionPlayerReviveInteractor : NetworkBehaviour
             return;
         }
 
+        if (hasPendingBandageConsume)
+        {
+            if (PickupUIManager.instance != null)
+            {
+                PickupUIManager.instance.ShowInfo("Revive request pending");
+            }
+
+            return;
+        }
+
+        // In Fusion Shared Mode, the reviver owns inventory locally; target authority validates target/range and refunds on rejection.
         if (!inventory.RemoveItem(ItemType.Bandage, 1))
         {
             ResetReviveUI();
@@ -115,6 +126,11 @@ public class FusionPlayerReviveInteractor : NetworkBehaviour
         }
 
         ResetReviveUI();
+    }
+
+    public bool HasPendingBandageConsumeFor(FusionPlayerSurvival target)
+    {
+        return hasPendingBandageConsume && pendingReviveTarget == target;
     }
 
     public void HandleReviveRejected(FusionPlayerSurvival rejectedTarget)
@@ -176,7 +192,11 @@ public class FusionPlayerReviveInteractor : NetworkBehaviour
 
         if (inventory != null)
         {
-            inventory.AddItem(ItemType.Bandage, 1);
+            int added = inventory.AddItem(ItemType.Bandage, 1);
+            if (added == 0 && PickupUIManager.instance != null)
+            {
+                PickupUIManager.instance.ShowInfo("Bandage refund failed: inventory full");
+            }
         }
 
         hasPendingBandageConsume = false;

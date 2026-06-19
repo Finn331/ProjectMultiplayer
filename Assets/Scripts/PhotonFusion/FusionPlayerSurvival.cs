@@ -129,12 +129,13 @@ public class FusionPlayerSurvival : NetworkBehaviour
         }
 
         FusionPlayerSurvival reviverSurvival = reviverObject.GetComponent<FusionPlayerSurvival>();
-        if (reviverSurvival != null && reviverSurvival.IsDowned)
+        if (reviverSurvival == null || reviverSurvival.IsDowned)
         {
             RejectRevive(info.Source);
             return;
         }
 
+        // Reviver inventory is validated by the reviver's state-authority interactor because inventory is local-owner state in this MVP.
         float allowedRange = Mathf.Clamp(reviveRange, 0.5f, 4f) + 0.5f;
         if ((transform.position - reviverObject.transform.position).sqrMagnitude > allowedRange * allowedRange)
         {

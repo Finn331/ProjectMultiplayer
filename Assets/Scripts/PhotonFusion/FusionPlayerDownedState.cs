@@ -10,6 +10,7 @@ public class FusionPlayerDownedState : NetworkBehaviour
 
     private bool lastAppliedDowned;
     private bool hasApplied;
+    private bool showingLocalDownedStatus;
 
     public override void Spawned()
     {
@@ -49,6 +50,40 @@ public class FusionPlayerDownedState : NetworkBehaviour
         if (axeCombat != null)
         {
             axeCombat.ControlsBlocked = downed;
+        }
+
+        UpdateLocalDownedStatus(downed);
+    }
+
+    private void UpdateLocalDownedStatus(bool downed)
+    {
+        if (Object == null || !Object.HasStateAuthority)
+        {
+            return;
+        }
+
+        GameplayReviveHUD hud = GameplayReviveHUD.Instance;
+        if (downed)
+        {
+            if (hud != null)
+            {
+                hud.ShowPrompt("Downed - Waiting for revive", false);
+                hud.SetProgress(0f);
+            }
+
+            showingLocalDownedStatus = true;
+            return;
+        }
+
+        if (!showingLocalDownedStatus)
+        {
+            return;
+        }
+
+        showingLocalDownedStatus = false;
+        if (hud != null)
+        {
+            hud.Clear();
         }
     }
 

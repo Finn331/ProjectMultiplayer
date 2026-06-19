@@ -1,3 +1,4 @@
+using Fusion;
 using UnityEngine;
 
 [DisallowMultipleComponent]
@@ -7,6 +8,8 @@ public class BandageCraftingSystem : MonoBehaviour
     [SerializeField] private int fiberCost = 2;
     [SerializeField] private int clothCost = 1;
     [SerializeField] private int bandageOutput = 1;
+    [SerializeField] private bool allowKeyboardCraft = true;
+    [SerializeField] private KeyCode keyboardCraftKey = KeyCode.C;
 
     public int FiberCost => Mathf.Max(1, fiberCost);
     public int ClothCost => Mathf.Max(1, clothCost);
@@ -15,6 +18,16 @@ public class BandageCraftingSystem : MonoBehaviour
     private void Awake()
     {
         ResolveReferences();
+    }
+
+    private void Update()
+    {
+        if (!allowKeyboardCraft || !HasLocalCraftAuthority() || !Input.GetKeyDown(keyboardCraftKey))
+        {
+            return;
+        }
+
+        TryCraftBandage();
     }
 
     public bool CanCraftBandage()
@@ -79,5 +92,11 @@ public class BandageCraftingSystem : MonoBehaviour
         {
             PickupUIManager.instance.ShowInfo(message);
         }
+    }
+
+    private bool HasLocalCraftAuthority()
+    {
+        NetworkObject networkObject = GetComponent<NetworkObject>();
+        return networkObject == null || networkObject.HasStateAuthority;
     }
 }
