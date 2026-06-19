@@ -43,6 +43,7 @@ public class PlayerSurvivalSystem : MonoBehaviour
     public event Action Died;
 
     public float CurrentHealth => currentHealth;
+    public float MaxHealth => maxHealth;
     public float CurrentHunger => currentHunger;
     public float CurrentThirst => currentThirst;
 
