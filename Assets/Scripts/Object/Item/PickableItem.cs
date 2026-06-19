@@ -8,7 +8,10 @@ public enum ItemType
     Axe,
     HealthConsumable,
     HungerConsumable,
-    ThirstConsumable
+    ThirstConsumable,
+    Fiber,
+    Cloth,
+    Bandage
 }
 
 public class PickableItem : MonoBehaviour
