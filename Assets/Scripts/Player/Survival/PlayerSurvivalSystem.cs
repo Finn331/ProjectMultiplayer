@@ -133,6 +133,10 @@ public class PlayerSurvivalSystem : MonoBehaviour
         {
             this.SetDeathState(true);
         }
+        else if (isDead)
+        {
+            this.ClearDeathState();
+        }
 
         this.UpdateMovementPenalty(currentHealth, currentHunger, currentThirst);
         this.RaiseStatsChanged(currentHealth, currentHunger, currentThirst);
@@ -205,12 +209,7 @@ public class PlayerSurvivalSystem : MonoBehaviour
 
         float clampedPercent = Mathf.Clamp01(healthPercent);
         currentHealth = Mathf.Max(1f, maxHealth * clampedPercent);
-        isDead = false;
-
-        if (movementController != null)
-        {
-            movementController.enabled = true;
-        }
+        this.ClearDeathState();
 
         this.RaiseStatsChanged(currentHealth, currentHunger, currentThirst);
     }
@@ -357,6 +356,21 @@ public class PlayerSurvivalSystem : MonoBehaviour
         }
 
         Died?.Invoke();
+    }
+
+    private void ClearDeathState()
+    {
+        if (!isDead)
+        {
+            return;
+        }
+
+        isDead = false;
+
+        if (movementController != null)
+        {
+            movementController.enabled = true;
+        }
     }
 
     private void RaiseStatsChanged(float healthValue, float hungerValue, float thirstValue)

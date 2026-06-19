@@ -121,8 +121,13 @@ public class FusionPlayerSurvival : NetworkBehaviour
             return;
         }
 
-        float allowedRange = Mathf.Max(0.5f, reviveRange) + 0.5f;
-        if ((transform.position - reviverPosition).sqrMagnitude > allowedRange * allowedRange)
+        if (Runner == null || !Runner.TryGetPlayerObject(info.Source, out NetworkObject reviverObject))
+        {
+            return;
+        }
+
+        float allowedRange = Mathf.Clamp(reviveRange, 0.5f, 4f) + 0.5f;
+        if ((transform.position - reviverObject.transform.position).sqrMagnitude > allowedRange * allowedRange)
         {
             return;
         }
