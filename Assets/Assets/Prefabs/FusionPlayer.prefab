@@ -204,6 +204,8 @@ GameObject:
   - component: {fileID: 2418521628232560225}
   - component: {fileID: 8235419706021330797}
   - component: {fileID: 1523808440579855256}
+  - component: {fileID: 2812518113419283217}
+  - component: {fileID: 9056112807315783195}
   m_Layer: 0
   m_Name: FusionPlayer
   m_TagString: Untagged
@@ -852,6 +854,7 @@ MonoBehaviour:
   - {fileID: 2143775898492630770}
   - {fileID: 7103980233483436989}
   - {fileID: 1523808440579855256}
+  - {fileID: 2812518113419283217}
   ForceRemoteRenderTimeframe: 0
 --- !u!114 &4243588901381709582
 MonoBehaviour:
@@ -1061,6 +1064,40 @@ MonoBehaviour:
   survival: {fileID: 0}
   movement: {fileID: 0}
   axeCombat: {fileID: 0}
+--- !u!114 &2812518113419283217
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4472293491055181419}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ce1e051db7eeb0e44aa526920ddc4e67, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  inventory: {fileID: 0}
+  selfSurvival: {fileID: 0}
+  reviveRange: 2.2
+  reviveDurationSeconds: 5
+  reviveHealthPercent: 0.25
+  keyboardReviveKey: 101
+--- !u!114 &9056112807315783195
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4472293491055181419}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 630fe683e04345645950450281c27b8a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  inventory: {fileID: 0}
+  fiberCost: 2
+  clothCost: 1
+  bandageOutput: 1
 --- !u!1 &7516938604735521551
 GameObject:
   m_ObjectHideFlags: 0
