@@ -118,17 +118,27 @@ public class FusionPlayerSurvival : NetworkBehaviour
         ResolveReferences();
         if (survivalSystem == null || !IsDowned)
         {
+            RejectRevive(info.Source);
             return;
         }
 
         if (Runner == null || !Runner.TryGetPlayerObject(info.Source, out NetworkObject reviverObject))
         {
+            RejectRevive(info.Source);
+            return;
+        }
+
+        FusionPlayerSurvival reviverSurvival = reviverObject.GetComponent<FusionPlayerSurvival>();
+        if (reviverSurvival != null && reviverSurvival.IsDowned)
+        {
+            RejectRevive(info.Source);
             return;
         }
 
         float allowedRange = Mathf.Clamp(reviveRange, 0.5f, 4f) + 0.5f;
         if ((transform.position - reviverObject.transform.position).sqrMagnitude > allowedRange * allowedRange)
         {
+            RejectRevive(info.Source);
             return;
         }
 
@@ -136,6 +146,36 @@ public class FusionPlayerSurvival : NetworkBehaviour
         IsDowned = false;
         QueueSnapshot(survivalSystem.CurrentHealth, survivalSystem.CurrentHunger, survivalSystem.CurrentThirst);
         TryFlushSnapshot(true);
+    }
+
+    private void RejectRevive(PlayerRef reviver)
+    {
+        if (reviver.IsNone)
+        {
+            return;
+        }
+
+        RPC_ReviveRequestRejected(reviver);
+    }
+
+    [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
+    private void RPC_ReviveRequestRejected(PlayerRef reviver, RpcInfo info = default)
+    {
+        if (Runner == null || Runner.LocalPlayer != reviver)
+        {
+            return;
+        }
+
+        if (!Runner.TryGetPlayerObject(reviver, out NetworkObject localPlayerObject) || localPlayerObject == null)
+        {
+            return;
+        }
+
+        FusionPlayerReviveInteractor reviveInteractor = localPlayerObject.GetComponent<FusionPlayerReviveInteractor>();
+        if (reviveInteractor != null)
+        {
+            reviveInteractor.HandleReviveRejected(this);
+        }
     }
 
     private void OnStateAuthoritySurvivalChanged(float health, float hunger, float thirst)

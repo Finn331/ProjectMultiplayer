@@ -12,7 +12,9 @@ public class FusionPlayerReviveInteractor : NetworkBehaviour
     [SerializeField] private KeyCode keyboardReviveKey = KeyCode.E;
 
     private FusionPlayerSurvival currentTarget;
+    private FusionPlayerSurvival pendingReviveTarget;
     private float reviveProgressSeconds;
+    private bool hasPendingBandageConsume;
 
     public override void Spawned()
     {
@@ -32,7 +34,21 @@ public class FusionPlayerReviveInteractor : NetworkBehaviour
         }
 
         ResolveReferences();
-        currentTarget = FindBestDownedTarget();
+        ResolvePendingReviveResult();
+
+        if (selfSurvival != null && selfSurvival.IsDowned)
+        {
+            ResetReviveUI();
+            return;
+        }
+
+        FusionPlayerSurvival nextTarget = FindBestDownedTarget();
+        if (nextTarget != currentTarget)
+        {
+            reviveProgressSeconds = 0f;
+        }
+
+        currentTarget = nextTarget;
         if (currentTarget == null)
         {
             ResetReviveUI();
@@ -90,13 +106,25 @@ public class FusionPlayerReviveInteractor : NetworkBehaviour
             return;
         }
 
+        pendingReviveTarget = currentTarget;
+        hasPendingBandageConsume = true;
         bool requested = currentTarget.RequestReviveFrom(transform.position, reviveRange, reviveHealthPercent);
         if (!requested)
         {
-            inventory.AddItem(ItemType.Bandage, 1);
+            RefundPendingBandage(currentTarget);
         }
 
         ResetReviveUI();
+    }
+
+    public void HandleReviveRejected(FusionPlayerSurvival rejectedTarget)
+    {
+        if (!hasPendingBandageConsume || pendingReviveTarget != rejectedTarget)
+        {
+            return;
+        }
+
+        RefundPendingBandage(rejectedTarget);
     }
 
     private FusionPlayerSurvival FindBestDownedTarget()
@@ -126,6 +154,33 @@ public class FusionPlayerReviveInteractor : NetworkBehaviour
         }
 
         return best;
+    }
+
+    private void ResolvePendingReviveResult()
+    {
+        if (!hasPendingBandageConsume || pendingReviveTarget == null || pendingReviveTarget.IsDowned)
+        {
+            return;
+        }
+
+        hasPendingBandageConsume = false;
+        pendingReviveTarget = null;
+    }
+
+    private void RefundPendingBandage(FusionPlayerSurvival target)
+    {
+        if (!hasPendingBandageConsume || pendingReviveTarget != target)
+        {
+            return;
+        }
+
+        if (inventory != null)
+        {
+            inventory.AddItem(ItemType.Bandage, 1);
+        }
+
+        hasPendingBandageConsume = false;
+        pendingReviveTarget = null;
     }
 
     private void ResetReviveUI()
