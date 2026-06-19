@@ -1110,7 +1110,7 @@ GameObject:
   - component: {fileID: 222726896}
   - component: {fileID: 222726895}
   - component: {fileID: 222726894}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Bandage Pickup
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -6819,7 +6819,7 @@ GameObject:
   - component: {fileID: 1125506528}
   - component: {fileID: 1125506527}
   - component: {fileID: 1125506526}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Fiber Pickup
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -11034,7 +11034,7 @@ GameObject:
   - component: {fileID: 1877829651}
   - component: {fileID: 1877829650}
   - component: {fileID: 1877829649}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Cloth Pickup
   m_TagString: Untagged
   m_Icon: {fileID: 0}
