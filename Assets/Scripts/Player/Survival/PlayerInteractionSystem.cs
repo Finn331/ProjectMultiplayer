@@ -218,6 +218,12 @@ public class PlayerInteractionSystem : MonoBehaviour
     {
         if (this.IsDowned())
         {
+            currentTarget = null;
+            if (pickButton != null)
+            {
+                pickButton.SetActive(false);
+            }
+
             return;
         }
 
