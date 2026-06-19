@@ -39,6 +39,7 @@ public class FusionPlayerMovement : NetworkBehaviour
     public Vector3 AnimatorPlanarVelocity => animatorPlanarVelocity;
     public Vector2 AnimatorMoveInput => animatorMoveInput;
     public float AnimatorSpeed => animatorSpeed;
+    public bool ControlsBlocked { get; set; }
 
     public override void Spawned()
     {
@@ -63,6 +64,12 @@ public class FusionPlayerMovement : NetworkBehaviour
     {
         if (!HasFusionInputAuthority() || controller == null)
         {
+            return;
+        }
+
+        if (ControlsBlocked)
+        {
+            ClearAnimatorMovementState();
             return;
         }
 
@@ -124,7 +131,7 @@ public class FusionPlayerMovement : NetworkBehaviour
 
     public void Jump()
     {
-        if (!HasFusionInputAuthority() || !enableJump || controller == null || !controller.isGrounded)
+        if (ControlsBlocked || !HasFusionInputAuthority() || !enableJump || controller == null || !controller.isGrounded)
         {
             return;
         }
@@ -175,6 +182,12 @@ public class FusionPlayerMovement : NetworkBehaviour
     {
         if (Object == null || !Object.HasStateAuthority)
         {
+            return;
+        }
+
+        if (ControlsBlocked)
+        {
+            accumulatedLookDelta = Vector2.zero;
             return;
         }
 

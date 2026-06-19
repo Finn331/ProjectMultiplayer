@@ -101,6 +101,17 @@ public class PlayerInteractionSystem : MonoBehaviour
             return;
         }
 
+        if (this.IsDowned())
+        {
+            currentTarget = null;
+            if (pickButton != null)
+            {
+                pickButton.SetActive(false);
+            }
+
+            return;
+        }
+
         if (pickButton == null && autoBindPickButton)
         {
             this.RefreshSceneBindings();
@@ -205,6 +216,11 @@ public class PlayerInteractionSystem : MonoBehaviour
 
     public void TryInteract()
     {
+        if (this.IsDowned())
+        {
+            return;
+        }
+
         if (Time.unscaledTime < nextInteractTime)
         {
             return;
@@ -440,5 +456,11 @@ public class PlayerInteractionSystem : MonoBehaviour
         {
             baseInteractDistance = Mathf.Max(0.1f, interactDistance);
         }
+    }
+
+    private bool IsDowned()
+    {
+        FusionPlayerSurvival survival = GetComponent<FusionPlayerSurvival>();
+        return survival != null && survival.IsDowned;
     }
 }

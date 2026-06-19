@@ -53,6 +53,16 @@ public class HotbarConsumeUI : MonoBehaviour
 
         nextConsumeTime = Time.unscaledTime + Mathf.Max(0.01f, consumeDebounceSeconds);
 
+        if (this.IsDowned())
+        {
+            if (PickupUIManager.instance != null)
+            {
+                PickupUIManager.instance.ShowInfo("Cannot consume while downed");
+            }
+
+            return;
+        }
+
         if (!this.HasLocalConsumeAuthority() || hotbarUI == null || inventory == null)
         {
             return;
@@ -247,6 +257,11 @@ public class HotbarConsumeUI : MonoBehaviour
 
     private bool CanConsumeSelectedItem()
     {
+        if (this.IsDowned())
+        {
+            return false;
+        }
+
         if (!this.HasLocalConsumeAuthority() || hotbarUI == null || inventory == null)
         {
             return false;
@@ -266,6 +281,12 @@ public class HotbarConsumeUI : MonoBehaviour
         }
 
         return ConsumableItemCatalog.TryGetEffect(itemType.Value, out _);
+    }
+
+    private bool IsDowned()
+    {
+        FusionPlayerSurvival survival = GetComponent<FusionPlayerSurvival>();
+        return survival != null && survival.IsDowned;
     }
 
     private bool HasLocalConsumeAuthority()

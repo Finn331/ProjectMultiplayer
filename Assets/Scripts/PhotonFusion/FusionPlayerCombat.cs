@@ -48,7 +48,7 @@ public class FusionPlayerCombat : NetworkBehaviour
 
     public bool RequestSwing()
     {
-        if (!IsNetworkReady() || !HasFusionInputAuthority())
+        if (IsDowned() || !IsNetworkReady() || !HasFusionInputAuthority())
         {
             return false;
         }
@@ -59,7 +59,7 @@ public class FusionPlayerCombat : NetworkBehaviour
 
     public bool RequestSceneTreeHit(Vector3 treePosition, float damage)
     {
-        if (!IsNetworkReady() || !HasFusionInputAuthority() || damage <= 0f)
+        if (IsDowned() || !IsNetworkReady() || !HasFusionInputAuthority() || damage <= 0f)
         {
             return false;
         }
@@ -70,7 +70,7 @@ public class FusionPlayerCombat : NetworkBehaviour
 
     public bool RequestPlayerDamage(Vector3 targetPosition, float damage)
     {
-        if (!IsNetworkReady() || !HasFusionInputAuthority() || damage <= 0f)
+        if (IsDowned() || !IsNetworkReady() || !HasFusionInputAuthority() || damage <= 0f)
         {
             return false;
         }
@@ -259,6 +259,12 @@ public class FusionPlayerCombat : NetworkBehaviour
     private bool IsNetworkReady()
     {
         return Runner != null && Object != null && Object.IsValid;
+    }
+
+    private bool IsDowned()
+    {
+        FusionPlayerSurvival survival = GetComponent<FusionPlayerSurvival>();
+        return survival != null && survival.IsDowned;
     }
 
     private bool HasFusionInputAuthority()
