@@ -27,6 +27,12 @@ public class ItemIconDatabase : ScriptableObject
             return this.FindIcon(ItemType.Food);
         }
 
+        if (type == ItemType.Bandage)
+        {
+            Sprite healthIcon = this.FindIcon(ItemType.HealthConsumable);
+            return healthIcon != null ? healthIcon : this.FindIcon(ItemType.Food);
+        }
+
         return null;
     }
 

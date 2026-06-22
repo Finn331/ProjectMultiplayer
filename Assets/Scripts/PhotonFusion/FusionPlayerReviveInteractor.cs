@@ -61,7 +61,7 @@ public class FusionPlayerReviveInteractor : NetworkBehaviour
         GameplayReviveHUD hud = GameplayReviveHUD.Instance;
         if (hud != null)
         {
-            hud.ShowPrompt(hasBandage ? "Hold Interact to Revive (Bandage x1)" : "Need Bandage to Revive", hasBandage);
+            hud.ShowPrompt(hasBandage ? "Hold Interact to Revive (Bandage x1)" : "Need Bandage to Revive", true);
         }
 
         bool holding = hasBandage && (Input.GetKey(keyboardReviveKey) || (hud != null && hud.IsMobileReviveHeld));
