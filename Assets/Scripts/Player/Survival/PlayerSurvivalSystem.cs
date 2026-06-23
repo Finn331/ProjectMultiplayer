@@ -20,7 +20,7 @@ public class PlayerSurvivalSystem : MonoBehaviour
     [Header("Health Impact")]
     [SerializeField] private float healthLossWhenStarvingPerSecond = 3f;
     [SerializeField] private float healthLossWhenDehydratedPerSecond = 5f;
-    [SerializeField] private bool enablePassiveRegen = true;
+    [SerializeField] private bool enablePassiveRegen;
     [SerializeField] private float passiveRegenPerSecond = 1.5f;
     [SerializeField] private float minimumHungerForRegen = 40f;
     [SerializeField] private float minimumThirstForRegen = 40f;
