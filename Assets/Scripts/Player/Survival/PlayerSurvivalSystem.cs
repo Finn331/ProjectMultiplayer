@@ -202,7 +202,7 @@ public class PlayerSurvivalSystem : MonoBehaviour
 
     public void Revive(float healthPercent)
     {
-        if (!isDead)
+        if (!isDead && currentHealth > 0f)
         {
             return;
         }
