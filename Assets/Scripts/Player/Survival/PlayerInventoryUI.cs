@@ -1144,7 +1144,22 @@ public class PlayerInventoryUI : MonoBehaviour
         var fusionObject = GetComponent<Fusion.NetworkObject>();
         if (fusionObject != null && fusionObject.IsValid)
         {
-            return fusionObject.HasStateAuthority || fusionObject.HasInputAuthority;
+            if (fusionObject.HasInputAuthority)
+            {
+                return true;
+            }
+
+            if (!fusionObject.HasStateAuthority)
+            {
+                return false;
+            }
+
+            if (fusionObject.InputAuthority.IsNone)
+            {
+                return true;
+            }
+
+            return fusionObject.Runner != null && fusionObject.InputAuthority == fusionObject.Runner.LocalPlayer;
         }
 
         NetworkObject networkObject = GetComponent<NetworkObject>();
