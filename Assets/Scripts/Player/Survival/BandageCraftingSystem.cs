@@ -13,6 +13,9 @@ public class BandageCraftingSystem : MonoBehaviour
     [SerializeField] private KeyCode keyboardCraftKey = KeyCode.C;
     [SerializeField] private List<CraftingRecipe> recipes = new List<CraftingRecipe>();
 
+    private readonly List<CraftingRecipe> availableRecipes = new List<CraftingRecipe>();
+    private FusionPlayerSurvival survival;
+
     public int FiberCost => Mathf.Max(1, fiberCost);
     public int ClothCost => Mathf.Max(1, clothCost);
     public int BandageOutput => Mathf.Max(1, bandageOutput);
@@ -44,7 +47,7 @@ public class BandageCraftingSystem : MonoBehaviour
     {
         EnsureDefaultRecipes();
 
-        List<CraftingRecipe> availableRecipes = new List<CraftingRecipe>();
+        availableRecipes.Clear();
         for (int i = 0; i < recipes.Count; i++)
         {
             CraftingRecipe recipe = recipes[i];
@@ -60,7 +63,7 @@ public class BandageCraftingSystem : MonoBehaviour
     public bool CanCraft(CraftingRecipe recipe)
     {
         ResolveReferences();
-        if (inventory == null || recipe == null || IsDowned())
+        if (inventory == null || recipe == null || recipe.ingredients == null || IsDowned())
         {
             return false;
         }
@@ -80,7 +83,7 @@ public class BandageCraftingSystem : MonoBehaviour
     public bool TryCraft(CraftingRecipe recipe)
     {
         ResolveReferences();
-        if (inventory == null || recipe == null)
+        if (inventory == null || recipe == null || recipe.ingredients == null)
         {
             return false;
         }
@@ -94,6 +97,13 @@ public class BandageCraftingSystem : MonoBehaviour
         if (!CanCraft(recipe))
         {
             ShowInfo(BuildMissingIngredientMessage(recipe));
+            return false;
+        }
+
+        int ingredientTotal = GetIngredientTotal(recipe);
+        if (inventory.RemainingCapacity + ingredientTotal < recipe.OutputAmount)
+        {
+            ShowInfo("Inventory Full");
             return false;
         }
 
@@ -155,6 +165,11 @@ public class BandageCraftingSystem : MonoBehaviour
 
     private void EnsureDefaultRecipes()
     {
+        if (recipes == null)
+        {
+            recipes = new List<CraftingRecipe>();
+        }
+
         if (recipes.Count > 0)
         {
             return;
@@ -175,6 +190,26 @@ public class BandageCraftingSystem : MonoBehaviour
         });
     }
 
+    private int GetIngredientTotal(CraftingRecipe recipe)
+    {
+        int total = 0;
+        if (recipe == null || recipe.ingredients == null)
+        {
+            return total;
+        }
+
+        for (int i = 0; i < recipe.ingredients.Count; i++)
+        {
+            CraftingIngredient ingredient = recipe.ingredients[i];
+            if (ingredient != null)
+            {
+                total += ingredient.Amount;
+            }
+        }
+
+        return total;
+    }
+
     private void RollbackIngredients(List<CraftingIngredient> removed)
     {
         for (int i = 0; i < removed.Count; i++)
@@ -189,7 +224,7 @@ public class BandageCraftingSystem : MonoBehaviour
 
     private string BuildMissingIngredientMessage(CraftingRecipe recipe)
     {
-        if (inventory == null || recipe == null || recipe.ingredients.Count == 0)
+        if (inventory == null || recipe == null || recipe.ingredients == null || recipe.ingredients.Count == 0)
         {
             return "Missing Ingredients";
         }
@@ -218,6 +253,11 @@ public class BandageCraftingSystem : MonoBehaviour
         {
             inventory = GetComponent<PlayerInventory>();
         }
+
+        if (survival == null)
+        {
+            survival = GetComponent<FusionPlayerSurvival>();
+        }
     }
 
     private static void ShowInfo(string message)
@@ -231,12 +271,12 @@ public class BandageCraftingSystem : MonoBehaviour
     private bool HasLocalCraftAuthority()
     {
         NetworkObject networkObject = GetComponent<NetworkObject>();
-        return networkObject == null || networkObject.HasStateAuthority;
+        return networkObject == null || networkObject.HasStateAuthority || networkObject.HasInputAuthority;
     }
 
     private bool IsDowned()
     {
-        FusionPlayerSurvival survival = GetComponent<FusionPlayerSurvival>();
+        ResolveReferences();
         return survival != null && survival.IsDowned;
     }
 }
