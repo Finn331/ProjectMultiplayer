@@ -105,11 +105,19 @@ public class PlayerInventoryUI : MonoBehaviour
             return;
         }
 
-        this.EnsureUI();
+        if (Application.isPlaying || this.CanRenderEditorPreview())
+        {
+            this.EnsureUI();
+        }
     }
 
     private void OnEnable()
     {
+        if (!Application.isPlaying && !this.CanRenderEditorPreview())
+        {
+            return;
+        }
+
         if (Application.isPlaying && !this.HasLocalInventoryAuthority())
         {
             enabled = false;
@@ -177,7 +185,7 @@ public class PlayerInventoryUI : MonoBehaviour
             hotbarUI.SelectedSlotChanged -= this.OnHotbarSelectionChanged;
         }
 
-        if (Application.isPlaying)
+        if (this.HasGeneratedUIObjects())
         {
             this.CleanupRuntimeGeneratedUI();
         }
@@ -213,6 +221,11 @@ public class PlayerInventoryUI : MonoBehaviour
 
     private void Update()
     {
+        if (!Application.isPlaying)
+        {
+            return;
+        }
+
         if (allowKeyboardToggle && Input.GetKeyDown(toggleKey))
         {
             this.Toggle();
@@ -926,14 +939,7 @@ public class PlayerInventoryUI : MonoBehaviour
                 continue;
             }
 
-            if (Application.isPlaying)
-            {
-                Destroy(card);
-            }
-            else
-            {
-                DestroyImmediate(card);
-            }
+            this.DestroyGeneratedObject(card);
         }
 
         recipeCardObjects.Clear();
@@ -1074,38 +1080,66 @@ public class PlayerInventoryUI : MonoBehaviour
         return !string.IsNullOrEmpty(gameObject.scene.path);
     }
 
+    private bool HasGeneratedUIObjects()
+    {
+        return recipeCardObjects.Count > 0
+            || createdCraftingTabAtRuntime
+            || createdItemsTabAtRuntime
+            || createdDropButtonAtRuntime
+            || createdNextButtonAtRuntime
+            || createdToggleButtonAtRuntime
+            || createdPanelAtRuntime;
+    }
+
+    private void DestroyGeneratedObject(GameObject obj)
+    {
+        if (obj == null)
+        {
+            return;
+        }
+
+        if (Application.isPlaying)
+        {
+            Destroy(obj);
+        }
+        else
+        {
+            DestroyImmediate(obj);
+        }
+    }
+
     private void CleanupRuntimeGeneratedUI()
     {
         this.ClearRecipeCards();
 
         if (createdCraftingTabAtRuntime && craftingTabButton != null)
         {
-            Destroy(craftingTabButton.gameObject);
+            this.DestroyGeneratedObject(craftingTabButton.gameObject);
         }
 
         if (createdItemsTabAtRuntime && itemsTabButton != null)
         {
-            Destroy(itemsTabButton.gameObject);
+            this.DestroyGeneratedObject(itemsTabButton.gameObject);
         }
 
         if (createdDropButtonAtRuntime && dropItemButton != null)
         {
-            Destroy(dropItemButton.gameObject);
+            this.DestroyGeneratedObject(dropItemButton.gameObject);
         }
 
         if (createdNextButtonAtRuntime && nextItemButton != null)
         {
-            Destroy(nextItemButton.gameObject);
+            this.DestroyGeneratedObject(nextItemButton.gameObject);
         }
 
         if (createdToggleButtonAtRuntime && toggleButton != null)
         {
-            Destroy(toggleButton.gameObject);
+            this.DestroyGeneratedObject(toggleButton.gameObject);
         }
 
         if (createdPanelAtRuntime && panelRoot != null)
         {
-            Destroy(panelRoot.gameObject);
+            this.DestroyGeneratedObject(panelRoot.gameObject);
         }
 
         createdPanelAtRuntime = false;
