@@ -15,9 +15,12 @@ public class CraftingStationInteractor : MonoBehaviour
     [SerializeField] private float scanRadius = 3f;
     [SerializeField] private float scanInterval = 0.2f;
     [SerializeField] private LayerMask stationMask = ~0;
+    [SerializeField] private int initialStationBufferSize = 64;
     [SerializeField] private bool hideWhenUnavailable = true;
 
-    private readonly Collider[] stationColliderBuffer = new Collider[64];
+    private const int MaxStationBufferSize = 256;
+
+    private Collider[] stationColliderBuffer;
     private CraftingTableStation currentStation;
     private float nextScanTime;
     private bool buttonBound;
@@ -25,6 +28,7 @@ public class CraftingStationInteractor : MonoBehaviour
 
     private void Awake()
     {
+        EnsureStationBuffer();
         ResolvePlayerReferences();
     }
 
@@ -111,7 +115,11 @@ public class CraftingStationInteractor : MonoBehaviour
     {
         if (craftButton == null)
         {
-            craftButton = FindButtonByName("craft");
+            craftButton = FindButtonByName("station craft");
+            if (craftButton == null)
+            {
+                craftButton = FindButtonByName("craft");
+            }
         }
     }
 
@@ -149,7 +157,7 @@ public class CraftingStationInteractor : MonoBehaviour
     {
         CraftingTableStation nearest = null;
         float bestDistance = Mathf.Max(0.5f, scanRadius);
-        int hitCount = Physics.OverlapSphereNonAlloc(transform.position, bestDistance, stationColliderBuffer, stationMask, QueryTriggerInteraction.Collide);
+        int hitCount = OverlapStations(bestDistance);
 
         for (int i = 0; i < hitCount; i++)
         {
@@ -179,6 +187,30 @@ public class CraftingStationInteractor : MonoBehaviour
         }
 
         return nearest;
+    }
+
+    private int OverlapStations(float radius)
+    {
+        EnsureStationBuffer();
+        int hitCount = Physics.OverlapSphereNonAlloc(transform.position, radius, stationColliderBuffer, stationMask, QueryTriggerInteraction.Collide);
+
+        while (hitCount == stationColliderBuffer.Length && stationColliderBuffer.Length < MaxStationBufferSize)
+        {
+            int nextSize = Mathf.Min(stationColliderBuffer.Length * 2, MaxStationBufferSize);
+            stationColliderBuffer = new Collider[nextSize];
+            hitCount = Physics.OverlapSphereNonAlloc(transform.position, radius, stationColliderBuffer, stationMask, QueryTriggerInteraction.Collide);
+        }
+
+        return hitCount;
+    }
+
+    private void EnsureStationBuffer()
+    {
+        int size = Mathf.Clamp(initialStationBufferSize, 1, MaxStationBufferSize);
+        if (stationColliderBuffer == null || stationColliderBuffer.Length < size)
+        {
+            stationColliderBuffer = new Collider[size];
+        }
     }
 
     private bool CanUseCurrentStation()
