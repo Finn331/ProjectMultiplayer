@@ -11,7 +11,9 @@ public enum ItemType
     ThirstConsumable,
     Fiber,
     Cloth,
-    Bandage
+    Bandage,
+    CraftingTable,
+    Campfire
 }
 
 public class PickableItem : MonoBehaviour

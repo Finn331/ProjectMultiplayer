@@ -170,12 +170,7 @@ public class BandageCraftingSystem : MonoBehaviour
             recipes = new List<CraftingRecipe>();
         }
 
-        if (recipes.Count > 0)
-        {
-            return;
-        }
-
-        recipes.Add(new CraftingRecipe
+        AddDefaultRecipeIfMissing(new CraftingRecipe
         {
             recipeId = "bandage",
             displayName = "Bandage",
@@ -188,6 +183,68 @@ public class BandageCraftingSystem : MonoBehaviour
                 new CraftingIngredient { itemType = ItemType.Cloth, amount = ClothCost }
             }
         });
+
+        AddDefaultRecipeIfMissing(new CraftingRecipe
+        {
+            recipeId = "crafting_table",
+            displayName = "Crafting Table",
+            outputItemType = ItemType.CraftingTable,
+            outputAmount = 1,
+            context = CraftingContext.Simple,
+            ingredients = new List<CraftingIngredient>
+            {
+                new CraftingIngredient { itemType = ItemType.Wood, amount = 8 },
+                new CraftingIngredient { itemType = ItemType.Stone, amount = 2 },
+                new CraftingIngredient { itemType = ItemType.Fiber, amount = 2 }
+            }
+        });
+
+        AddDefaultRecipeIfMissing(new CraftingRecipe
+        {
+            recipeId = "axe",
+            displayName = "Axe",
+            outputItemType = ItemType.Axe,
+            outputAmount = 1,
+            context = CraftingContext.CraftingTable,
+            ingredients = new List<CraftingIngredient>
+            {
+                new CraftingIngredient { itemType = ItemType.Wood, amount = 3 },
+                new CraftingIngredient { itemType = ItemType.Stone, amount = 2 }
+            }
+        });
+
+        AddDefaultRecipeIfMissing(new CraftingRecipe
+        {
+            recipeId = "campfire",
+            displayName = "Campfire",
+            outputItemType = ItemType.Campfire,
+            outputAmount = 1,
+            context = CraftingContext.CraftingTable,
+            ingredients = new List<CraftingIngredient>
+            {
+                new CraftingIngredient { itemType = ItemType.Wood, amount = 4 },
+                new CraftingIngredient { itemType = ItemType.Stone, amount = 4 }
+            }
+        });
+    }
+
+    private void AddDefaultRecipeIfMissing(CraftingRecipe defaultRecipe)
+    {
+        if (defaultRecipe == null || string.IsNullOrWhiteSpace(defaultRecipe.recipeId))
+        {
+            return;
+        }
+
+        for (int i = 0; i < recipes.Count; i++)
+        {
+            CraftingRecipe recipe = recipes[i];
+            if (recipe != null && recipe.recipeId == defaultRecipe.recipeId)
+            {
+                return;
+            }
+        }
+
+        recipes.Add(defaultRecipe);
     }
 
     private int GetIngredientTotal(CraftingRecipe recipe)

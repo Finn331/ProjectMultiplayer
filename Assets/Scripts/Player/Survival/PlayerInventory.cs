@@ -96,7 +96,7 @@ public class PlayerInventory : MonoBehaviour
         int remaining = Mathf.Max(1, amount);
         int acceptedAmount = 0;
 
-        if (itemType == ItemType.Axe)
+        if (ShouldPreferHotbar(itemType))
         {
             acceptedAmount += this.FillExistingStacks(itemType, remaining, HotbarStartIndex, TotalSlotCount, ref remaining);
             acceptedAmount += this.FillEmptySlots(itemType, remaining, HotbarStartIndex, TotalSlotCount, ref remaining);
@@ -123,6 +123,13 @@ public class PlayerInventory : MonoBehaviour
         this.SyncInspectorEntries();
         InventoryChanged?.Invoke();
         return acceptedAmount;
+    }
+
+    private static bool ShouldPreferHotbar(ItemType itemType)
+    {
+        return itemType == ItemType.Axe
+            || itemType == ItemType.CraftingTable
+            || itemType == ItemType.Campfire;
     }
 
     public bool RemoveItem(ItemType itemType, int amount = 1)
