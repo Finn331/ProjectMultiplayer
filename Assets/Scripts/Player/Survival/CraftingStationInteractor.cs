@@ -14,19 +14,31 @@ public class CraftingStationInteractor : MonoBehaviour
     [Header("Detection")]
     [SerializeField] private float scanRadius = 3f;
     [SerializeField] private float scanInterval = 0.2f;
+    [SerializeField] private LayerMask stationMask = ~0;
     [SerializeField] private bool hideWhenUnavailable = true;
 
+    private readonly Collider[] stationColliderBuffer = new Collider[16];
     private CraftingTableStation currentStation;
     private float nextScanTime;
+    private bool buttonBound;
+    private bool wasLocalAuthority;
 
     private void Awake()
     {
-        ResolveReferences();
+        ResolvePlayerReferences();
     }
 
     private void OnEnable()
     {
-        ResolveReferences();
+        ResolvePlayerReferences();
+        if (!HasLocalAuthority())
+        {
+            currentStation = null;
+            return;
+        }
+
+        wasLocalAuthority = true;
+        ResolveButtonReference();
         BindButton();
         ScanForStation();
         RefreshButton();
@@ -34,20 +46,35 @@ public class CraftingStationInteractor : MonoBehaviour
 
     private void OnDisable()
     {
-        if (craftButton != null)
+        UnbindButton();
+
+        if (wasLocalAuthority)
         {
-            craftButton.onClick.RemoveListener(OpenCraftingTable);
+            DowngradeCraftingContextIfNeeded();
         }
+
+        wasLocalAuthority = false;
     }
 
     private void Update()
     {
-        if (!HasLocalAuthority())
+        bool hasLocalAuthority = HasLocalAuthority();
+        if (!hasLocalAuthority)
         {
             currentStation = null;
-            SetButtonAvailable(false);
+            UnbindButton();
+            if (wasLocalAuthority)
+            {
+                DowngradeCraftingContextIfNeeded();
+            }
+
+            wasLocalAuthority = false;
             return;
         }
+
+        wasLocalAuthority = true;
+        ResolveButtonReference();
+        BindButton();
 
         if (Time.time >= nextScanTime)
         {
@@ -67,7 +94,7 @@ public class CraftingStationInteractor : MonoBehaviour
         inventoryUI.OpenCrafting(CraftingContext.CraftingTable);
     }
 
-    private void ResolveReferences()
+    private void ResolvePlayerReferences()
     {
         if (inventoryUI == null)
         {
@@ -78,7 +105,10 @@ public class CraftingStationInteractor : MonoBehaviour
         {
             survival = GetComponent<FusionPlayerSurvival>();
         }
+    }
 
+    private void ResolveButtonReference()
+    {
         if (craftButton == null)
         {
             craftButton = FindButtonByName("craft");
@@ -87,13 +117,26 @@ public class CraftingStationInteractor : MonoBehaviour
 
     private void BindButton()
     {
-        if (craftButton == null)
+        if (buttonBound || craftButton == null || !HasLocalAuthority())
         {
             return;
         }
 
         craftButton.onClick.RemoveListener(OpenCraftingTable);
         craftButton.onClick.AddListener(OpenCraftingTable);
+        buttonBound = true;
+    }
+
+    private void UnbindButton()
+    {
+        if (!buttonBound || craftButton == null)
+        {
+            buttonBound = false;
+            return;
+        }
+
+        craftButton.onClick.RemoveListener(OpenCraftingTable);
+        buttonBound = false;
     }
 
     private void ScanForStation()
@@ -104,9 +147,43 @@ public class CraftingStationInteractor : MonoBehaviour
 
     private CraftingTableStation FindNearestStation()
     {
-        CraftingTableStation[] stations = FindObjectsOfType<CraftingTableStation>();
         CraftingTableStation nearest = null;
         float bestDistance = Mathf.Max(0.5f, scanRadius);
+        int hitCount = Physics.OverlapSphereNonAlloc(transform.position, bestDistance, stationColliderBuffer, stationMask, QueryTriggerInteraction.Collide);
+
+        for (int i = 0; i < hitCount; i++)
+        {
+            Collider hit = stationColliderBuffer[i];
+            if (hit == null)
+            {
+                continue;
+            }
+
+            CraftingTableStation station = hit.GetComponentInParent<CraftingTableStation>();
+            if (station == null)
+            {
+                station = hit.GetComponentInChildren<CraftingTableStation>();
+            }
+
+            if (station == null)
+            {
+                continue;
+            }
+
+            float distance = Vector3.Distance(transform.position, station.transform.position);
+            if (distance <= bestDistance && station.IsInRange(transform.position))
+            {
+                bestDistance = distance;
+                nearest = station;
+            }
+        }
+
+        if (nearest != null)
+        {
+            return nearest;
+        }
+
+        CraftingTableStation[] stations = FindObjectsOfType<CraftingTableStation>();
 
         for (int i = 0; i < stations.Length; i++)
         {
@@ -138,12 +215,18 @@ public class CraftingStationInteractor : MonoBehaviour
 
     private void RefreshButton()
     {
-        SetButtonAvailable(CanUseCurrentStation());
+        bool canUse = CanUseCurrentStation();
+        SetButtonAvailable(canUse);
+
+        if (!canUse)
+        {
+            DowngradeCraftingContextIfNeeded();
+        }
     }
 
     private void SetButtonAvailable(bool available)
     {
-        if (craftButton == null)
+        if (craftButton == null || !HasLocalAuthority())
         {
             return;
         }
@@ -152,6 +235,14 @@ public class CraftingStationInteractor : MonoBehaviour
         if (hideWhenUnavailable)
         {
             craftButton.gameObject.SetActive(available);
+        }
+    }
+
+    private void DowngradeCraftingContextIfNeeded()
+    {
+        if (inventoryUI != null && inventoryUI.CurrentCraftingContext == CraftingContext.CraftingTable)
+        {
+            inventoryUI.SetCraftingContext(CraftingContext.Simple);
         }
     }
 
