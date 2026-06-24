@@ -64,6 +64,7 @@ public class PlayerInventoryUI : MonoBehaviour
     private bool createdDropButtonAtRuntime;
     private readonly System.Collections.Generic.List<GameObject> recipeCardObjects = new System.Collections.Generic.List<GameObject>();
     private InventoryView activeView = InventoryView.Items;
+    private CraftingContext currentCraftingContext = CraftingContext.Simple;
     private bool createdItemsTabAtRuntime;
     private bool createdCraftingTabAtRuntime;
 
@@ -256,7 +257,14 @@ public class PlayerInventoryUI : MonoBehaviour
             return;
         }
 
-        panelRoot.gameObject.SetActive(!panelRoot.gameObject.activeSelf);
+        bool visible = !panelRoot.gameObject.activeSelf;
+        panelRoot.gameObject.SetActive(visible);
+
+        if (visible)
+        {
+            currentCraftingContext = CraftingContext.Simple;
+            this.Refresh();
+        }
     }
 
     public void SetVisible(bool visible)
@@ -267,6 +275,30 @@ public class PlayerInventoryUI : MonoBehaviour
         }
 
         panelRoot.gameObject.SetActive(visible);
+    }
+
+    public void OpenCrafting(CraftingContext context)
+    {
+        currentCraftingContext = context;
+        activeView = InventoryView.Crafting;
+        this.EnsureUI();
+        this.SetVisible(true);
+        this.Refresh();
+    }
+
+    public void SetCraftingContext(CraftingContext context)
+    {
+        currentCraftingContext = context;
+
+        if (activeView == InventoryView.Crafting)
+        {
+            this.Refresh();
+        }
+    }
+
+    public CraftingContext CurrentCraftingContext
+    {
+        get { return currentCraftingContext; }
     }
 
     public void SelectNextItem()
@@ -800,7 +832,12 @@ public class PlayerInventoryUI : MonoBehaviour
             return;
         }
 
-        var recipes = craftingSystem.GetAvailableRecipes(CraftingContext.Simple);
+        if (titleText != null)
+        {
+            titleText.text = currentCraftingContext == CraftingContext.CraftingTable ? "Crafting Table" : "Crafting";
+        }
+
+        var recipes = craftingSystem.GetAvailableRecipes(currentCraftingContext);
         if (recipes == null || recipes.Count == 0)
         {
             this.CreateRecipeInfoText("No recipes available");
@@ -1107,7 +1144,7 @@ public class PlayerInventoryUI : MonoBehaviour
         var fusionObject = GetComponent<Fusion.NetworkObject>();
         if (fusionObject != null && fusionObject.IsValid)
         {
-            return fusionObject.HasStateAuthority;
+            return fusionObject.HasStateAuthority || fusionObject.HasInputAuthority;
         }
 
         NetworkObject networkObject = GetComponent<NetworkObject>();
