@@ -17,7 +17,7 @@ public class PlaceableItemSystem : MonoBehaviour
     [SerializeField] private float groundRaycastDistance = 4f;
     [SerializeField] private float groundOffset = 0.02f;
     [SerializeField] private LayerMask placementSurfaceMask = ~0;
-    [SerializeField] private LayerMask placementBlockedMask = ~0;
+    [SerializeField] private LayerMask placementBlockedMask = 0;
     [SerializeField] private Vector3 previewBounds = Vector3.one;
     [SerializeField] private Material validPreviewMaterial;
     [SerializeField] private Material invalidPreviewMaterial;
@@ -119,7 +119,8 @@ public class PlaceableItemSystem : MonoBehaviour
 
         if (fusionInventory != null)
         {
-            placed = fusionInventory.RequestPlaceFromSlot(selectedGlobalSlot, position, rotation);
+            fusionInventory.RequestPlaceFromSlot(selectedGlobalSlot, position, rotation);
+            return;
         }
         else if (inventory != null && inventory.RemoveItemFromSlot(selectedGlobalSlot, 1, out ItemType removedItemType))
         {
@@ -173,9 +174,25 @@ public class PlaceableItemSystem : MonoBehaviour
         Quaternion targetRotation = Quaternion.Euler(0f, transform.eulerAngles.y, 0f);
         previewObject.transform.SetPositionAndRotation(targetPosition, targetRotation);
 
-        Vector3 halfExtents = Vector3.Max(previewBounds, Vector3.one * 0.1f) * 0.5f;
-        currentPlacementValid = hasGround && !Physics.CheckBox(targetPosition, halfExtents, targetRotation, placementBlockedMask, QueryTriggerInteraction.Ignore);
+        currentPlacementValid = hasGround && !IsPlacementBlocked(targetPosition, targetRotation, hit.collider);
         ApplyPreviewMaterial(currentPlacementValid ? validPreviewMaterial : invalidPreviewMaterial);
+    }
+
+    private bool IsPlacementBlocked(Vector3 groundPosition, Quaternion rotation, Collider groundCollider)
+    {
+        Vector3 halfExtents = Vector3.Max(previewBounds, Vector3.one * 0.1f) * 0.5f;
+        Vector3 center = groundPosition + Vector3.up * (halfExtents.y + Mathf.Max(0.01f, groundOffset));
+        Collider[] hits = Physics.OverlapBox(center, halfExtents, rotation, placementBlockedMask, QueryTriggerInteraction.Ignore);
+        for (int i = 0; i < hits.Length; i++)
+        {
+            Collider hit = hits[i];
+            if (hit != null && hit != groundCollider)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private bool TryGetPlacementGround(out RaycastHit hit)

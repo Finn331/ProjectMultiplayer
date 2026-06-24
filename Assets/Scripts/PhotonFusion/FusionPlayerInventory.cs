@@ -38,7 +38,8 @@ public class FusionPlayerInventory : NetworkBehaviour
     [SerializeField] private LayerMask placementSurfaceMask = ~0;
     [SerializeField] private float placementGroundRaycastDistance = 4f;
     [SerializeField] private float placementGroundTolerance = 0.15f;
-    [SerializeField] private LayerMask placementBlockedMask = ~0;
+    [SerializeField] private float placementGroundOffset = 0.02f;
+    [SerializeField] private LayerMask placementBlockedMask = 0;
 
     public override void Spawned()
     {
@@ -691,13 +692,12 @@ public class FusionPlayerInventory : NetworkBehaviour
             return;
         }
 
-        if (!IsOnValidPlacementGround(position))
+        if (!TryGetValidPlacementGround(position, out Collider groundCollider))
         {
             return;
         }
 
-        Vector3 halfExtents = Vector3.Max(bounds, Vector3.one * 0.1f) * 0.5f;
-        if (Physics.CheckBox(position, halfExtents, rotation, placementBlockedMask, QueryTriggerInteraction.Ignore))
+        if (IsPlacementBlocked(position, rotation, bounds, groundCollider))
         {
             return;
         }
@@ -820,8 +820,9 @@ public class FusionPlayerInventory : NetworkBehaviour
         return false;
     }
 
-    private bool IsOnValidPlacementGround(Vector3 position)
+    private bool TryGetValidPlacementGround(Vector3 position, out Collider groundCollider)
     {
+        groundCollider = null;
         float rayDistance = Mathf.Max(0.5f, placementGroundRaycastDistance);
         Vector3 origin = position + Vector3.up * Mathf.Min(1f, rayDistance * 0.5f);
         if (!Physics.Raycast(origin, Vector3.down, out RaycastHit hit, rayDistance, placementSurfaceMask, QueryTriggerInteraction.Ignore))
@@ -829,7 +830,30 @@ public class FusionPlayerInventory : NetworkBehaviour
             return false;
         }
 
-        return Mathf.Abs(hit.point.y - position.y) <= Mathf.Max(0.01f, placementGroundTolerance);
+        if (Mathf.Abs(hit.point.y - position.y) > Mathf.Max(0.01f, placementGroundTolerance))
+        {
+            return false;
+        }
+
+        groundCollider = hit.collider;
+        return true;
+    }
+
+    private bool IsPlacementBlocked(Vector3 groundPosition, Quaternion rotation, Vector3 bounds, Collider groundCollider)
+    {
+        Vector3 halfExtents = Vector3.Max(bounds, Vector3.one * 0.1f) * 0.5f;
+        Vector3 center = groundPosition + Vector3.up * (halfExtents.y + Mathf.Max(0.01f, placementGroundOffset));
+        Collider[] hits = Physics.OverlapBox(center, halfExtents, rotation, placementBlockedMask, QueryTriggerInteraction.Ignore);
+        for (int i = 0; i < hits.Length; i++)
+        {
+            Collider hit = hits[i];
+            if (hit != null && hit != groundCollider)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private bool CanSpawnFusionDrop(ItemType itemType)
