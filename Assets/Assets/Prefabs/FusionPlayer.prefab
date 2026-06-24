@@ -958,7 +958,7 @@ MonoBehaviour:
   placementGroundOffset: 0.02
   placementBlockedMask:
     serializedVersion: 2
-    m_Bits: 0
+    m_Bits: 4294967255
 --- !u!114 &2888294261796364785
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1178,7 +1178,7 @@ MonoBehaviour:
     m_Bits: 4294967295
   placementBlockedMask:
     serializedVersion: 2
-    m_Bits: 0
+    m_Bits: 4294967255
   previewBounds: {x: 1, y: 1, z: 1}
   validPreviewMaterial: {fileID: 2100000, guid: 6afb9e175d3fdc44e973831f338090f4,
     type: 2}
