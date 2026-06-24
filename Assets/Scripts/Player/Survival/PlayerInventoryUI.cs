@@ -26,7 +26,6 @@ public class PlayerInventoryUI : MonoBehaviour
     [SerializeField] private TextMeshProUGUI itemsTabButtonText;
     [SerializeField] private Button craftingTabButton;
     [SerializeField] private TextMeshProUGUI craftingTabButtonText;
-    [SerializeField] private RectTransform craftingListRoot;
 
     [Header("Behavior")]
     [SerializeField] private bool autoCreateUI = true;
@@ -836,8 +835,18 @@ public class PlayerInventoryUI : MonoBehaviour
 
     private void CreateRecipeCard(CraftingRecipe recipe, float y)
     {
-        GameObject card = new GameObject("Recipe Card - " + recipe.DisplayName, typeof(RectTransform), typeof(Image));
+        string cardName = "Recipe Card - " + recipe.DisplayName;
+        Transform existingCard = panelRoot.Find(cardName);
+        bool createdCard = existingCard == null;
+        GameObject card = createdCard
+            ? new GameObject(cardName, typeof(RectTransform), typeof(Image))
+            : existingCard.gameObject;
         RectTransform rect = card.GetComponent<RectTransform>();
+        if (rect == null)
+        {
+            rect = card.AddComponent<RectTransform>();
+        }
+
         rect.SetParent(panelRoot, false);
         rect.anchorMin = new Vector2(0f, 1f);
         rect.anchorMax = new Vector2(1f, 1f);
@@ -846,18 +855,24 @@ public class PlayerInventoryUI : MonoBehaviour
         rect.offsetMax = new Vector2(-16f, 0f);
         rect.sizeDelta = new Vector2(rect.sizeDelta.x, 76f);
         rect.anchoredPosition = new Vector2(0f, y);
+        card.SetActive(true);
 
         Image image = card.GetComponent<Image>();
+        if (image == null)
+        {
+            image = card.AddComponent<Image>();
+        }
+
         image.color = new Color(0.05f, 0.08f, 0.1f, 0.82f);
 
-        TextMeshProUGUI title = this.CreateLabel("Title", rect, 20f, FontStyles.Bold, titleColor, TextAlignmentOptions.Left, true);
+        TextMeshProUGUI title = this.GetOrCreateLabel("Title", rect, 20f, FontStyles.Bold, titleColor, TextAlignmentOptions.Left, true);
         title.rectTransform.anchorMin = new Vector2(0f, 1f);
         title.rectTransform.anchorMax = new Vector2(1f, 1f);
         title.rectTransform.offsetMin = new Vector2(12f, -34f);
         title.rectTransform.offsetMax = new Vector2(-112f, -8f);
         title.text = recipe.DisplayName + " x" + recipe.OutputAmount;
 
-        TextMeshProUGUI ingredients = this.CreateLabel("Ingredients", rect, 16f, FontStyles.Normal, itemTextColor, TextAlignmentOptions.Left, false);
+        TextMeshProUGUI ingredients = this.GetOrCreateLabel("Ingredients", rect, 16f, FontStyles.Normal, itemTextColor, TextAlignmentOptions.Left, false);
         ingredients.rectTransform.anchorMin = new Vector2(0f, 0f);
         ingredients.rectTransform.anchorMax = new Vector2(1f, 0f);
         ingredients.rectTransform.offsetMin = new Vector2(12f, 10f);
@@ -867,24 +882,47 @@ public class PlayerInventoryUI : MonoBehaviour
         Button craftButton = this.CreateRecipeCraftButton(rect, recipe);
         craftButton.interactable = craftingSystem.CanCraft(recipe);
 
-        recipeCardObjects.Add(card);
+        if (createdCard)
+        {
+            recipeCardObjects.Add(card);
+        }
     }
 
     private Button CreateRecipeCraftButton(RectTransform parent, CraftingRecipe recipe)
     {
-        GameObject buttonObject = new GameObject("Craft Button", typeof(RectTransform), typeof(Image), typeof(Button));
+        Transform existingButton = parent.Find("Craft Button");
+        GameObject buttonObject = existingButton == null
+            ? new GameObject("Craft Button", typeof(RectTransform), typeof(Image), typeof(Button))
+            : existingButton.gameObject;
         RectTransform rect = buttonObject.GetComponent<RectTransform>();
+        if (rect == null)
+        {
+            rect = buttonObject.AddComponent<RectTransform>();
+        }
+
         rect.SetParent(parent, false);
         rect.anchorMin = new Vector2(1f, 0.5f);
         rect.anchorMax = new Vector2(1f, 0.5f);
         rect.pivot = new Vector2(1f, 0.5f);
         rect.sizeDelta = new Vector2(96f, 42f);
         rect.anchoredPosition = new Vector2(-10f, 0f);
+        buttonObject.SetActive(true);
 
         Image image = buttonObject.GetComponent<Image>();
+        if (image == null)
+        {
+            image = buttonObject.AddComponent<Image>();
+        }
+
         image.color = actionButtonColor;
 
         Button button = buttonObject.GetComponent<Button>();
+        if (button == null)
+        {
+            button = buttonObject.AddComponent<Button>();
+        }
+
+        button.onClick.RemoveAllListeners();
         button.onClick.AddListener(() =>
         {
             if (craftingSystem != null && craftingSystem.TryCraft(recipe))
@@ -893,13 +931,38 @@ public class PlayerInventoryUI : MonoBehaviour
             }
         });
 
-        TextMeshProUGUI label = this.CreateLabel("Label", rect, 18f, FontStyles.Bold, Color.white, TextAlignmentOptions.Center, true);
+        TextMeshProUGUI label = this.GetOrCreateLabel("Label", rect, 18f, FontStyles.Bold, Color.white, TextAlignmentOptions.Center, true);
         label.rectTransform.anchorMin = Vector2.zero;
         label.rectTransform.anchorMax = Vector2.one;
         label.rectTransform.offsetMin = new Vector2(6f, 4f);
         label.rectTransform.offsetMax = new Vector2(-6f, -4f);
         label.text = "Craft";
         return button;
+    }
+
+    private TextMeshProUGUI GetOrCreateLabel(
+        string objectName,
+        RectTransform parent,
+        float fontSize,
+        FontStyles style,
+        Color color,
+        TextAlignmentOptions alignment,
+        bool autoSizing)
+    {
+        Transform existing = parent.Find(objectName);
+        TextMeshProUGUI label = existing != null ? existing.GetComponent<TextMeshProUGUI>() : null;
+        if (label == null)
+        {
+            return this.CreateLabel(objectName, parent, fontSize, style, color, alignment, autoSizing);
+        }
+
+        label.fontSize = fontSize;
+        label.fontStyle = style;
+        label.color = color;
+        label.alignment = alignment;
+        label.enableAutoSizing = autoSizing;
+        label.enableWordWrapping = false;
+        return label;
     }
 
     private string BuildIngredientText(CraftingRecipe recipe)
@@ -948,6 +1011,24 @@ public class PlayerInventoryUI : MonoBehaviour
         }
 
         recipeCardObjects.Clear();
+        this.HidePersistentRecipeCards();
+    }
+
+    private void HidePersistentRecipeCards()
+    {
+        if (panelRoot == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < panelRoot.childCount; i++)
+        {
+            Transform child = panelRoot.GetChild(i);
+            if (child != null && child.name.StartsWith("Recipe Card - ", System.StringComparison.Ordinal))
+            {
+                child.gameObject.SetActive(false);
+            }
+        }
     }
 
     private void OnHotbarSelectionChanged(int slotIndex, ItemType? itemType)
@@ -1164,6 +1245,5 @@ public class PlayerInventoryUI : MonoBehaviour
         craftingTabButton = null;
         itemsTabButtonText = null;
         craftingTabButtonText = null;
-        craftingListRoot = null;
     }
 }

@@ -294,7 +294,7 @@ public class HotbarConsumeUI : MonoBehaviour
         var fusionObject = GetComponent<Fusion.NetworkObject>();
         if (fusionObject != null && fusionObject.IsValid)
         {
-            return fusionObject.HasStateAuthority;
+            return fusionObject.HasStateAuthority || fusionObject.HasInputAuthority;
         }
 
         NetworkObject networkObject = GetComponent<NetworkObject>();

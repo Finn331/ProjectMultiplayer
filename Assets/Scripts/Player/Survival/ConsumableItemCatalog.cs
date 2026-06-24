@@ -31,6 +31,9 @@ public static class ConsumableItemCatalog
             case ItemType.HealthConsumable:
                 effect = new ConsumableItemEffect(DefaultHealthBoostAmount, 0f, 0f);
                 return true;
+            case ItemType.Bandage:
+                effect = new ConsumableItemEffect(DefaultHealthBoostAmount, 0f, 0f);
+                return true;
             case ItemType.HungerConsumable:
                 effect = new ConsumableItemEffect(0f, DefaultHungerBoostAmount, 0f);
                 return true;

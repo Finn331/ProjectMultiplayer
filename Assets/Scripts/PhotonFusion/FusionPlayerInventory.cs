@@ -350,6 +350,11 @@ public class FusionPlayerInventory : NetworkBehaviour
             return true;
         }
 
+        if (TryCacheSceneDropTemplate(itemType))
+        {
+            return true;
+        }
+
         return itemType == ItemType.Axe && Resources.Load<GameObject>("Prefabs/axe") != null;
     }
 
@@ -445,15 +450,36 @@ public class FusionPlayerInventory : NetworkBehaviour
             return;
         }
 
+        if (!Application.isPlaying)
+        {
+            SceneDropTemplates[sourceItem.itemType] = sourceItem;
+            return;
+        }
+
         PickableItem template = Instantiate(sourceItem);
         template.name = sourceItem.itemType + " FusionSceneDropTemplate";
         template.gameObject.SetActive(false);
-        if (Application.isPlaying)
-        {
-            DontDestroyOnLoad(template.gameObject);
-        }
+        DontDestroyOnLoad(template.gameObject);
 
         SceneDropTemplates[sourceItem.itemType] = template;
+    }
+
+    private static bool TryCacheSceneDropTemplate(ItemType itemType)
+    {
+        PickableItem[] items = FindObjectsOfType<PickableItem>(true);
+        for (int i = 0; i < items.Length; i++)
+        {
+            PickableItem candidate = items[i];
+            if (candidate == null || candidate.itemType != itemType)
+            {
+                continue;
+            }
+
+            CacheSceneDropTemplate(candidate);
+            return SceneDropTemplates.TryGetValue(itemType, out PickableItem template) && template != null;
+        }
+
+        return false;
     }
 
     private static PickableItem FindMatchingScenePickup(Vector3 itemPosition, Vector3 pickerPosition, ItemType itemType, int requestedAmount, int sceneDropId)
@@ -662,6 +688,6 @@ public class FusionPlayerInventory : NetworkBehaviour
 
     private bool HasFusionInputAuthority()
     {
-        return Object != null && Object.HasStateAuthority;
+        return Object != null && (Object.HasStateAuthority || Object.HasInputAuthority);
     }
 }

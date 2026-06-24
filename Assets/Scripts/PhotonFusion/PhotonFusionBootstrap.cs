@@ -53,7 +53,7 @@ public class PhotonFusionBootstrap : MonoBehaviour, INetworkRunnerCallbacks
         }
     }
 
-    public async void CreateRoom(string roomCode, string playerName, int maxPlayers)
+    public void CreateRoom(string roomCode, string playerName, int maxPlayers)
     {
         CreateRoom(roomCode, playerName, maxPlayers, isPrivate: false);
     }
