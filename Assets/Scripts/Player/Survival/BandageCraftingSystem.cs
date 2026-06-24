@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Fusion;
 using UnityEngine;
 
@@ -10,6 +11,7 @@ public class BandageCraftingSystem : MonoBehaviour
     [SerializeField] private int bandageOutput = 1;
     [SerializeField] private bool allowKeyboardCraft = true;
     [SerializeField] private KeyCode keyboardCraftKey = KeyCode.C;
+    [SerializeField] private List<CraftingRecipe> recipes = new List<CraftingRecipe>();
 
     public int FiberCost => Mathf.Max(1, fiberCost);
     public int ClothCost => Mathf.Max(1, clothCost);
@@ -18,6 +20,14 @@ public class BandageCraftingSystem : MonoBehaviour
     private void Awake()
     {
         ResolveReferences();
+        EnsureDefaultRecipes();
+    }
+
+    private void OnValidate()
+    {
+        fiberCost = Mathf.Max(1, fiberCost);
+        clothCost = Mathf.Max(1, clothCost);
+        bandageOutput = Mathf.Max(1, bandageOutput);
     }
 
     private void Update()
@@ -30,52 +40,176 @@ public class BandageCraftingSystem : MonoBehaviour
         TryCraftBandage();
     }
 
-    public bool CanCraftBandage()
+    public IReadOnlyList<CraftingRecipe> GetAvailableRecipes(CraftingContext context)
     {
-        ResolveReferences();
-        return inventory != null &&
-            inventory.HasItem(ItemType.Fiber, FiberCost) &&
-            inventory.HasItem(ItemType.Cloth, ClothCost);
+        EnsureDefaultRecipes();
+
+        List<CraftingRecipe> availableRecipes = new List<CraftingRecipe>();
+        for (int i = 0; i < recipes.Count; i++)
+        {
+            CraftingRecipe recipe = recipes[i];
+            if (recipe != null && recipe.context == context)
+            {
+                availableRecipes.Add(recipe);
+            }
+        }
+
+        return availableRecipes;
     }
 
-    public bool TryCraftBandage()
+    public bool CanCraft(CraftingRecipe recipe)
     {
         ResolveReferences();
-        if (!CanCraftBandage())
+        if (inventory == null || recipe == null || IsDowned())
         {
-            ShowInfo("Need 2 Fiber + 1 Cloth");
             return false;
         }
 
-        if (!inventory.RemoveItem(ItemType.Fiber, FiberCost))
+        for (int i = 0; i < recipe.ingredients.Count; i++)
         {
-            ShowInfo("Need 2 Fiber");
+            CraftingIngredient ingredient = recipe.ingredients[i];
+            if (ingredient == null || !inventory.HasItem(ingredient.itemType, ingredient.Amount))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public bool TryCraft(CraftingRecipe recipe)
+    {
+        ResolveReferences();
+        if (inventory == null || recipe == null)
+        {
             return false;
         }
 
-        if (!inventory.RemoveItem(ItemType.Cloth, ClothCost))
+        if (IsDowned())
         {
-            inventory.AddItem(ItemType.Fiber, FiberCost);
-            ShowInfo("Need 1 Cloth");
+            ShowInfo("Cannot craft while downed");
             return false;
         }
 
-        int added = inventory.AddItem(ItemType.Bandage, BandageOutput);
-        if (added < BandageOutput)
+        if (!CanCraft(recipe))
+        {
+            ShowInfo(BuildMissingIngredientMessage(recipe));
+            return false;
+        }
+
+        List<CraftingIngredient> removed = new List<CraftingIngredient>();
+        for (int i = 0; i < recipe.ingredients.Count; i++)
+        {
+            CraftingIngredient ingredient = recipe.ingredients[i];
+            if (!inventory.RemoveItem(ingredient.itemType, ingredient.Amount))
+            {
+                RollbackIngredients(removed);
+                ShowInfo(BuildMissingIngredientMessage(recipe));
+                return false;
+            }
+
+            removed.Add(ingredient);
+        }
+
+        int added = inventory.AddItem(recipe.outputItemType, recipe.OutputAmount);
+        if (added < recipe.OutputAmount)
         {
             if (added > 0)
             {
-                inventory.RemoveItem(ItemType.Bandage, added);
+                inventory.RemoveItem(recipe.outputItemType, added);
             }
 
-            inventory.AddItem(ItemType.Fiber, FiberCost);
-            inventory.AddItem(ItemType.Cloth, ClothCost);
+            RollbackIngredients(removed);
             ShowInfo("Inventory Full");
             return false;
         }
 
-        ShowInfo("Crafted Bandage");
+        ShowInfo("Crafted " + recipe.DisplayName);
         return true;
+    }
+
+    public bool CanCraftBandage()
+    {
+        return CanCraft(GetBandageRecipe());
+    }
+
+    public bool TryCraftBandage()
+    {
+        return TryCraft(GetBandageRecipe());
+    }
+
+    public CraftingRecipe GetBandageRecipe()
+    {
+        EnsureDefaultRecipes();
+        for (int i = 0; i < recipes.Count; i++)
+        {
+            CraftingRecipe recipe = recipes[i];
+            if (recipe != null && recipe.outputItemType == ItemType.Bandage)
+            {
+                return recipe;
+            }
+        }
+
+        return null;
+    }
+
+    private void EnsureDefaultRecipes()
+    {
+        if (recipes.Count > 0)
+        {
+            return;
+        }
+
+        recipes.Add(new CraftingRecipe
+        {
+            recipeId = "bandage",
+            displayName = "Bandage",
+            outputItemType = ItemType.Bandage,
+            outputAmount = BandageOutput,
+            context = CraftingContext.Simple,
+            ingredients = new List<CraftingIngredient>
+            {
+                new CraftingIngredient { itemType = ItemType.Fiber, amount = FiberCost },
+                new CraftingIngredient { itemType = ItemType.Cloth, amount = ClothCost }
+            }
+        });
+    }
+
+    private void RollbackIngredients(List<CraftingIngredient> removed)
+    {
+        for (int i = 0; i < removed.Count; i++)
+        {
+            CraftingIngredient ingredient = removed[i];
+            if (ingredient != null)
+            {
+                inventory.AddItem(ingredient.itemType, ingredient.Amount);
+            }
+        }
+    }
+
+    private string BuildMissingIngredientMessage(CraftingRecipe recipe)
+    {
+        if (inventory == null || recipe == null || recipe.ingredients.Count == 0)
+        {
+            return "Missing Ingredients";
+        }
+
+        for (int i = 0; i < recipe.ingredients.Count; i++)
+        {
+            CraftingIngredient ingredient = recipe.ingredients[i];
+            if (ingredient == null)
+            {
+                continue;
+            }
+
+            int owned = inventory.GetAmount(ingredient.itemType);
+            if (owned < ingredient.Amount)
+            {
+                return "Need " + ingredient.Amount + " " + ingredient.itemType;
+            }
+        }
+
+        return "Missing Ingredients";
     }
 
     private void ResolveReferences()
@@ -98,5 +232,11 @@ public class BandageCraftingSystem : MonoBehaviour
     {
         NetworkObject networkObject = GetComponent<NetworkObject>();
         return networkObject == null || networkObject.HasStateAuthority;
+    }
+
+    private bool IsDowned()
+    {
+        FusionPlayerSurvival survival = GetComponent<FusionPlayerSurvival>();
+        return survival != null && survival.IsDowned;
     }
 }
