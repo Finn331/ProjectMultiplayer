@@ -35,6 +35,9 @@ public class FusionPlayerInventory : NetworkBehaviour
     [Header("Placeables")]
     [SerializeField] private PlaceablePrefabBinding[] placeablePrefabs;
     [SerializeField] private float maxPlacementDistance = 4f;
+    [SerializeField] private LayerMask placementSurfaceMask = ~0;
+    [SerializeField] private float placementGroundRaycastDistance = 4f;
+    [SerializeField] private float placementGroundTolerance = 0.15f;
     [SerializeField] private LayerMask placementBlockedMask = ~0;
 
     public override void Spawned()
@@ -688,6 +691,11 @@ public class FusionPlayerInventory : NetworkBehaviour
             return;
         }
 
+        if (!IsOnValidPlacementGround(position))
+        {
+            return;
+        }
+
         Vector3 halfExtents = Vector3.Max(bounds, Vector3.one * 0.1f) * 0.5f;
         if (Physics.CheckBox(position, halfExtents, rotation, placementBlockedMask, QueryTriggerInteraction.Ignore))
         {
@@ -810,6 +818,18 @@ public class FusionPlayerInventory : NetworkBehaviour
 
         prefab = default;
         return false;
+    }
+
+    private bool IsOnValidPlacementGround(Vector3 position)
+    {
+        float rayDistance = Mathf.Max(0.5f, placementGroundRaycastDistance);
+        Vector3 origin = position + Vector3.up * Mathf.Min(1f, rayDistance * 0.5f);
+        if (!Physics.Raycast(origin, Vector3.down, out RaycastHit hit, rayDistance, placementSurfaceMask, QueryTriggerInteraction.Ignore))
+        {
+            return false;
+        }
+
+        return Mathf.Abs(hit.point.y - position.y) <= Mathf.Max(0.01f, placementGroundTolerance);
     }
 
     private bool CanSpawnFusionDrop(ItemType itemType)

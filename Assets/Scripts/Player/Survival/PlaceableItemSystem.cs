@@ -14,6 +14,8 @@ public class PlaceableItemSystem : MonoBehaviour
 
     [Header("Placement")]
     [SerializeField] private float placementDistance = 2.5f;
+    [SerializeField] private float groundRaycastDistance = 4f;
+    [SerializeField] private float groundOffset = 0.02f;
     [SerializeField] private LayerMask placementSurfaceMask = ~0;
     [SerializeField] private LayerMask placementBlockedMask = ~0;
     [SerializeField] private Vector3 previewBounds = Vector3.one;
@@ -36,6 +38,7 @@ public class PlaceableItemSystem : MonoBehaviour
     private void OnEnable()
     {
         ResolveReferences();
+        ResolveButtonReference();
         BindButton();
 
         if (hotbarUI != null)
@@ -64,10 +67,13 @@ public class PlaceableItemSystem : MonoBehaviour
         if (!CanUseLocalPlacement())
         {
             ExitPlacementMode();
+            UnbindButton();
             RefreshButton();
             return;
         }
 
+        ResolveButtonReference();
+        BindButton();
         RefreshSelection();
         RefreshButton();
 
@@ -158,17 +164,25 @@ public class PlaceableItemSystem : MonoBehaviour
         }
 
         Vector3 targetPosition = transform.position + transform.forward * placementDistance;
-        if (Physics.Raycast(transform.position + Vector3.up * 0.5f, transform.forward, out RaycastHit hit, placementDistance + 1f, placementSurfaceMask, QueryTriggerInteraction.Ignore))
+        bool hasGround = TryGetPlacementGround(out RaycastHit hit);
+        if (hasGround)
         {
-            targetPosition = hit.point;
+            targetPosition = hit.point + hit.normal * groundOffset;
         }
 
         Quaternion targetRotation = Quaternion.Euler(0f, transform.eulerAngles.y, 0f);
         previewObject.transform.SetPositionAndRotation(targetPosition, targetRotation);
 
         Vector3 halfExtents = Vector3.Max(previewBounds, Vector3.one * 0.1f) * 0.5f;
-        currentPlacementValid = !Physics.CheckBox(targetPosition, halfExtents, targetRotation, placementBlockedMask, QueryTriggerInteraction.Ignore);
+        currentPlacementValid = hasGround && !Physics.CheckBox(targetPosition, halfExtents, targetRotation, placementBlockedMask, QueryTriggerInteraction.Ignore);
         ApplyPreviewMaterial(currentPlacementValid ? validPreviewMaterial : invalidPreviewMaterial);
+    }
+
+    private bool TryGetPlacementGround(out RaycastHit hit)
+    {
+        Vector3 origin = transform.position + Vector3.up * 0.5f + transform.forward * placementDistance;
+        float distance = Mathf.Max(0.5f, groundRaycastDistance);
+        return Physics.Raycast(origin, Vector3.down, out hit, distance, placementSurfaceMask, QueryTriggerInteraction.Ignore);
     }
 
     private void EnsurePreviewObject()
@@ -217,6 +231,11 @@ public class PlaceableItemSystem : MonoBehaviour
         GameObject placedObject = GameObject.CreatePrimitive(itemType == ItemType.Campfire ? PrimitiveType.Cylinder : PrimitiveType.Cube);
         placedObject.name = itemType.ToString();
         placedObject.transform.SetPositionAndRotation(position, rotation);
+        if (itemType == ItemType.CraftingTable && placedObject.GetComponent<CraftingTableStation>() == null)
+        {
+            placedObject.AddComponent<CraftingTableStation>();
+        }
+
         return true;
     }
 
@@ -260,7 +279,7 @@ public class PlaceableItemSystem : MonoBehaviour
 
     private void RefreshButton()
     {
-        if (placeButton == null)
+        if (placeButton == null || !HasLocalAuthority())
         {
             return;
         }
@@ -281,8 +300,7 @@ public class PlaceableItemSystem : MonoBehaviour
 
     private bool CanUseLocalPlacement()
     {
-        NetworkObject fusionObject = GetComponent<NetworkObject>();
-        if (fusionObject != null && fusionObject.IsValid && !fusionObject.HasInputAuthority)
+        if (!HasLocalAuthority())
         {
             return false;
         }
@@ -290,6 +308,32 @@ public class PlaceableItemSystem : MonoBehaviour
         if (fusionSurvival != null && fusionSurvival.IsDowned)
         {
             return false;
+        }
+
+        return true;
+    }
+
+    private bool HasLocalAuthority()
+    {
+        NetworkObject fusionObject = GetComponent<NetworkObject>();
+        if (fusionObject != null && fusionObject.IsValid)
+        {
+            if (fusionObject.HasInputAuthority)
+            {
+                return true;
+            }
+
+            if (!fusionObject.HasStateAuthority)
+            {
+                return false;
+            }
+
+            if (fusionObject.InputAuthority.IsNone)
+            {
+                return true;
+            }
+
+            return fusionObject.Runner != null && fusionObject.InputAuthority == fusionObject.Runner.LocalPlayer;
         }
 
         return true;
@@ -320,7 +364,7 @@ public class PlaceableItemSystem : MonoBehaviour
 
     private void BindButton()
     {
-        if (buttonBound || placeButton == null)
+        if (buttonBound || placeButton == null || !HasLocalAuthority())
         {
             return;
         }
@@ -340,5 +384,35 @@ public class PlaceableItemSystem : MonoBehaviour
 
         placeButton.onClick.RemoveListener(TogglePlacementMode);
         buttonBound = false;
+    }
+
+    private void ResolveButtonReference()
+    {
+        if (placeButton != null || !HasLocalAuthority())
+        {
+            return;
+        }
+
+        placeButton = FindButtonByName("station place");
+        if (placeButton == null)
+        {
+            placeButton = FindButtonByName("place");
+        }
+    }
+
+    private static Button FindButtonByName(string keyword)
+    {
+        Button[] buttons = FindObjectsByType<Button>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        string loweredKeyword = keyword.ToLowerInvariant();
+        for (int i = 0; i < buttons.Length; i++)
+        {
+            Button button = buttons[i];
+            if (button != null && button.name.ToLowerInvariant().Contains(loweredKeyword))
+            {
+                return button;
+            }
+        }
+
+        return null;
     }
 }
