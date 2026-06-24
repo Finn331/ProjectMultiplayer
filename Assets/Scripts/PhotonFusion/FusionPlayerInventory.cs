@@ -14,6 +14,15 @@ public class FusionPlayerInventory : NetworkBehaviour
         public GameObject prefabObject;
     }
 
+    [System.Serializable]
+    private class PlaceablePrefabBinding
+    {
+        public ItemType itemType;
+        public NetworkPrefabRef prefab;
+        public GameObject prefabObject;
+        public Vector3 bounds = Vector3.one;
+    }
+
     [SerializeField] private PlayerInventory inventory;
     [SerializeField] private PlayerSurvivalSystem survivalSystem;
     [SerializeField] private float pickupDistance = 4f;
@@ -22,6 +31,11 @@ public class FusionPlayerInventory : NetworkBehaviour
     [SerializeField] private Transform dropOrigin;
     [SerializeField] private float dropForwardDistance = 1.2f;
     [SerializeField] private float dropUpOffset = 0.2f;
+
+    [Header("Placeables")]
+    [SerializeField] private PlaceablePrefabBinding[] placeablePrefabs;
+    [SerializeField] private float maxPlacementDistance = 4f;
+    [SerializeField] private LayerMask placementBlockedMask = ~0;
 
     public override void Spawned()
     {
@@ -188,9 +202,26 @@ public class FusionPlayerInventory : NetworkBehaviour
         return true;
     }
 
+    public bool RequestPlaceFromSlot(int slotIndex, Vector3 position, Quaternion rotation)
+    {
+        if (!IsNetworkReady() || !HasFusionInputAuthority() || inventory == null)
+        {
+            return false;
+        }
+
+        ItemType? itemType = inventory.GetSlotItemType(slotIndex);
+        if (itemType == null || inventory.GetSlotAmount(slotIndex) <= 0 || !PlaceableItemSystem.IsPlaceable(itemType.Value))
+        {
+            return false;
+        }
+
+        RPC_RequestPlace(slotIndex, (int)itemType.Value, position, rotation);
+        return true;
+    }
+
     public bool SpawnTreeDrops(TreeChoppable tree)
     {
-        if (!IsNetworkReady() || !HasFusionInputAuthority() || tree == null || !tree.HasDropPrefab)
+        if (!IsNetworkReady() || !HasFusionLocalAuthority() || tree == null || !tree.HasDropPrefab)
         {
             return false;
         }
@@ -207,7 +238,7 @@ public class FusionPlayerInventory : NetworkBehaviour
 
     public bool SpawnTreeDropsFromData(Vector3 treePosition, Vector3 dropBasePosition, Vector3 dropForward, ItemType itemType, int spawnCount, int amountPerDrop, float scatter)
     {
-        if (!IsNetworkReady() || !HasFusionInputAuthority())
+        if (!IsNetworkReady() || !HasFusionLocalAuthority())
         {
             return false;
         }
@@ -619,6 +650,77 @@ public class FusionPlayerInventory : NetworkBehaviour
         }
     }
 
+    [Rpc(RpcSources.InputAuthority, RpcTargets.StateAuthority)]
+    private void RPC_RequestPlace(int slotIndex, int expectedItemTypeValue, Vector3 position, Quaternion rotation, RpcInfo info = default)
+    {
+        ResolveReferences();
+
+        if (inventory == null || Runner == null || survivalSystem == null || survivalSystem.IsDead)
+        {
+            return;
+        }
+
+        FusionPlayerSurvival fusionSurvival = GetComponent<FusionPlayerSurvival>();
+        if (fusionSurvival != null && fusionSurvival.IsDowned)
+        {
+            return;
+        }
+
+        if (!System.Enum.IsDefined(typeof(ItemType), expectedItemTypeValue))
+        {
+            return;
+        }
+
+        ItemType itemType = (ItemType)expectedItemTypeValue;
+        if (!PlaceableItemSystem.IsPlaceable(itemType) || inventory.GetSlotItemType(slotIndex) != itemType)
+        {
+            return;
+        }
+
+        if (!TryGetPlaceablePrefab(itemType, out NetworkPrefabRef placeablePrefab, out GameObject placeablePrefabObject, out Vector3 bounds))
+        {
+            return;
+        }
+
+        float maxDistance = Mathf.Max(0.5f, maxPlacementDistance);
+        if ((position - transform.position).sqrMagnitude > maxDistance * maxDistance)
+        {
+            return;
+        }
+
+        Vector3 halfExtents = Vector3.Max(bounds, Vector3.one * 0.1f) * 0.5f;
+        if (Physics.CheckBox(position, halfExtents, rotation, placementBlockedMask, QueryTriggerInteraction.Ignore))
+        {
+            return;
+        }
+
+        if (!inventory.RemoveItemFromSlot(slotIndex, 1, out ItemType removedItemType))
+        {
+            return;
+        }
+
+        if (removedItemType != itemType)
+        {
+            inventory.AddItemToSlot(removedItemType, 1, slotIndex);
+            return;
+        }
+
+        NetworkObject placedObject = placeablePrefabObject != null
+            ? Runner.Spawn(placeablePrefabObject, position, rotation, info.Source)
+            : Runner.Spawn(placeablePrefab, position, rotation, info.Source);
+        if (placedObject == null)
+        {
+            inventory.AddItemToSlot(itemType, 1, slotIndex);
+            return;
+        }
+
+        FusionPlaceableObject placeableObject = placedObject.GetComponent<FusionPlaceableObject>();
+        if (placeableObject != null)
+        {
+            placeableObject.Initialize(itemType, info.Source);
+        }
+    }
+
     private void ResolveReferences()
     {
         if (inventory == null)
@@ -676,6 +778,40 @@ public class FusionPlayerInventory : NetworkBehaviour
         return false;
     }
 
+    private bool TryGetPlaceablePrefab(ItemType itemType, out NetworkPrefabRef prefab, out GameObject prefabObject, out Vector3 bounds)
+    {
+        prefabObject = null;
+        bounds = Vector3.one;
+        if (placeablePrefabs != null)
+        {
+            for (int i = 0; i < placeablePrefabs.Length; i++)
+            {
+                PlaceablePrefabBinding binding = placeablePrefabs[i];
+                if (binding == null || binding.itemType != itemType)
+                {
+                    continue;
+                }
+
+                bounds = binding.bounds;
+                if (binding.prefabObject != null && binding.prefabObject.GetComponent<NetworkObject>() != null)
+                {
+                    prefabObject = binding.prefabObject;
+                    prefab = default;
+                    return true;
+                }
+
+                if (binding.prefab.IsValid)
+                {
+                    prefab = binding.prefab;
+                    return true;
+                }
+            }
+        }
+
+        prefab = default;
+        return false;
+    }
+
     private bool CanSpawnFusionDrop(ItemType itemType)
     {
         return TryGetDropPrefab(itemType, out NetworkPrefabRef _, out GameObject _);
@@ -688,6 +824,11 @@ public class FusionPlayerInventory : NetworkBehaviour
 
     private bool HasFusionInputAuthority()
     {
-        return Object != null && (Object.HasStateAuthority || Object.HasInputAuthority);
+        return Object != null && Object.HasInputAuthority;
+    }
+
+    private bool HasFusionLocalAuthority()
+    {
+        return Object != null && (Object.HasInputAuthority || Object.HasStateAuthority);
     }
 }
