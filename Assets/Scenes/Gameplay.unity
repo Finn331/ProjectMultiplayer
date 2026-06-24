@@ -9159,7 +9159,7 @@ GameObject:
   - component: {fileID: 1442566911}
   - component: {fileID: 1442566913}
   - component: {fileID: 1442566912}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: Label
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -11106,7 +11106,7 @@ GameObject:
   - component: {fileID: 1688217047}
   - component: {fileID: 1688217049}
   - component: {fileID: 1688217048}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: Label
   m_TagString: Untagged
   m_Icon: {fileID: 0}
