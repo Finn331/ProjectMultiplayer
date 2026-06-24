@@ -143,6 +143,11 @@ public class PlayerInventoryUI : MonoBehaviour
     {
         if (!this.CanRenderEditorPreview())
         {
+            if (this.HasGeneratedUIObjects())
+            {
+                this.CleanupRuntimeGeneratedUI();
+            }
+
             return;
         }
 
