@@ -17,7 +17,7 @@ public class CraftingStationInteractor : MonoBehaviour
     [SerializeField] private LayerMask stationMask = ~0;
     [SerializeField] private bool hideWhenUnavailable = true;
 
-    private readonly Collider[] stationColliderBuffer = new Collider[16];
+    private readonly Collider[] stationColliderBuffer = new Collider[64];
     private CraftingTableStation currentStation;
     private float nextScanTime;
     private bool buttonBound;
@@ -178,29 +178,6 @@ public class CraftingStationInteractor : MonoBehaviour
             }
         }
 
-        if (nearest != null)
-        {
-            return nearest;
-        }
-
-        CraftingTableStation[] stations = FindObjectsOfType<CraftingTableStation>();
-
-        for (int i = 0; i < stations.Length; i++)
-        {
-            CraftingTableStation station = stations[i];
-            if (station == null)
-            {
-                continue;
-            }
-
-            float distance = Vector3.Distance(transform.position, station.transform.position);
-            if (distance <= bestDistance && station.IsInRange(transform.position))
-            {
-                bestDistance = distance;
-                nearest = station;
-            }
-        }
-
         return nearest;
     }
 
@@ -285,7 +262,7 @@ public class CraftingStationInteractor : MonoBehaviour
 
     private static Button FindButtonByName(string keyword)
     {
-        Button[] buttons = FindObjectsOfType<Button>(true);
+        Button[] buttons = FindObjectsByType<Button>(FindObjectsInactive.Include, FindObjectsSortMode.None);
         string loweredKeyword = keyword.ToLowerInvariant();
         for (int i = 0; i < buttons.Length; i++)
         {
