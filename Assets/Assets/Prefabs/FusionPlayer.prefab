@@ -1209,11 +1209,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   useStateAuthorityFallback: 1
   hideForLocalPlayer:
+  - {fileID: 2505963940294500903}
   - {fileID: 1787749371333910755}
   - {fileID: 8204730280450964787}
   - {fileID: 8929763548271489983}
-  disableRenderer: 1
-  forceRenderingOff: 1
+  keepHiddenRenderersCastingShadows: 1
 --- !u!1 &7516938604735521551
 GameObject:
   m_ObjectHideFlags: 0
@@ -2416,6 +2416,12 @@ SkinnedMeshRenderer:
 --- !u!4 &2236343067535735669 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 5621442062734800805, guid: 55afdf97579228e40afb4f92aed6af65,
+    type: 3}
+  m_PrefabInstance: {fileID: 5839561155049213136}
+  m_PrefabAsset: {fileID: 0}
+--- !u!137 &2505963940294500903 stripped
+SkinnedMeshRenderer:
+  m_CorrespondingSourceObject: {fileID: 8344238837459971831, guid: 55afdf97579228e40afb4f92aed6af65,
     type: 3}
   m_PrefabInstance: {fileID: 5839561155049213136}
   m_PrefabAsset: {fileID: 0}

@@ -9,8 +9,7 @@ public class FusionLocalBodyVisibility : NetworkBehaviour
 
     [Header("Local First Person Visibility")]
     [SerializeField] private Renderer[] hideForLocalPlayer;
-    [SerializeField] private bool disableRenderer = true;
-    [SerializeField] private bool forceRenderingOff = true;
+    [SerializeField] private bool keepHiddenRenderersCastingShadows = true;
 
     private bool[] originalEnabledStates;
     private bool[] originalForceRenderingOffStates;
@@ -103,15 +102,16 @@ public class FusionLocalBodyVisibility : NetworkBehaviour
                 continue;
             }
 
-            if (forceRenderingOff)
+            if (keepHiddenRenderersCastingShadows)
             {
-                renderer.forceRenderingOff = true;
+                renderer.enabled = true;
+                renderer.forceRenderingOff = false;
+                renderer.shadowCastingMode = ShadowCastingMode.ShadowsOnly;
+                continue;
             }
 
-            if (disableRenderer)
-            {
-                renderer.enabled = false;
-            }
+            renderer.forceRenderingOff = true;
+            renderer.enabled = false;
         }
 
         isLocalHidden = true;
