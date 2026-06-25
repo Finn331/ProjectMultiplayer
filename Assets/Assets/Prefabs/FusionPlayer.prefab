@@ -1211,7 +1211,6 @@ MonoBehaviour:
   hideForLocalPlayer:
   - {fileID: 1787749371333910755}
   - {fileID: 8204730280450964787}
-  - {fileID: 8929763548271489983}
   keepHiddenRenderersCastingShadows: 1
 --- !u!1 &7516938604735521551
 GameObject:
@@ -2445,12 +2444,6 @@ Transform:
 --- !u!4 &8616086505503960689 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 2781030944033301153, guid: 55afdf97579228e40afb4f92aed6af65,
-    type: 3}
-  m_PrefabInstance: {fileID: 5839561155049213136}
-  m_PrefabAsset: {fileID: 0}
---- !u!137 &8929763548271489983 stripped
-SkinnedMeshRenderer:
-  m_CorrespondingSourceObject: {fileID: 3091348740394778479, guid: 55afdf97579228e40afb4f92aed6af65,
     type: 3}
   m_PrefabInstance: {fileID: 5839561155049213136}
   m_PrefabAsset: {fileID: 0}

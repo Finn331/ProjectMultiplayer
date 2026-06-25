@@ -95,6 +95,7 @@ GameObject:
   - component: {fileID: 9103093724523977357}
   - component: {fileID: 7410883579952746250}
   - component: {fileID: 3289966273324346223}
+  - component: {fileID: 4100090815873235575}
   m_Layer: 0
   m_Name: PlacedCampfire
   m_TagString: Untagged
@@ -137,6 +138,7 @@ MonoBehaviour:
   NestedObjects: []
   NetworkedBehaviours:
   - {fileID: 7410883579952746250}
+  - {fileID: 4100090815873235575}
   ForceRemoteRenderTimeframe: 0
 --- !u!114 &7410883579952746250
 MonoBehaviour:
@@ -172,6 +174,23 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 1.1, y: 0.7, z: 1.1}
   m_Center: {x: 0, y: 0.35, z: 0}
+--- !u!114 &4100090815873235575
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 874980459986673997}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 158639473, guid: e725a070cec140c4caffb81624c8c787, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _stateAuthorityChangeErrorCorrectionDelta: 0
+  SyncScale: 0
+  SyncParent: 0
+  _autoAOIOverride: 1
+  DisableSharedModeInterpolation: 0
 --- !u!1 &2810878187209823908
 GameObject:
   m_ObjectHideFlags: 0
