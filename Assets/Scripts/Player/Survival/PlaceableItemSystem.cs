@@ -322,12 +322,22 @@ public class PlaceableItemSystem : MonoBehaviour
             return false;
         }
 
-        if (fusionSurvival != null && fusionSurvival.IsDowned)
+        if (IsFusionPlayerDowned())
         {
             return false;
         }
 
         return true;
+    }
+
+    private bool IsFusionPlayerDowned()
+    {
+        if (fusionSurvival == null || fusionSurvival.Object == null || !fusionSurvival.Object.IsValid)
+        {
+            return false;
+        }
+
+        return fusionSurvival.IsDowned;
     }
 
     private bool HasLocalAuthority()
