@@ -294,10 +294,12 @@ public class MobileHotbarUI : MonoBehaviour
                 if (sprite != null)
                 {
                     icon.sprite = sprite;
+                    icon.gameObject.SetActive(true);
                     icon.enabled = true;
                 }
                 else if (iconDatabase == null)
                 {
+                    icon.gameObject.SetActive(true);
                     icon.enabled = false;
                 }
                 else
