@@ -6266,7 +6266,7 @@ MonoBehaviour:
   destroyWhenDepleted: 1
   destroyDelay: 0
   dropPrefab: {fileID: 2006871537}
-  dropAmount: 3
+  dropAmount: 8
   dropPoint: {fileID: 966228801}
   dropImpulse: 1.8
   spawnAsSingleStack: 0
