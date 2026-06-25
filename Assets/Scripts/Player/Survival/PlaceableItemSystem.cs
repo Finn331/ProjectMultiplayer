@@ -5,6 +5,14 @@ using UnityEngine.UI;
 [DisallowMultipleComponent]
 public class PlaceableItemSystem : MonoBehaviour
 {
+    [System.Serializable]
+    private class GhostPrefabBinding
+    {
+        public ItemType itemType;
+        public GameObject ghostPrefab;
+        public Vector3 previewBounds = Vector3.one;
+    }
+
     [Header("References")]
     [SerializeField] private PlayerInventory inventory;
     [SerializeField] private MobileHotbarUI hotbarUI;
@@ -19,6 +27,7 @@ public class PlaceableItemSystem : MonoBehaviour
     [SerializeField] private LayerMask placementSurfaceMask = ~0;
     [SerializeField] private LayerMask placementBlockedMask = 0;
     [SerializeField] private Vector3 previewBounds = Vector3.one;
+    [SerializeField] private GhostPrefabBinding[] ghostPrefabs;
     [SerializeField] private Material validPreviewMaterial;
     [SerializeField] private Material invalidPreviewMaterial;
 
@@ -29,6 +38,7 @@ public class PlaceableItemSystem : MonoBehaviour
     private int selectedGlobalSlot = -1;
     private ItemType selectedItemType;
     private bool buttonBound;
+    private Vector3 currentPreviewBounds;
 
     private void Awake()
     {
@@ -180,7 +190,7 @@ public class PlaceableItemSystem : MonoBehaviour
 
     private bool IsPlacementBlocked(Vector3 groundPosition, Quaternion rotation, Collider groundCollider)
     {
-        Vector3 halfExtents = Vector3.Max(previewBounds, Vector3.one * 0.1f) * 0.5f;
+        Vector3 halfExtents = Vector3.Max(currentPreviewBounds, Vector3.one * 0.1f) * 0.5f;
         Vector3 center = groundPosition + Vector3.up * (halfExtents.y + Mathf.Max(0.01f, groundOffset));
         Collider[] hits = Physics.OverlapBox(center, halfExtents, rotation, placementBlockedMask, QueryTriggerInteraction.Ignore);
         for (int i = 0; i < hits.Length; i++)
@@ -209,17 +219,52 @@ public class PlaceableItemSystem : MonoBehaviour
             return;
         }
 
-        previewObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        previewObject.name = selectedItemType + " Placement Preview";
-        previewObject.transform.localScale = previewBounds;
-
-        Collider previewCollider = previewObject.GetComponent<Collider>();
-        if (previewCollider != null)
+        GameObject ghostPrefab = GetGhostPrefab(selectedItemType, out Vector3 bindingBounds);
+        if (ghostPrefab != null)
         {
-            previewCollider.enabled = false;
+            previewObject = Instantiate(ghostPrefab);
+            previewObject.name = selectedItemType + " Placement Preview";
+            currentPreviewBounds = Vector3.Max(bindingBounds, Vector3.one * 0.1f);
+        }
+        else
+        {
+            previewObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            previewObject.name = selectedItemType + " Placement Preview";
+            previewObject.transform.localScale = previewBounds;
+            currentPreviewBounds = previewBounds;
+        }
+
+        Collider[] previewColliders = previewObject.GetComponentsInChildren<Collider>(true);
+        for (int i = 0; i < previewColliders.Length; i++)
+        {
+            if (previewColliders[i] != null)
+            {
+                previewColliders[i].enabled = false;
+            }
         }
 
         previewRenderers = previewObject.GetComponentsInChildren<Renderer>(true);
+    }
+
+    private GameObject GetGhostPrefab(ItemType itemType, out Vector3 bounds)
+    {
+        bounds = previewBounds;
+        if (ghostPrefabs == null)
+        {
+            return null;
+        }
+
+        for (int i = 0; i < ghostPrefabs.Length; i++)
+        {
+            GhostPrefabBinding binding = ghostPrefabs[i];
+            if (binding != null && binding.itemType == itemType && binding.ghostPrefab != null)
+            {
+                bounds = binding.previewBounds;
+                return binding.ghostPrefab;
+            }
+        }
+
+        return null;
     }
 
     private void ApplyPreviewMaterial(Material material)

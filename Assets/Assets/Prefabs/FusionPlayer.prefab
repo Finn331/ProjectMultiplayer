@@ -1180,6 +1180,15 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 4294967255
   previewBounds: {x: 1, y: 1, z: 1}
+  ghostPrefabs:
+  - itemType: 10
+    ghostPrefab: {fileID: 3761260617412921399, guid: ee3313b6d3018e24b8918949fa7a5760,
+      type: 3}
+    previewBounds: {x: 1.4, y: 1, z: 1.4}
+  - itemType: 11
+    ghostPrefab: {fileID: 5019704341484286425, guid: d638d1d575d58d541b64aa43fbd2352b,
+      type: 3}
+    previewBounds: {x: 1.1, y: 0.8, z: 1.1}
   validPreviewMaterial: {fileID: 2100000, guid: 6afb9e175d3fdc44e973831f338090f4,
     type: 2}
   invalidPreviewMaterial: {fileID: 2100000, guid: 3a7f94c0942505448aff8be3db3b20f2,
