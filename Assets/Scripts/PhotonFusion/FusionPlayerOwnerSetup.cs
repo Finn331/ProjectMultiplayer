@@ -145,6 +145,8 @@ public class FusionPlayerOwnerSetup : NetworkBehaviour
         AddComponentsInChildren<HotbarConsumeUI>(behaviours);
         AddComponentsInChildren<PlayerAxeCombat>(behaviours);
         AddComponentsInChildren<PlayerProceduralAnimation>(behaviours);
+        AddComponentsInChildren<CraftingStationInteractor>(behaviours);
+        AddComponentsInChildren<PlaceableItemSystem>(behaviours);
 
         return behaviours.Count > 0 ? behaviours.ToArray() : EmptyBehaviours;
     }

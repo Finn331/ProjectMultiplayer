@@ -1211,6 +1211,8 @@ MonoBehaviour:
   hideForLocalPlayer:
   - {fileID: 1787749371333910755}
   - {fileID: 8204730280450964787}
+  scaleToHideForLocalPlayer:
+  - {fileID: 1553214287503789009}
   keepHiddenRenderersCastingShadows: 1
 --- !u!1 &7516938604735521551
 GameObject:
@@ -2402,6 +2404,12 @@ Transform:
 --- !u!4 &1061581120011266541 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -2328018470481386179, guid: 55afdf97579228e40afb4f92aed6af65,
+    type: 3}
+  m_PrefabInstance: {fileID: 5839561155049213136}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &1553214287503789009 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -4286184654138423551, guid: 55afdf97579228e40afb4f92aed6af65,
     type: 3}
   m_PrefabInstance: {fileID: 5839561155049213136}
   m_PrefabAsset: {fileID: 0}

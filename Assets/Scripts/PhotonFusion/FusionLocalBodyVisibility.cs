@@ -9,11 +9,13 @@ public class FusionLocalBodyVisibility : NetworkBehaviour
 
     [Header("Local First Person Visibility")]
     [SerializeField] private Renderer[] hideForLocalPlayer;
+    [SerializeField] private Transform[] scaleToHideForLocalPlayer;
     [SerializeField] private bool keepHiddenRenderersCastingShadows = true;
 
     private bool[] originalEnabledStates;
     private bool[] originalForceRenderingOffStates;
     private ShadowCastingMode[] originalShadowCastingModes;
+    private Vector3[] originalLocalScales;
     private bool originalStatesCaptured;
     private bool isLocalHidden;
 
@@ -91,6 +93,8 @@ public class FusionLocalBodyVisibility : NetworkBehaviour
 
         if (hideForLocalPlayer == null)
         {
+            ApplyTransformVisibility();
+            isLocalHidden = true;
             return;
         }
 
@@ -114,7 +118,26 @@ public class FusionLocalBodyVisibility : NetworkBehaviour
             renderer.enabled = false;
         }
 
+        ApplyTransformVisibility();
+
         isLocalHidden = true;
+    }
+
+    private void ApplyTransformVisibility()
+    {
+        if (scaleToHideForLocalPlayer == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < scaleToHideForLocalPlayer.Length; i++)
+        {
+            Transform target = scaleToHideForLocalPlayer[i];
+            if (target != null)
+            {
+                target.localScale = Vector3.zero;
+            }
+        }
     }
 
     private void CaptureOriginalStates()
@@ -128,6 +151,8 @@ public class FusionLocalBodyVisibility : NetworkBehaviour
         originalEnabledStates = new bool[count];
         originalForceRenderingOffStates = new bool[count];
         originalShadowCastingModes = new ShadowCastingMode[count];
+        int transformCount = scaleToHideForLocalPlayer != null ? scaleToHideForLocalPlayer.Length : 0;
+        originalLocalScales = new Vector3[transformCount];
 
         for (int i = 0; i < count; i++)
         {
@@ -143,6 +168,12 @@ public class FusionLocalBodyVisibility : NetworkBehaviour
             originalEnabledStates[i] = renderer.enabled;
             originalForceRenderingOffStates[i] = renderer.forceRenderingOff;
             originalShadowCastingModes[i] = renderer.shadowCastingMode;
+        }
+
+        for (int i = 0; i < transformCount; i++)
+        {
+            Transform target = scaleToHideForLocalPlayer[i];
+            originalLocalScales[i] = target != null ? target.localScale : Vector3.one;
         }
 
         originalStatesCaptured = true;
@@ -167,6 +198,18 @@ public class FusionLocalBodyVisibility : NetworkBehaviour
             renderer.enabled = i < originalEnabledStates.Length ? originalEnabledStates[i] : true;
             renderer.forceRenderingOff = i < originalForceRenderingOffStates.Length && originalForceRenderingOffStates[i];
             renderer.shadowCastingMode = i < originalShadowCastingModes.Length ? originalShadowCastingModes[i] : ShadowCastingMode.On;
+        }
+
+        if (scaleToHideForLocalPlayer != null)
+        {
+            for (int i = 0; i < scaleToHideForLocalPlayer.Length; i++)
+            {
+                Transform target = scaleToHideForLocalPlayer[i];
+                if (target != null)
+                {
+                    target.localScale = i < originalLocalScales.Length ? originalLocalScales[i] : Vector3.one;
+                }
+            }
         }
 
         isLocalHidden = false;
