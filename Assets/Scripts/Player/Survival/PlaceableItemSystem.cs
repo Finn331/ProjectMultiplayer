@@ -95,7 +95,9 @@ public class PlaceableItemSystem : MonoBehaviour
 
     public static bool IsPlaceable(ItemType itemType)
     {
-        return itemType == ItemType.CraftingTable || itemType == ItemType.Campfire;
+        return itemType == ItemType.CraftingTable
+            || itemType == ItemType.Campfire
+            || itemType == ItemType.StorageChest;
     }
 
     public void TogglePlacementMode()
