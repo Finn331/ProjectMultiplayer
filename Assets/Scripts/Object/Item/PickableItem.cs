@@ -13,7 +13,8 @@ public enum ItemType
     Cloth,
     Bandage,
     CraftingTable,
-    Campfire
+    Campfire,
+    StorageChest
 }
 
 public class PickableItem : MonoBehaviour
