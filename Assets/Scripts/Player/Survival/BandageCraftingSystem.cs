@@ -13,7 +13,6 @@ public class BandageCraftingSystem : MonoBehaviour
     [SerializeField] private KeyCode keyboardCraftKey = KeyCode.C;
     [SerializeField] private List<CraftingRecipe> recipes = new List<CraftingRecipe>();
 
-    private readonly List<CraftingRecipe> availableRecipes = new List<CraftingRecipe>();
     private FusionPlayerSurvival survival;
 
     public int FiberCost => Mathf.Max(1, fiberCost);
@@ -47,7 +46,7 @@ public class BandageCraftingSystem : MonoBehaviour
     {
         EnsureDefaultRecipes();
 
-        availableRecipes.Clear();
+        List<CraftingRecipe> availableRecipes = new List<CraftingRecipe>();
         for (int i = 0; i < recipes.Count; i++)
         {
             CraftingRecipe recipe = recipes[i];
@@ -224,6 +223,21 @@ public class BandageCraftingSystem : MonoBehaviour
             {
                 new CraftingIngredient { itemType = ItemType.Wood, amount = 4 },
                 new CraftingIngredient { itemType = ItemType.Stone, amount = 4 }
+            }
+        });
+
+        AddDefaultRecipeIfMissing(new CraftingRecipe
+        {
+            recipeId = "storage_chest",
+            displayName = "Storage Chest",
+            outputItemType = ItemType.StorageChest,
+            outputAmount = 1,
+            context = CraftingContext.CraftingTable,
+            ingredients = new List<CraftingIngredient>
+            {
+                new CraftingIngredient { itemType = ItemType.Wood, amount = 12 },
+                new CraftingIngredient { itemType = ItemType.Stone, amount = 2 },
+                new CraftingIngredient { itemType = ItemType.Fiber, amount = 4 }
             }
         });
     }
