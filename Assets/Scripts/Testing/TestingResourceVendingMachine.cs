@@ -119,6 +119,7 @@ public class TestingResourceVendingMachine : MonoBehaviour
         if (vendingCanvas == null)
         {
             GameObject canvasObject = new GameObject("Testing Resource Vending Canvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
+            MarkDontSave(canvasObject);
             vendingCanvas = canvasObject.GetComponent<Canvas>();
             vendingCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
 
@@ -128,6 +129,7 @@ public class TestingResourceVendingMachine : MonoBehaviour
         }
 
         panelObject = new GameObject("Testing Resource Vending Panel", typeof(RectTransform), typeof(Image));
+        MarkDontSave(panelObject);
         panelObject.transform.SetParent(vendingCanvas.transform, false);
 
         RectTransform panelRect = panelObject.GetComponent<RectTransform>();
@@ -153,6 +155,7 @@ public class TestingResourceVendingMachine : MonoBehaviour
     private static void CreateButton(Transform parent, string label, Vector2 anchoredPosition, UnityEngine.Events.UnityAction action)
     {
         GameObject buttonObject = new GameObject(label + " Button", typeof(RectTransform), typeof(Image), typeof(Button));
+        MarkDontSave(buttonObject);
         buttonObject.transform.SetParent(parent, false);
 
         RectTransform rect = buttonObject.GetComponent<RectTransform>();
@@ -174,6 +177,7 @@ public class TestingResourceVendingMachine : MonoBehaviour
     private static Text CreateText(Transform parent, string text, Vector2 anchoredPosition, int fontSize, TextAnchor alignment)
     {
         GameObject textObject = new GameObject(text + " Text", typeof(RectTransform), typeof(Text));
+        MarkDontSave(textObject);
         textObject.transform.SetParent(parent, false);
 
         RectTransform rect = textObject.GetComponent<RectTransform>();
@@ -190,6 +194,14 @@ public class TestingResourceVendingMachine : MonoBehaviour
         uiText.color = Color.white;
         uiText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         return uiText;
+    }
+
+    private static void MarkDontSave(GameObject target)
+    {
+        if (target != null)
+        {
+            target.hideFlags = HideFlags.DontSave;
+        }
     }
 
     private static void ShowInfo(string message)
