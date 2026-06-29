@@ -35,6 +35,31 @@ public class TestingResourceVendingMachine : MonoBehaviour
         panelObject.SetActive(true);
     }
 
+    public void OpenForNearestInteractor()
+    {
+        PlayerInteractionSystem[] interactors = FindObjectsByType<PlayerInteractionSystem>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+        PlayerInteractionSystem nearest = null;
+        float nearestSqr = 9f;
+
+        for (int i = 0; i < interactors.Length; i++)
+        {
+            PlayerInteractionSystem candidate = interactors[i];
+            if (candidate == null)
+            {
+                continue;
+            }
+
+            float distanceSqr = (candidate.transform.position - transform.position).sqrMagnitude;
+            if (distanceSqr <= nearestSqr)
+            {
+                nearestSqr = distanceSqr;
+                nearest = candidate;
+            }
+        }
+
+        OpenForInteractor(nearest);
+    }
+
     public void Close()
     {
         if (panelObject != null)
