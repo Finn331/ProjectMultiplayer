@@ -14,7 +14,8 @@ GameObject:
   - component: {fileID: 6940856093072678920}
   - component: {fileID: 4631032113691057576}
   - component: {fileID: 4116729759086775147}
-  m_Layer: 0
+  - component: {fileID: 5212247678957002955}
+  m_Layer: 3
   m_Name: PlacedStorageChest
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -126,6 +127,21 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 1.25, y: 0.8, z: 0.8}
   m_Center: {x: 0, y: 0.38, z: 0}
+--- !u!114 &5212247678957002955
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 145417318617140870}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f828bc58b3937bd4382c92b9961e2029, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  onInteraction:
+    m_PersistentCalls:
+      m_Calls: []
 --- !u!1 &5940660189892283609
 GameObject:
   m_ObjectHideFlags: 0
@@ -137,7 +153,7 @@ GameObject:
   - component: {fileID: 701595429447162978}
   - component: {fileID: 3865031707245783285}
   - component: {fileID: 5285698946084833578}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: ChestLid
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -220,7 +236,7 @@ GameObject:
   - component: {fileID: 6663267731504479822}
   - component: {fileID: 7306939906470093265}
   - component: {fileID: 707769197893720303}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: ChestLatch
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -303,7 +319,7 @@ GameObject:
   - component: {fileID: 5455271140348469500}
   - component: {fileID: 7895689665423962955}
   - component: {fileID: 515221698361442751}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: ChestBody
   m_TagString: Untagged
   m_Icon: {fileID: 0}
