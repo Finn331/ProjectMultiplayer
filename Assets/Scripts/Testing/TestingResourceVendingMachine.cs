@@ -15,6 +15,9 @@ public class TestingResourceVendingMachine : MonoBehaviour
 
     public void OpenForInteractor(PlayerInteractionSystem interactor)
     {
+        currentInventory = null;
+        Close();
+
         if (interactor == null)
         {
             ShowInfo("No player selected");
