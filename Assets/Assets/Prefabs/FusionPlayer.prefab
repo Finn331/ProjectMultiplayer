@@ -357,6 +357,11 @@ MonoBehaviour:
   cameraCollisionLayers:
     serializedVersion: 2
     m_Bits: 4294967295
+  enableHeadBob: 1
+  bobFrequency: 2
+  bobVerticalAmplitude: 0.03
+  bobHorizontalAmplitude: 0.015
+  bobSmoothTime: 0.08
 --- !u!114 &6530736624186658528
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1178,6 +1183,9 @@ MonoBehaviour:
   fusionInventory: {fileID: 0}
   fusionSurvival: {fileID: 0}
   placeButton: {fileID: 0}
+  rotateButton: {fileID: 0}
+  cancelButton: {fileID: 0}
+  rotateSpeed: 90
   placementDistance: 2.5
   groundRaycastDistance: 4
   groundOffset: 0.02
