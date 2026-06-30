@@ -26,6 +26,14 @@ public class PlayerSurvivalUI : MonoBehaviour
     [SerializeField] private Color thirstColor = Color.cyan;
     [SerializeField] private Color hungerColor = Color.green;
 
+    [Header("Critical Flash")]
+    [SerializeField] private float criticalThreshold = 0.2f;
+    [SerializeField] private float flashSpeed = 3f;
+
+    private Image healthFillImage;
+    private Image thirstFillImage;
+    private Image hungerFillImage;
+
     private void Awake()
     {
         this.ResolveSurvivalSystemBinding();
@@ -60,6 +68,8 @@ public class PlayerSurvivalUI : MonoBehaviour
                 this.ResolveSurvivalSystemBinding();
             }
         }
+
+        this.UpdateCriticalFlash();
     }
 
     private void OnEnable()
@@ -129,6 +139,26 @@ public class PlayerSurvivalUI : MonoBehaviour
         if (hungerSlider == null)
         {
             hungerSlider = this.CreateSliderBar("Hunger Slider", -sliderSpacing * 2f, hungerColor);
+        }
+
+        this.CacheFillImages();
+    }
+
+    private void CacheFillImages()
+    {
+        if (healthFillImage == null && healthSlider != null && healthSlider.fillRect != null)
+        {
+            healthFillImage = healthSlider.fillRect.GetComponent<Image>();
+        }
+
+        if (thirstFillImage == null && thirstSlider != null && thirstSlider.fillRect != null)
+        {
+            thirstFillImage = thirstSlider.fillRect.GetComponent<Image>();
+        }
+
+        if (hungerFillImage == null && hungerSlider != null && hungerSlider.fillRect != null)
+        {
+            hungerFillImage = hungerSlider.fillRect.GetComponent<Image>();
         }
     }
 
@@ -236,6 +266,30 @@ public class PlayerSurvivalUI : MonoBehaviour
         }
 
         slider.value = Mathf.Clamp01(normalizedValue);
+    }
+
+    private void UpdateCriticalFlash()
+    {
+        if (survivalSystem == null)
+        {
+            return;
+        }
+
+        float flash = Mathf.PingPong(Time.time * flashSpeed, 1f);
+
+        this.FlashBar(healthSlider, healthFillImage, survivalSystem.HealthNormalized, healthColor, Color.Lerp(healthColor, Color.red, 0.8f), flash);
+        this.FlashBar(thirstSlider, thirstFillImage, survivalSystem.ThirstNormalized, thirstColor, Color.Lerp(thirstColor, Color.red, 0.8f), flash);
+        this.FlashBar(hungerSlider, hungerFillImage, survivalSystem.HungerNormalized, hungerColor, Color.red, flash);
+    }
+
+    private void FlashBar(Slider slider, Image fillImage, float normalized, Color normalColor, Color warningColor, float t)
+    {
+        if (slider == null || fillImage == null)
+        {
+            return;
+        }
+
+        fillImage.color = normalized <= criticalThreshold ? Color.Lerp(normalColor, warningColor, t) : normalColor;
     }
 
     private void ResolveSurvivalSystemBinding()
