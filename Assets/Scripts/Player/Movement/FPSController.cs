@@ -59,8 +59,8 @@ public class FPSControllerMobile : MonoBehaviour
     [Header("Head Bob")]
     [SerializeField] private bool enableHeadBob = true;
     [SerializeField] private float bobFrequency = 2f;
-    [SerializeField] private float bobVerticalAmplitude = 0.03f;
-    [SerializeField] private float bobHorizontalAmplitude = 0.015f;
+    [SerializeField] private float bobVerticalAmplitude = 0.06f;
+    [SerializeField] private float bobHorizontalAmplitude = 0.03f;
     [SerializeField] private float bobSmoothTime = 0.08f;
 
     float xRotation = 0f;
@@ -234,7 +234,7 @@ public class FPSControllerMobile : MonoBehaviour
         Vector3 horizontalVelocity = new Vector3(controller.velocity.x, 0f, controller.velocity.z);
         float speed = horizontalVelocity.magnitude;
         float speedNormalized = moveSpeed > 0.01f ? Mathf.Clamp01(speed / moveSpeed) : 0f;
-        float targetBobAmount = controller.isGrounded && speedNormalized > 0.01f ? speedNormalized : 0f;
+        float targetBobAmount = speedNormalized > 0.01f ? speedNormalized : 0f;
 
         currentBobAmount = Mathf.SmoothDamp(currentBobAmount, targetBobAmount, ref bobAmountVelocity, bobSmoothTime);
 
