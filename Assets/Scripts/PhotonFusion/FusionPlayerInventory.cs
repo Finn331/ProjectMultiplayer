@@ -290,6 +290,8 @@ public class FusionPlayerInventory : NetworkBehaviour
             Rigidbody rigidbody = droppedObject.GetComponent<Rigidbody>();
             if (rigidbody != null)
             {
+                rigidbody.drag = 2f;
+                rigidbody.angularDrag = 2f;
                 Vector3 randomPush = dropForward + Vector3.up + new Vector3(offset2D.x, 0f, offset2D.y);
                 rigidbody.AddForce(randomPush.normalized * 1.8f, ForceMode.VelocityChange);
             }
@@ -475,6 +477,8 @@ public class FusionPlayerInventory : NetworkBehaviour
 
         rigidbody.isKinematic = false;
         rigidbody.detectCollisions = true;
+        rigidbody.drag = 2f;
+        rigidbody.angularDrag = 2f;
         rigidbody.AddForce((forward.normalized + Vector3.up).normalized * 2f, ForceMode.VelocityChange);
     }
 
