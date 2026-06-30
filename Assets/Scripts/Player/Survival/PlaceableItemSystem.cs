@@ -21,6 +21,7 @@ public class PlaceableItemSystem : MonoBehaviour
     [SerializeField] private Button placeButton;
     [SerializeField] private Button rotateButton;
     [SerializeField] private Button cancelButton;
+    [SerializeField] private float rotateSpeed = 90f;
 
     [Header("Placement")]
     [SerializeField] private float placementDistance = 2.5f;
@@ -43,6 +44,7 @@ public class PlaceableItemSystem : MonoBehaviour
     private bool rotateButtonBound;
     private bool cancelButtonBound;
     private float previewYawOffset;
+    private PlacementRotateHold rotateHold;
     private Vector3 currentPreviewBounds;
 
     private void Awake()
@@ -94,6 +96,11 @@ public class PlaceableItemSystem : MonoBehaviour
 
         if (placementMode)
         {
+            if (rotateHold != null && rotateHold.IsHeld)
+            {
+                previewYawOffset = (previewYawOffset + rotateSpeed * Time.deltaTime) % 360f;
+            }
+
             UpdatePreview();
         }
     }
@@ -535,7 +542,11 @@ public class PlaceableItemSystem : MonoBehaviour
         if (!rotateButtonBound && rotateButton != null)
         {
             rotateButton.onClick.RemoveListener(RotatePreview);
-            rotateButton.onClick.AddListener(RotatePreview);
+            rotateHold = rotateButton.GetComponent<PlacementRotateHold>();
+            if (rotateHold == null)
+            {
+                rotateHold = rotateButton.gameObject.AddComponent<PlacementRotateHold>();
+            }
             rotateButtonBound = true;
         }
         if (!cancelButtonBound && cancelButton != null)
@@ -550,7 +561,7 @@ public class PlaceableItemSystem : MonoBehaviour
     {
         if (rotateButtonBound && rotateButton != null)
         {
-            rotateButton.onClick.RemoveListener(RotatePreview);
+            rotateHold = null;
             rotateButtonBound = false;
         }
         if (cancelButtonBound && cancelButton != null)
