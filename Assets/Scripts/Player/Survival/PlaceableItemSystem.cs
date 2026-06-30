@@ -19,6 +19,8 @@ public class PlaceableItemSystem : MonoBehaviour
     [SerializeField] private FusionPlayerInventory fusionInventory;
     [SerializeField] private FusionPlayerSurvival fusionSurvival;
     [SerializeField] private Button placeButton;
+    [SerializeField] private Button rotateButton;
+    [SerializeField] private Button cancelButton;
 
     [Header("Placement")]
     [SerializeField] private float placementDistance = 2.5f;
@@ -38,6 +40,9 @@ public class PlaceableItemSystem : MonoBehaviour
     private int selectedGlobalSlot = -1;
     private ItemType selectedItemType;
     private bool buttonBound;
+    private bool rotateButtonBound;
+    private bool cancelButtonBound;
+    private float previewYawOffset;
     private Vector3 currentPreviewBounds;
 
     private void Awake()
@@ -152,6 +157,7 @@ public class PlaceableItemSystem : MonoBehaviour
     private void EnterPlacementMode()
     {
         placementMode = true;
+        previewYawOffset = 0f;
         EnsurePreviewObject();
         UpdatePreview();
     }
@@ -160,6 +166,8 @@ public class PlaceableItemSystem : MonoBehaviour
     {
         placementMode = false;
         currentPlacementValid = false;
+        previewYawOffset = 0f;
+        HideRotateCancelButtons();
         if (previewObject != null)
         {
             Destroy(previewObject);
@@ -183,7 +191,7 @@ public class PlaceableItemSystem : MonoBehaviour
             targetPosition = hit.point + hit.normal * groundOffset;
         }
 
-        Quaternion targetRotation = Quaternion.Euler(0f, transform.eulerAngles.y, 0f);
+        Quaternion targetRotation = Quaternion.Euler(0f, transform.eulerAngles.y + previewYawOffset, 0f);
         previewObject.transform.SetPositionAndRotation(targetPosition, targetRotation);
 
         currentPlacementValid = hasGround && !IsPlacementBlocked(targetPosition, targetRotation, hit.collider);
@@ -351,6 +359,15 @@ public class PlaceableItemSystem : MonoBehaviour
         bool canPlace = CanPlaceSelectedItem();
         placeButton.gameObject.SetActive(canPlace);
         placeButton.interactable = canPlace;
+
+        if (placementMode && canPlace)
+        {
+            ShowRotateCancelButtons();
+        }
+        else
+        {
+            HideRotateCancelButtons();
+        }
     }
 
     private bool CanPlaceSelectedItem()
@@ -471,6 +488,75 @@ public class PlaceableItemSystem : MonoBehaviour
         if (placeButton == null)
         {
             placeButton = FindButtonByName("place");
+        }
+    }
+
+    public void RotatePreview()
+    {
+        previewYawOffset = (previewYawOffset + 45f) % 360f;
+    }
+
+    public void CancelPlacement()
+    {
+        ExitPlacementMode();
+    }
+
+    private void ShowRotateCancelButtons()
+    {
+        ResolveRotateCancelButtons();
+        BindRotateCancelButtons();
+        if (rotateButton != null)
+        {
+            rotateButton.gameObject.SetActive(true);
+            rotateButton.interactable = true;
+        }
+        if (cancelButton != null)
+        {
+            cancelButton.gameObject.SetActive(true);
+            cancelButton.interactable = true;
+        }
+    }
+
+    private void HideRotateCancelButtons()
+    {
+        UnbindRotateCancelButtons();
+        if (rotateButton != null) rotateButton.gameObject.SetActive(false);
+        if (cancelButton != null) cancelButton.gameObject.SetActive(false);
+    }
+
+    private void ResolveRotateCancelButtons()
+    {
+        if (rotateButton == null) rotateButton = FindButtonByName("rotate");
+        if (cancelButton == null) cancelButton = FindButtonByName("cancel");
+    }
+
+    private void BindRotateCancelButtons()
+    {
+        if (!rotateButtonBound && rotateButton != null)
+        {
+            rotateButton.onClick.RemoveListener(RotatePreview);
+            rotateButton.onClick.AddListener(RotatePreview);
+            rotateButtonBound = true;
+        }
+        if (!cancelButtonBound && cancelButton != null)
+        {
+            cancelButton.onClick.RemoveListener(CancelPlacement);
+            cancelButton.onClick.AddListener(CancelPlacement);
+            cancelButtonBound = true;
+        }
+    }
+
+    private void UnbindRotateCancelButtons()
+    {
+        if (rotateButtonBound && rotateButton != null)
+        {
+            rotateButton.onClick.RemoveListener(RotatePreview);
+            rotateButtonBound = false;
+        }
+        if (cancelButtonBound && cancelButton != null)
+        {
+            cancelButton.onClick.RemoveListener(CancelPlacement);
+            cancelButtonBound = false;
         }
     }
 
