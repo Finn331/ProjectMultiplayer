@@ -172,6 +172,8 @@ public class PlayerAnimatorDriver : MonoBehaviour
             (!disableRunningWhenInjured || !injuredActive) &&
             speedNormalized > 0.15f &&
             inputMagnitude >= runInputThreshold;
+
+        float animSpeed = RemapSpeedForWalkRun(speedNormalized, inputMagnitude, isRunning);
         smoothedVerticalVelocity = Mathf.SmoothDamp(
             smoothedVerticalVelocity,
             verticalVelocity,
@@ -183,7 +185,7 @@ public class PlayerAnimatorDriver : MonoBehaviour
             smoothedVerticalVelocity = 0f;
         }
 
-        animator.SetFloat(speedParam, speedNormalized, speedSmoothTime, Time.deltaTime);
+        animator.SetFloat(speedParam, animSpeed, speedSmoothTime, Time.deltaTime);
         animator.SetFloat(verticalVelocityParam, smoothedVerticalVelocity);
         animator.SetBool(isGroundedParam, isGrounded);
         animator.SetBool(isRunningParam, isRunning);
@@ -193,6 +195,23 @@ public class PlayerAnimatorDriver : MonoBehaviour
         wasGrounded = isGrounded;
         lastFramePosition = transform.position;
         hasLastFramePosition = true;
+    }
+
+    private float RemapSpeedForWalkRun(float speedNorm, float inputMag, bool running)
+    {
+        if (speedNorm <= moveInputDeadZone)
+        {
+            return 0f;
+        }
+
+        if (running)
+        {
+            float t = Mathf.InverseLerp(runInputThreshold, 1f, inputMag);
+            return Mathf.Lerp(0.5f, 1f, t);
+        }
+
+        float walkT = Mathf.InverseLerp(0f, runInputThreshold, inputMag);
+        return Mathf.Lerp(0f, 0.45f, walkT);
     }
 
     private bool ShouldProcessAnimator()
