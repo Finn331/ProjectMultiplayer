@@ -392,7 +392,11 @@ public class FusionPlayerInventory : NetworkBehaviour
             return true;
         }
 
-        return itemType == ItemType.Axe && Resources.Load<GameObject>("Prefabs/axe") != null;
+        return itemType == ItemType.Axe && Resources.Load<GameObject>("Prefabs/axe") != null
+            || itemType == ItemType.RawChicken
+            || itemType == ItemType.CookedChicken
+            || itemType == ItemType.RawFish
+            || itemType == ItemType.CookedFish;
     }
 
     private static void SpawnSceneDropLocal(Vector3 position, Vector3 forward, ItemType itemType, int amount, int sceneDropId)
@@ -409,6 +413,12 @@ public class FusionPlayerInventory : NetworkBehaviour
             {
                 droppedObject = Instantiate(axePrefab, position, Quaternion.identity);
             }
+        }
+        else if (itemType == ItemType.RawChicken || itemType == ItemType.CookedChicken
+            || itemType == ItemType.RawFish || itemType == ItemType.CookedFish)
+        {
+            droppedObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            droppedObject.transform.localScale = new Vector3(0.25f, 0.15f, 0.25f);
         }
 
         if (droppedObject == null)
