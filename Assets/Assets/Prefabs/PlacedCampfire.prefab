@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 4103607447361119228}
   - component: {fileID: 4099733098279997005}
   - component: {fileID: 4301041838529863370}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Flame Placeholder
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -96,7 +96,9 @@ GameObject:
   - component: {fileID: 7410883579952746250}
   - component: {fileID: 3289966273324346223}
   - component: {fileID: 4100090815873235575}
-  m_Layer: 0
+  - component: {fileID: 5209494781263418468}
+  - component: {fileID: 3132400271071860134}
+  m_Layer: 3
   m_Name: PlacedCampfire
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -139,6 +141,7 @@ MonoBehaviour:
   NetworkedBehaviours:
   - {fileID: 7410883579952746250}
   - {fileID: 4100090815873235575}
+  - {fileID: 3132400271071860134}
   ForceRemoteRenderTimeframe: 0
 --- !u!114 &7410883579952746250
 MonoBehaviour:
@@ -191,6 +194,49 @@ MonoBehaviour:
   SyncParent: 0
   _autoAOIOverride: 1
   DisableSharedModeInterpolation: 0
+--- !u!114 &5209494781263418468
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 874980459986673997}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f828bc58b3937bd4382c92b9961e2029, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  onInteraction:
+    m_PersistentCalls:
+      m_Calls: []
+--- !u!114 &3132400271071860134
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 874980459986673997}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d38290e080d28e24095ea0265faac9ad, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  drumstickRawPrefab: {fileID: 384192913179074482, guid: 5ac40a81039c36f42aad782a9a256083,
+    type: 3}
+  drumstickCookedPrefab: {fileID: 6494479680293001691, guid: ceab7f70c6ea6de48bc726375c3a5cd9,
+    type: 3}
+  steakRawPrefab: {fileID: 3872576327743985497, guid: cbb35c4a40e18bc41ab83409438d7446,
+    type: 3}
+  steakCookedPrefab: {fileID: 4205971768458200983, guid: 2f05a752af891794ba97ce13c5b3e44c,
+    type: 3}
+  fishFilletRawPrefab: {fileID: 5211742341678424403, guid: dd0a10b30d4f0ec4085865838454ff0b,
+    type: 3}
+  fishFilletCookedPrefab: {fileID: 6339178896466320526, guid: 65b759abfe2f81141be4cd9444886116,
+    type: 3}
+  wholeBirdRawPrefab: {fileID: 7677049683471479743, guid: 8e651e18f498c0244be314e63dd91170,
+    type: 3}
+  wholeBirdCookedPrefab: {fileID: 5566699297183848087, guid: eb5f0ff9acdbc5b4c9ffe6f1ff3bbd3c,
+    type: 3}
 --- !u!1 &2810878187209823908
 GameObject:
   m_ObjectHideFlags: 0
@@ -202,7 +248,7 @@ GameObject:
   - component: {fileID: 6969811726803827133}
   - component: {fileID: 5277150265857222528}
   - component: {fileID: 2532544165709500872}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Stone Ring
   m_TagString: Untagged
   m_Icon: {fileID: 0}

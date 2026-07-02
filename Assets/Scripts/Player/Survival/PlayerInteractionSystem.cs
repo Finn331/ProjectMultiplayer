@@ -264,6 +264,17 @@ public class PlayerInteractionSystem : MonoBehaviour
             return;
         }
 
+        CampfireCooking campfire = currentTarget.GetComponent<CampfireCooking>();
+        if (campfire != null)
+        {
+            if (this.TryInteractCampfire(campfire) && pickButton != null)
+            {
+                pickButton.SetActive(false);
+            }
+
+            return;
+        }
+
         currentTarget.Interact();
         if (pickButton != null)
         {
@@ -282,6 +293,75 @@ public class PlayerInteractionSystem : MonoBehaviour
         {
             pickButton.SetActive(false);
         }
+    }
+
+    private bool TryInteractCampfire(CampfireCooking campfire)
+    {
+        if (campfire == null || inventory == null)
+        {
+            return false;
+        }
+
+        if (networkInventoryBridge != null && networkInventoryBridge.UseNetworkedInventory)
+        {
+            return TryInteractCampfireNetworked(campfire);
+        }
+
+        var fusionInventory = GetComponent<FusionPlayerInventory>();
+        if (fusionInventory != null)
+        {
+            return TryInteractCampfireFusion(campfire, fusionInventory);
+        }
+
+        if (inventory.HasItem(ItemType.RawMeat, 1))
+        {
+            return campfire.TryPlaceRawMeat(inventory);
+        }
+
+        for (int i = 0; i < 4; i++)
+        {
+            if (campfire.HasCookedFood(i))
+            {
+                return campfire.TryPickupCooked(inventory, i);
+            }
+        }
+
+        return false;
+    }
+
+    private bool TryInteractCampfireFusion(CampfireCooking campfire, FusionPlayerInventory fusionInventory)
+    {
+        int hotbarSlot = 0;
+        MobileHotbarUI hotbar = GetComponent<MobileHotbarUI>();
+        if (hotbar != null)
+        {
+            hotbarSlot = hotbar.SelectedSlotIndex;
+        }
+
+        int globalSlot = inventory.HotbarStartIndex + hotbarSlot;
+        ItemType? selectedItem = globalSlot >= 0 && globalSlot < inventory.TotalSlotCount
+            ? inventory.GetSlotItemType(globalSlot)
+            : null;
+
+        if (selectedItem == ItemType.RawMeat && inventory.GetSlotAmount(globalSlot) > 0)
+        {
+            return campfire.TryPlaceRawMeat(inventory);
+        }
+
+        for (int i = 0; i < 4; i++)
+        {
+            if (campfire.HasCookedFood(i))
+            {
+                return campfire.TryPickupCooked(inventory, i);
+            }
+        }
+
+        return false;
+    }
+
+    private bool TryInteractCampfireNetworked(CampfireCooking campfire)
+    {
+        return TryInteractCampfireFusion(campfire, null);
     }
 
     private void TryPickupItem(PickableItem item)

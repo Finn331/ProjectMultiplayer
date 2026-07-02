@@ -40,6 +40,9 @@ public static class ConsumableItemCatalog
             case ItemType.ThirstConsumable:
                 effect = new ConsumableItemEffect(0f, 0f, DefaultThirstBoostAmount);
                 return true;
+            case ItemType.CookedMeat:
+                effect = new ConsumableItemEffect(0f, 40f, 0f);
+                return true;
             default:
                 effect = default;
                 return false;
