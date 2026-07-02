@@ -357,11 +357,6 @@ MonoBehaviour:
   cameraCollisionLayers:
     serializedVersion: 2
     m_Bits: 4294967295
-  enableHeadBob: 1
-  bobFrequency: 2
-  bobVerticalAmplitude: 0.06
-  bobHorizontalAmplitude: 0.03
-  bobSmoothTime: 0.08
 --- !u!114 &6530736624186658528
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -943,6 +938,14 @@ MonoBehaviour:
   dropOrigin: {fileID: 0}
   dropForwardDistance: 1.2
   dropUpOffset: 0.2
+  rawChickenDropPrefab: {fileID: 384192913179074482, guid: 5ac40a81039c36f42aad782a9a256083,
+    type: 3}
+  cookedChickenDropPrefab: {fileID: 6494479680293001691, guid: ceab7f70c6ea6de48bc726375c3a5cd9,
+    type: 3}
+  rawFishDropPrefab: {fileID: 5211742341678424403, guid: dd0a10b30d4f0ec4085865838454ff0b,
+    type: 3}
+  cookedFishDropPrefab: {fileID: 6339178896466320526, guid: 65b759abfe2f81141be4cd9444886116,
+    type: 3}
   placeablePrefabs:
   - itemType: 10
     prefab:

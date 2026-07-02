@@ -32,6 +32,12 @@ public class FusionPlayerInventory : NetworkBehaviour
     [SerializeField] private float dropForwardDistance = 1.2f;
     [SerializeField] private float dropUpOffset = 0.2f;
 
+    [Header("Food Drop Prefabs")]
+    [SerializeField] private GameObject rawChickenDropPrefab;
+    [SerializeField] private GameObject cookedChickenDropPrefab;
+    [SerializeField] private GameObject rawFishDropPrefab;
+    [SerializeField] private GameObject cookedFishDropPrefab;
+
     [Header("Placeables")]
     [SerializeField] private PlaceablePrefabBinding[] placeablePrefabs;
     [SerializeField] private float maxPlacementDistance = 4f;
@@ -417,8 +423,7 @@ public class FusionPlayerInventory : NetworkBehaviour
         else if (itemType == ItemType.RawChicken || itemType == ItemType.CookedChicken
             || itemType == ItemType.RawFish || itemType == ItemType.CookedFish)
         {
-            droppedObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            droppedObject.transform.localScale = new Vector3(0.25f, 0.15f, 0.25f);
+            droppedObject = SpawnFoodDropObject(itemType);
         }
 
         if (droppedObject == null)
@@ -490,6 +495,32 @@ public class FusionPlayerInventory : NetworkBehaviour
         rigidbody.drag = 0f;
         rigidbody.angularDrag = 1f;
         rigidbody.AddForce((forward.normalized + Vector3.up).normalized * 2f, ForceMode.VelocityChange);
+    }
+
+    private static GameObject SpawnFoodDropObject(ItemType itemType)
+    {
+        FusionPlayerInventory instance = FindObjectOfType<FusionPlayerInventory>();
+        if (instance == null)
+        {
+            GameObject fallback = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            fallback.transform.localScale = new Vector3(0.25f, 0.15f, 0.25f);
+            return fallback;
+        }
+
+        GameObject prefab = null;
+        if (itemType == ItemType.RawChicken) prefab = instance.rawChickenDropPrefab;
+        else if (itemType == ItemType.CookedChicken) prefab = instance.cookedChickenDropPrefab;
+        else if (itemType == ItemType.RawFish) prefab = instance.rawFishDropPrefab;
+        else if (itemType == ItemType.CookedFish) prefab = instance.cookedFishDropPrefab;
+
+        if (prefab != null)
+        {
+            return Instantiate(prefab, Vector3.zero, Quaternion.identity);
+        }
+
+        GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        cube.transform.localScale = new Vector3(0.25f, 0.15f, 0.25f);
+        return cube;
     }
 
     private static void CacheSceneDropTemplate(PickableItem sourceItem)
