@@ -315,7 +315,8 @@ public class PlayerInteractionSystem : MonoBehaviour
 
         if (inventory.HasItem(ItemType.RawChicken, 1) || inventory.HasItem(ItemType.RawFish, 1))
         {
-            return campfire.TryPlaceRawMeat(inventory);
+            ItemType rawType = inventory.HasItem(ItemType.RawChicken, 1) ? ItemType.RawChicken : ItemType.RawFish;
+            return campfire.TryPlaceRawMeat(inventory, rawType);
         }
 
         for (int i = 0; i < 4; i++)
@@ -347,7 +348,7 @@ public class PlayerInteractionSystem : MonoBehaviour
         {
             if (inventory.GetSlotAmount(globalSlot) > 0)
             {
-                return campfire.TryPlaceRawMeat(inventory);
+                return campfire.TryPlaceRawMeat(inventory, selectedItem.Value);
             }
         }
 

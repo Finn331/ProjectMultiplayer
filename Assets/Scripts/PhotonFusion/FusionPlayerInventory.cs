@@ -423,7 +423,7 @@ public class FusionPlayerInventory : NetworkBehaviour
         else if (itemType == ItemType.RawChicken || itemType == ItemType.CookedChicken
             || itemType == ItemType.RawFish || itemType == ItemType.CookedFish)
         {
-            droppedObject = SpawnFoodDropObject(itemType);
+            droppedObject = SpawnFoodDropObject(itemType, position);
         }
 
         if (droppedObject == null)
@@ -497,13 +497,14 @@ public class FusionPlayerInventory : NetworkBehaviour
         rigidbody.AddForce((forward.normalized + Vector3.up).normalized * 2f, ForceMode.VelocityChange);
     }
 
-    private static GameObject SpawnFoodDropObject(ItemType itemType)
+    private static GameObject SpawnFoodDropObject(ItemType itemType, Vector3 position)
     {
         FusionPlayerInventory instance = FindObjectOfType<FusionPlayerInventory>();
         if (instance == null)
         {
             GameObject fallback = GameObject.CreatePrimitive(PrimitiveType.Cube);
             fallback.transform.localScale = new Vector3(0.25f, 0.15f, 0.25f);
+            fallback.transform.position = position;
             return fallback;
         }
 
@@ -515,11 +516,12 @@ public class FusionPlayerInventory : NetworkBehaviour
 
         if (prefab != null)
         {
-            return Instantiate(prefab, Vector3.zero, Quaternion.identity);
+            return Instantiate(prefab, position, Quaternion.identity);
         }
 
         GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
         cube.transform.localScale = new Vector3(0.25f, 0.15f, 0.25f);
+        cube.transform.position = position;
         return cube;
     }
 

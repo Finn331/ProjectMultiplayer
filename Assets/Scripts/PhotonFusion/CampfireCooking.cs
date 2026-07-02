@@ -77,23 +77,19 @@ public class CampfireCooking : NetworkBehaviour
         }
     }
 
-    public bool TryPlaceRawMeat(PlayerInventory inventory)
+    public bool TryPlaceRawMeat(PlayerInventory inventory, ItemType rawType)
     {
         if (!HasStateAuthority || inventory == null)
         {
             return false;
         }
 
-        ItemType rawType = ItemType.RawChicken;
-        if (inventory.HasItem(ItemType.RawChicken, 1))
+        if (rawType != ItemType.RawChicken && rawType != ItemType.RawFish)
         {
-            rawType = ItemType.RawChicken;
+            return false;
         }
-        else if (inventory.HasItem(ItemType.RawFish, 1))
-        {
-            rawType = ItemType.RawFish;
-        }
-        else
+
+        if (!inventory.HasItem(rawType, 1))
         {
             return false;
         }
@@ -109,8 +105,12 @@ public class CampfireCooking : NetworkBehaviour
             return false;
         }
 
-        int foodIndex = rawType == ItemType.RawFish ? 2 : Random.Range(0, foodPairs.Length == 2 ? 1 : 0);
-        if (rawType == ItemType.RawChicken)
+        int foodIndex;
+        if (rawType == ItemType.RawFish)
+        {
+            foodIndex = 2;
+        }
+        else
         {
             int[] chickenIndices = new int[] { 0, 1, 3 };
             foodIndex = chickenIndices[Random.Range(0, chickenIndices.Length)];
@@ -160,7 +160,9 @@ public class CampfireCooking : NetworkBehaviour
             return false;
         }
 
-        return slotHasCooked[slot];
+        float timer = SlotTimers.Get(slot);
+        int foodIndex = SlotFoodIndices.Get(slot);
+        return timer <= 0f && foodIndex >= 0;
     }
 
     private int FindFreeSlot()
