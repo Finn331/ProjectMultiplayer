@@ -7,7 +7,7 @@ public class TestingResourceVendingMachine : MonoBehaviour
     private const int DispenseAmount = 5;
 
     [SerializeField] private string panelTitle = "Testing Resources";
-    [SerializeField] private Vector2 panelSize = new Vector2(360f, 420f);
+    [SerializeField] private Vector2 panelSize = new Vector2(360f, 500f);
 
     private PlayerInventory currentInventory;
     private Canvas vendingCanvas;
@@ -88,6 +88,11 @@ public class TestingResourceVendingMachine : MonoBehaviour
         Dispense(ItemType.Cloth, "Cloth");
     }
 
+    private void DispenseRawMeat()
+    {
+        Dispense(ItemType.RawMeat, "Raw Meat");
+    }
+
     private void Dispense(ItemType itemType, string label)
     {
         if (currentInventory == null)
@@ -147,7 +152,8 @@ public class TestingResourceVendingMachine : MonoBehaviour
         CreateButton(panelObject.transform, "FIBER x5", new Vector2(0f, 30f), DispenseFiber);
         CreateButton(panelObject.transform, "STONE x5", new Vector2(0f, -30f), DispenseStone);
         CreateButton(panelObject.transform, "CLOTH x5", new Vector2(0f, -90f), DispenseCloth);
-        CreateButton(panelObject.transform, "CLOSE", new Vector2(0f, -160f), Close);
+        CreateButton(panelObject.transform, "RAW MEAT x5", new Vector2(0f, -150f), DispenseRawMeat);
+        CreateButton(panelObject.transform, "CLOSE", new Vector2(0f, -220f), Close);
 
         panelObject.SetActive(false);
     }
