@@ -56,20 +56,10 @@ public class FPSControllerMobile : MonoBehaviour
     [Range(0.01f, 0.25f)] public float cameraCollisionMinDistance = 0.02f;
     public LayerMask cameraCollisionLayers = ~0;
 
-    [Header("Head Bob")]
-    [SerializeField] private bool enableHeadBob = true;
-    [SerializeField] private float bobFrequency = 2f;
-    [SerializeField] private float bobVerticalAmplitude = 0.06f;
-    [SerializeField] private float bobHorizontalAmplitude = 0.03f;
-    [SerializeField] private float bobSmoothTime = 0.08f;
-
     float xRotation = 0f;
     float verticalVelocity;
     float lastJumpPressedTime = -999f;
     private bool jumpButtonBound;
-    private float bobTimer;
-    private float currentBobAmount;
-    private float bobAmountVelocity;
     readonly List<Renderer> firstPersonHiddenRenderers = new List<Renderer>();
     readonly List<bool> firstPersonHiddenRendererOriginalStates = new List<bool>();
     readonly List<ShadowCastingMode> firstPersonHiddenRendererOriginalShadowModes = new List<ShadowCastingMode>();
@@ -214,42 +204,6 @@ public class FPSControllerMobile : MonoBehaviour
         this.ApplyFirstPersonCameraStabilization();
     }
 
-    private Vector3 CalculateHeadBobOffset()
-    {
-        if (!enableHeadBob || !mainCamera)
-        {
-            return Vector3.zero;
-        }
-
-        if (mainCamera.transform.parent != cameraHolder)
-        {
-            return Vector3.zero;
-        }
-
-        if (controller == null)
-        {
-            return Vector3.zero;
-        }
-
-        Vector3 horizontalVelocity = new Vector3(controller.velocity.x, 0f, controller.velocity.z);
-        float speed = horizontalVelocity.magnitude;
-        float speedNormalized = moveSpeed > 0.01f ? Mathf.Clamp01(speed / moveSpeed) : 0f;
-        float targetBobAmount = speedNormalized > 0.01f ? speedNormalized : 0f;
-
-        currentBobAmount = Mathf.SmoothDamp(currentBobAmount, targetBobAmount, ref bobAmountVelocity, bobSmoothTime);
-
-        if (currentBobAmount > 0.001f)
-        {
-            bobTimer += Time.deltaTime * bobFrequency;
-            float vertical = Mathf.Sin(bobTimer * 2f) * bobVerticalAmplitude * currentBobAmount;
-            float horizontal = Mathf.Sin(bobTimer) * bobHorizontalAmplitude * currentBobAmount;
-            return new Vector3(horizontal, vertical, 0f);
-        }
-
-        bobTimer = 0f;
-        return Vector3.zero;
-    }
-
     // ================= MOVEMENT =================
     void MobileMovement()
     {
@@ -311,28 +265,20 @@ public class FPSControllerMobile : MonoBehaviour
 
     void ApplyFirstPersonCameraStabilization()
     {
-        if (!cameraHolder || !mainCamera)
+        if (!stabilizeCameraLocalTransform || !cameraHolder || !mainCamera)
         {
-            return;
-        }
-
-        Transform cameraTransform = mainCamera.transform;
-        if (cameraTransform.parent != cameraHolder)
-        {
-            return;
-        }
-
-        Vector3 bobOffset = CalculateHeadBobOffset();
-
-        if (!stabilizeCameraLocalTransform)
-        {
-            cameraTransform.localPosition += bobOffset;
             return;
         }
 
         if (cameraHolder.localPosition != Vector3.zero)
         {
             cameraHolder.localPosition = Vector3.zero;
+        }
+
+        Transform cameraTransform = mainCamera.transform;
+        if (cameraTransform.parent != cameraHolder)
+        {
+            return;
         }
 
         float lerpFactor = 1f - Mathf.Exp(-headAnchorFollowSpeed * Time.deltaTime);
@@ -360,7 +306,6 @@ public class FPSControllerMobile : MonoBehaviour
         }
 
         Vector3 targetLocalPosition = cameraHolder.InverseTransformPoint(desiredWorldPosition);
-        targetLocalPosition += bobOffset;
         cameraTransform.localPosition = Vector3.Lerp(cameraTransform.localPosition, targetLocalPosition, lerpFactor);
         cameraTransform.localRotation = Quaternion.Slerp(cameraTransform.localRotation, desiredLocalRotation, lerpFactor);
 
