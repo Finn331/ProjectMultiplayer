@@ -44,7 +44,7 @@ public static class ConsumableItemCatalog
                 effect = new ConsumableItemEffect(0f, 40f, 0f);
                 return true;
             case ItemType.CookedFish:
-                effect = new ConsumableItemEffect(0f, 30f, 15f);
+                effect = new ConsumableItemEffect(0f, 30f, 0f);
                 return true;
             default:
                 effect = default;
