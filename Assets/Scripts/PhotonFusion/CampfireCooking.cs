@@ -3,8 +3,8 @@ using UnityEngine;
 
 public class CampfireCooking : NetworkBehaviour
 {
-    private const int BaseCurrentSlotCount = 4;
-    private const int PotCurrentSlotCount = 8;
+    private const int BaseSlotCount = 4;
+    private const int PotSlotCount = 8;
     public const float CookTimeSeconds = 20f;
     private const float PotCookTimeSeconds = 12f;
 
@@ -19,13 +19,13 @@ public class CampfireCooking : NetworkBehaviour
 
     [Networked] private NetworkBool HasPot { get; set; }
 
-    [Networked, Capacity(PotCurrentSlotCount)]
+    [Networked, Capacity(PotSlotCount)]
     private NetworkArray<float> SlotTimers { get; }
-    [Networked, Capacity(PotCurrentSlotCount)]
+    [Networked, Capacity(PotSlotCount)]
     private NetworkArray<int> SlotFoodIndices { get; }
 
-    private readonly GameObject[] slotVisuals = new GameObject[PotCurrentSlotCount];
-    private readonly bool[] slotHasCooked = new bool[PotCurrentSlotCount];
+    private readonly GameObject[] slotVisuals = new GameObject[PotSlotCount];
+    private readonly bool[] slotHasCooked = new bool[PotSlotCount];
     private readonly Vector3[] baseSlotPositions = new Vector3[]
     {
         new Vector3(0.2f, 0.55f, 0.2f),
@@ -48,7 +48,7 @@ public class CampfireCooking : NetworkBehaviour
     private GameObject potVisual;
     private (GameObject raw, GameObject cooked)[] foodPairs;
 
-    private int CurrentCurrentSlotCount => HasPot ? PotCurrentSlotCount : BaseCurrentSlotCount;
+    private int CurrentSlotCount => HasPot ? PotSlotCount : BaseSlotCount;
     private float CurrentCookTime => HasPot ? PotCookTimeSeconds : CookTimeSeconds;
 
     public bool HasCookingPot => HasPot;
@@ -65,7 +65,7 @@ public class CampfireCooking : NetworkBehaviour
 
         if (HasStateAuthority)
         {
-            for (int i = 0; i < PotCurrentSlotCount; i++)
+            for (int i = 0; i < PotSlotCount; i++)
             {
                 SlotTimers.Set(i, -1f);
                 SlotFoodIndices.Set(i, -1);
