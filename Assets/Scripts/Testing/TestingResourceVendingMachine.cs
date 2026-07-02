@@ -7,7 +7,7 @@ public class TestingResourceVendingMachine : MonoBehaviour
     private const int DispenseAmount = 5;
 
     [SerializeField] private string panelTitle = "Testing Resources";
-    [SerializeField] private Vector2 panelSize = new Vector2(360f, 560f);
+    [SerializeField] private Vector2 panelSize = new Vector2(360f, 680f);
 
     private PlayerInventory currentInventory;
     private Canvas vendingCanvas;
@@ -98,6 +98,16 @@ public class TestingResourceVendingMachine : MonoBehaviour
         Dispense(ItemType.RawFish, "Raw Fish");
     }
 
+    private void DispenseIron()
+    {
+        Dispense(ItemType.Iron, "Iron");
+    }
+
+    private void DispenseCookingPot()
+    {
+        Dispense(ItemType.CookingPot, "Cooking Pot");
+    }
+
     private void Dispense(ItemType itemType, string label)
     {
         if (currentInventory == null)
@@ -159,7 +169,9 @@ public class TestingResourceVendingMachine : MonoBehaviour
         CreateButton(panelObject.transform, "CLOTH x5", new Vector2(0f, -90f), DispenseCloth);
         CreateButton(panelObject.transform, "RAW CHICKEN x5", new Vector2(0f, -150f), DispenseRawMeat);
         CreateButton(panelObject.transform, "RAW FISH x5", new Vector2(0f, -210f), DispenseRawFish);
-        CreateButton(panelObject.transform, "CLOSE", new Vector2(0f, -280f), Close);
+        CreateButton(panelObject.transform, "IRON x5", new Vector2(0f, -270f), DispenseIron);
+        CreateButton(panelObject.transform, "COOKING POT x1", new Vector2(0f, -330f), DispenseCookingPot);
+        CreateButton(panelObject.transform, "CLOSE", new Vector2(0f, -400f), Close);
 
         panelObject.SetActive(false);
     }

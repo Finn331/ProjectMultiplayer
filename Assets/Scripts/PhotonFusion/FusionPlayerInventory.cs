@@ -402,7 +402,9 @@ public class FusionPlayerInventory : NetworkBehaviour
             || itemType == ItemType.RawChicken
             || itemType == ItemType.CookedChicken
             || itemType == ItemType.RawFish
-            || itemType == ItemType.CookedFish;
+            || itemType == ItemType.CookedFish
+            || itemType == ItemType.Iron
+            || itemType == ItemType.CookingPot;
     }
 
     private static void SpawnSceneDropLocal(Vector3 position, Vector3 forward, ItemType itemType, int amount, int sceneDropId)

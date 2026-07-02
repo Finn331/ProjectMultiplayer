@@ -240,6 +240,19 @@ public class BandageCraftingSystem : MonoBehaviour
                 new CraftingIngredient { itemType = ItemType.Fiber, amount = 4 }
             }
         });
+
+        AddDefaultRecipeIfMissing(new CraftingRecipe
+        {
+            recipeId = "cooking_pot",
+            displayName = "Cooking Pot",
+            outputItemType = ItemType.CookingPot,
+            outputAmount = 1,
+            context = CraftingContext.CraftingTable,
+            ingredients = new List<CraftingIngredient>
+            {
+                new CraftingIngredient { itemType = ItemType.Iron, amount = 4 }
+            }
+        });
     }
 
     private void AddDefaultRecipeIfMissing(CraftingRecipe defaultRecipe)

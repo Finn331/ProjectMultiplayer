@@ -319,12 +319,23 @@ public class PlayerInteractionSystem : MonoBehaviour
             return campfire.TryPlaceRawMeat(inventory, rawType);
         }
 
-        for (int i = 0; i < 4; i++)
+        if (inventory.HasItem(ItemType.CookingPot, 1))
+        {
+            return campfire.TryPlaceCookingPot(inventory);
+        }
+
+        int maxSlots = campfire.HasCookingPot ? 8 : 4;
+        for (int i = 0; i < maxSlots; i++)
         {
             if (campfire.HasCookedFood(i))
             {
                 return campfire.TryPickupCooked(inventory, i);
             }
+        }
+
+        if (campfire.HasCookingPot)
+        {
+            return campfire.TryRemoveCookingPot(inventory);
         }
 
         return false;
@@ -352,11 +363,34 @@ public class PlayerInteractionSystem : MonoBehaviour
             }
         }
 
-        for (int i = 0; i < 4; i++)
+        if (selectedItem == ItemType.CookingPot && inventory.GetSlotAmount(globalSlot) > 0)
         {
-            if (campfire.HasCookedFood(i))
+            return campfire.TryPlaceCookingPot(inventory);
+        }
+
+        if (!campfire.HasCookingPot)
+        {
+            for (int i = 0; i < 4; i++)
             {
-                return campfire.TryPickupCooked(inventory, i);
+                if (campfire.HasCookedFood(i))
+                {
+                    return campfire.TryPickupCooked(inventory, i);
+                }
+            }
+        }
+        else
+        {
+            for (int i = 0; i < 8; i++)
+            {
+                if (campfire.HasCookedFood(i))
+                {
+                    return campfire.TryPickupCooked(inventory, i);
+                }
+            }
+
+            if (campfire.TryRemoveCookingPot(inventory))
+            {
+                return true;
             }
         }
 
