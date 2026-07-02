@@ -313,7 +313,7 @@ public class PlayerInteractionSystem : MonoBehaviour
             return TryInteractCampfireFusion(campfire, fusionInventory);
         }
 
-        if (inventory.HasItem(ItemType.RawMeat, 1))
+        if (inventory.HasItem(ItemType.RawChicken, 1) || inventory.HasItem(ItemType.RawFish, 1))
         {
             return campfire.TryPlaceRawMeat(inventory);
         }
@@ -343,9 +343,12 @@ public class PlayerInteractionSystem : MonoBehaviour
             ? inventory.GetSlotItemType(globalSlot)
             : null;
 
-        if (selectedItem == ItemType.RawMeat && inventory.GetSlotAmount(globalSlot) > 0)
+        if (selectedItem == ItemType.RawChicken || selectedItem == ItemType.RawFish)
         {
-            return campfire.TryPlaceRawMeat(inventory);
+            if (inventory.GetSlotAmount(globalSlot) > 0)
+            {
+                return campfire.TryPlaceRawMeat(inventory);
+            }
         }
 
         for (int i = 0; i < 4; i++)

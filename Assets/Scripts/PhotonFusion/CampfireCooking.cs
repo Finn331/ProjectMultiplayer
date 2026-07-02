@@ -84,7 +84,16 @@ public class CampfireCooking : NetworkBehaviour
             return false;
         }
 
-        if (!inventory.HasItem(ItemType.RawMeat, 1))
+        ItemType rawType = ItemType.RawChicken;
+        if (inventory.HasItem(ItemType.RawChicken, 1))
+        {
+            rawType = ItemType.RawChicken;
+        }
+        else if (inventory.HasItem(ItemType.RawFish, 1))
+        {
+            rawType = ItemType.RawFish;
+        }
+        else
         {
             return false;
         }
@@ -95,12 +104,18 @@ public class CampfireCooking : NetworkBehaviour
             return false;
         }
 
-        if (!inventory.RemoveItem(ItemType.RawMeat, 1))
+        if (!inventory.RemoveItem(rawType, 1))
         {
             return false;
         }
 
-        int foodIndex = Random.Range(0, foodPairs.Length);
+        int foodIndex = rawType == ItemType.RawFish ? 2 : Random.Range(0, foodPairs.Length == 2 ? 1 : 0);
+        if (rawType == ItemType.RawChicken)
+        {
+            int[] chickenIndices = new int[] { 0, 1, 3 };
+            foodIndex = chickenIndices[Random.Range(0, chickenIndices.Length)];
+        }
+
         SlotTimers.Set(freeSlot, CookTimeSeconds);
         SlotFoodIndices.Set(freeSlot, foodIndex);
         slotHasCooked[freeSlot] = false;
@@ -126,9 +141,16 @@ public class CampfireCooking : NetworkBehaviour
             return false;
         }
 
-        inventory.AddItem(ItemType.CookedMeat, 1);
+        ItemType cookedType = GetCookedItemType(slot);
+        inventory.AddItem(cookedType, 1);
         ClearSlot(slot);
         return true;
+    }
+
+    private ItemType GetCookedItemType(int slot)
+    {
+        int foodIndex = SlotFoodIndices.Get(slot);
+        return foodIndex == 2 ? ItemType.CookedFish : ItemType.CookedChicken;
     }
 
     public bool HasCookedFood(int slot)

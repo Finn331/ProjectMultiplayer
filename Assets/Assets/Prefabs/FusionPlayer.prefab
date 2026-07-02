@@ -940,6 +940,8 @@ MonoBehaviour:
       type: 3}
   fallbackDropPrefab:
     RawGuidValue: 00000000000000000000000000000000
+    prefabObject: {fileID: 5804142493525070282, guid: 81f9cb41b51d56648acbfa75867f0822,
+      type: 3}
   dropOrigin: {fileID: 0}
   dropForwardDistance: 1.2
   dropUpOffset: 0.2
