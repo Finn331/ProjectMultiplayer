@@ -408,7 +408,9 @@ public class FusionPlayerInventory : NetworkBehaviour
             || itemType == ItemType.Wood
             || itemType == ItemType.Stone
             || itemType == ItemType.Fiber
-            || itemType == ItemType.Cloth;
+            || itemType == ItemType.Cloth
+            || itemType == ItemType.Furnace
+            || itemType == ItemType.IronIngot;
     }
 
     private static void SpawnSceneDropLocal(Vector3 position, Vector3 forward, ItemType itemType, int amount, int sceneDropId)

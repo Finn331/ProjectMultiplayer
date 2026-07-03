@@ -109,7 +109,8 @@ public class PlaceableItemSystem : MonoBehaviour
     {
         return itemType == ItemType.CraftingTable
             || itemType == ItemType.Campfire
-            || itemType == ItemType.StorageChest;
+            || itemType == ItemType.StorageChest
+            || itemType == ItemType.Furnace;
     }
 
     public void TogglePlacementMode()

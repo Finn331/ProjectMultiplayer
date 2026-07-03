@@ -275,6 +275,17 @@ public class PlayerInteractionSystem : MonoBehaviour
             return;
         }
 
+        FusionFurnace furnace = currentTarget.GetComponent<FusionFurnace>();
+        if (furnace != null)
+        {
+            if (this.TryInteractFurnace(furnace) && pickButton != null)
+            {
+                pickButton.SetActive(false);
+            }
+
+            return;
+        }
+
         currentTarget.Interact();
         if (pickButton != null)
         {
@@ -392,6 +403,39 @@ public class PlayerInteractionSystem : MonoBehaviour
             if (campfire.TryRemoveCookingPot(inventory))
             {
                 return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool TryInteractFurnace(FusionFurnace furnace)
+    {
+        if (furnace == null || inventory == null) return false;
+
+        int hotbarSlot = 0;
+        MobileHotbarUI hotbar = GetComponent<MobileHotbarUI>();
+        if (hotbar != null) hotbarSlot = hotbar.SelectedSlotIndex;
+
+        int globalSlot = inventory.HotbarStartIndex + hotbarSlot;
+        ItemType? selectedItem = globalSlot >= 0 && globalSlot < inventory.TotalSlotCount
+            ? inventory.GetSlotItemType(globalSlot) : null;
+
+        if (selectedItem == ItemType.Wood && inventory.GetSlotAmount(globalSlot) > 0)
+        {
+            return furnace.TryAddFuel(inventory);
+        }
+
+        if (selectedItem == ItemType.Iron && inventory.GetSlotAmount(globalSlot) > 0)
+        {
+            return furnace.TryAddIron(inventory);
+        }
+
+        for (int i = 0; i < 4; i++)
+        {
+            if (furnace.HasOutput(i))
+            {
+                return furnace.TryPickupOutput(inventory, i);
             }
         }
 

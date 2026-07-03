@@ -20,7 +20,9 @@ public enum ItemType
     RawFish,
     CookedFish,
     Iron,
-    CookingPot
+    CookingPot,
+    IronIngot,
+    Furnace
 }
 
 public class PickableItem : MonoBehaviour

@@ -965,6 +965,12 @@ MonoBehaviour:
     prefabObject: {fileID: 145417318617140870, guid: 0165523eedc11bb40bb9c03dc855d698,
       type: 3}
     bounds: {x: 1.25, y: 0.8, z: 0.8}
+  - itemType: 20
+    prefab:
+      RawGuidValue: 00000000000000000000000000000000
+    prefabObject: {fileID: 1135683667375107488, guid: ff24da5becacd30459de920e675f42c3,
+      type: 3}
+    bounds: {x: 1, y: 1.1, z: 1}
   maxPlacementDistance: 4
   placementSurfaceMask:
     serializedVersion: 2
@@ -1212,6 +1218,10 @@ MonoBehaviour:
     ghostPrefab: {fileID: 4173611294714680217, guid: c0a2c90e92314414f983a5c6f258649b,
       type: 3}
     previewBounds: {x: 1.25, y: 0.8, z: 0.8}
+  - itemType: 20
+    ghostPrefab: {fileID: 543966656036445769, guid: fa23e5c0580a4364dada6c6499a70b47,
+      type: 3}
+    previewBounds: {x: 1, y: 1.1, z: 1}
   validPreviewMaterial: {fileID: 2100000, guid: 6afb9e175d3fdc44e973831f338090f4,
     type: 2}
   invalidPreviewMaterial: {fileID: 2100000, guid: 3a7f94c0942505448aff8be3db3b20f2,
