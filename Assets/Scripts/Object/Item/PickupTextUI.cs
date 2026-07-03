@@ -8,33 +8,40 @@ public class PickupTextUI : MonoBehaviour
     public float floatDistance = 80f;
     public LeanTweenType easeType = LeanTweenType.easeOutQuad;
 
-    private void Start()
+    private RectTransform rectTransform;
+
+    private void Awake()
     {
+        rectTransform = GetComponent<RectTransform>();
+
         if (text == null)
         {
             text = GetComponent<TextMeshProUGUI>();
         }
+    }
 
-        RectTransform rect = GetComponent<RectTransform>();
-        if (rect != null)
-        {
-            LeanTween.moveY(rect, rect.anchoredPosition.y + floatDistance, lifeTime)
-                .setEase(easeType);
-        }
+    private void Start()
+    {
+        if (rectTransform == null) return;
+
+        Vector3 targetPos = rectTransform.anchoredPosition;
+        targetPos.y += floatDistance;
+
+        LeanTween.move(rectTransform, targetPos, lifeTime)
+            .setEase(easeType);
 
         if (text != null)
         {
-            text.color = new Color(text.color.r, text.color.g, text.color.b, 1f);
-            LeanTween.value(gameObject, 1f, 0f, lifeTime)
+            CanvasGroup cg = GetComponent<CanvasGroup>();
+            if (cg == null)
+            {
+                cg = gameObject.AddComponent<CanvasGroup>();
+            }
+
+            cg.alpha = 1f;
+            LeanTween.alphaCanvas(rectTransform, 0f, lifeTime)
                 .setEase(LeanTweenType.easeInQuad)
-                .setOnUpdate((float val) =>
-                {
-                    text.color = new Color(text.color.r, text.color.g, text.color.b, val);
-                })
-                .setOnComplete(() =>
-                {
-                    Destroy(gameObject);
-                });
+                .setOnComplete(() => Destroy(gameObject));
         }
         else
         {
