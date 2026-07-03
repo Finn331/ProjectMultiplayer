@@ -7,8 +7,7 @@ public class FurnaceUI : MonoBehaviour
     [Header("Furnace")]
     [SerializeField] private FusionFurnace furnace;
 
-    [Header("Auto-Build")]
-    [SerializeField] private bool autoBuildUI = true;
+    [Header("Layout")]
     [SerializeField] private Vector2 panelSize = new Vector2(700f, 440f);
     [SerializeField] private float buttonHeight = 52f;
 
@@ -129,7 +128,6 @@ public class FurnaceUI : MonoBehaviour
         CreateLabel(panelObject.transform, "HOTBAR", new Vector2(leftX, startY - Mathf.Ceil(inventorySlots / (float)columns) * 64f - 10f), 12);
 
         int hotbarStart = inventorySlots;
-        int hotbarCols = 5;
         for (int i = hotbarStart; i < totalSlots; i++)
         {
             int col = i - hotbarStart;
@@ -145,14 +143,14 @@ public class FurnaceUI : MonoBehaviour
 
         if (fuelTimerText != null)
         {
-            fuelTimerText.text = furnace.HasFuel ? Mathf.CeilToInt(furnace.FuelTimer) + "s" : "Empty";
+            fuelTimerText.text = furnace.HasFuel ? Mathf.CeilToInt(furnace.FuelTimerValue) + "s" : "Empty";
             fuelTimerText.color = furnace.HasFuel ? Color.white : Color.gray;
         }
 
         if (igniteButtonText != null)
         {
-            igniteButtonText.text = furnace.IsLit ? "STOP" : "IGNITE";
-            igniteButton.image.color = furnace.IsLit ? new Color(0.85f, 0.25f, 0.15f, 0.9f) : new Color(0.95f, 0.55f, 0.1f, 0.9f);
+            igniteButtonText.text = furnace.IsLitValue ? "STOP" : "IGNITE";
+            igniteButton.image.color = furnace.IsLitValue ? new Color(0.85f, 0.25f, 0.15f, 0.9f) : new Color(0.95f, 0.55f, 0.1f, 0.9f);
         }
 
         for (int i = 0; i < 4; i++)
