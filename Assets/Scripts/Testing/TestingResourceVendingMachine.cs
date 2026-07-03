@@ -105,7 +105,17 @@ public class TestingResourceVendingMachine : MonoBehaviour
 
     private void DispenseCookingPot()
     {
-        Dispense(ItemType.CookingPot, "Cooking Pot");
+        if (currentInventory == null)
+        {
+            ShowInfo("Open vending first");
+            return;
+        }
+
+        int accepted = currentInventory.AddItem(ItemType.CookingPot, 1);
+        if (accepted > 0)
+        {
+            ShowInfo("Cooking Pot +" + accepted);
+        }
     }
 
     private void Dispense(ItemType itemType, string label)

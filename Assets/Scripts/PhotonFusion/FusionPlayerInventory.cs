@@ -404,7 +404,11 @@ public class FusionPlayerInventory : NetworkBehaviour
             || itemType == ItemType.RawFish
             || itemType == ItemType.CookedFish
             || itemType == ItemType.Iron
-            || itemType == ItemType.CookingPot;
+            || itemType == ItemType.CookingPot
+            || itemType == ItemType.Wood
+            || itemType == ItemType.Stone
+            || itemType == ItemType.Fiber
+            || itemType == ItemType.Cloth;
     }
 
     private static void SpawnSceneDropLocal(Vector3 position, Vector3 forward, ItemType itemType, int amount, int sceneDropId)
@@ -426,6 +430,12 @@ public class FusionPlayerInventory : NetworkBehaviour
             || itemType == ItemType.RawFish || itemType == ItemType.CookedFish)
         {
             droppedObject = SpawnFoodDropObject(itemType, position);
+        }
+        else
+        {
+            droppedObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            droppedObject.transform.localScale = new Vector3(0.3f, 0.3f, 0.3f);
+            droppedObject.transform.position = position;
         }
 
         if (droppedObject == null)

@@ -25,7 +25,9 @@ public class CampfireCooking : NetworkBehaviour
     private NetworkArray<int> SlotFoodIndices { get; }
 
     private readonly GameObject[] slotVisuals = new GameObject[PotSlotCount];
-    private readonly bool[] slotHasCooked = new bool[PotSlotCount];
+    private readonly int[] lastVisualFoodIndex = new int[PotSlotCount];
+    private readonly bool[] lastVisualIsCooked = new bool[PotSlotCount];
+
     private readonly Vector3[] baseSlotPositions = new Vector3[]
     {
         new Vector3(0.2f, 0.55f, 0.2f),
@@ -46,6 +48,7 @@ public class CampfireCooking : NetworkBehaviour
     };
 
     private GameObject potVisual;
+    private bool lastPotState;
     private (GameObject raw, GameObject cooked)[] foodPairs;
 
     private int CurrentSlotCount => HasPot ? PotSlotCount : BaseSlotCount;
@@ -62,6 +65,12 @@ public class CampfireCooking : NetworkBehaviour
             (fishFilletRawPrefab, fishFilletCookedPrefab),
             (wholeBirdRawPrefab, wholeBirdCookedPrefab)
         };
+
+        for (int i = 0; i < PotSlotCount; i++)
+        {
+            lastVisualFoodIndex[i] = -1;
+            lastVisualIsCooked[i] = false;
+        }
 
         if (HasStateAuthority)
         {
@@ -88,13 +97,65 @@ public class CampfireCooking : NetworkBehaviour
             {
                 timer = Mathf.Max(0f, timer - delta);
                 SlotTimers.Set(i, timer);
-
-                if (timer <= 0f && !slotHasCooked[i])
-                {
-                    slotHasCooked[i] = true;
-                    SwapToCookedVisual(i);
-                }
             }
+        }
+    }
+
+    public override void Render()
+    {
+        for (int i = 0; i < CurrentSlotCount; i++)
+        {
+            float timer = SlotTimers.Get(i);
+            int foodIndex = SlotFoodIndices.Get(i);
+
+            if (foodIndex < 0 || foodIndex >= foodPairs.Length)
+            {
+                if (lastVisualFoodIndex[i] >= 0)
+                {
+                    ClearSlotVisual(i);
+                    lastVisualFoodIndex[i] = -1;
+                    lastVisualIsCooked[i] = false;
+                }
+                continue;
+            }
+
+            bool isCooked = timer <= 0f;
+
+            if (foodIndex != lastVisualFoodIndex[i] || isCooked != lastVisualIsCooked[i])
+            {
+                ClearSlotVisual(i);
+
+                GameObject prefab = isCooked
+                    ? foodPairs[foodIndex].cooked
+                    : foodPairs[foodIndex].raw;
+
+                if (prefab != null)
+                {
+                    slotVisuals[i] = Instantiate(prefab, transform);
+                    slotVisuals[i].transform.localPosition = GetSlotPosition(i);
+                    slotVisuals[i].transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
+                }
+
+                lastVisualFoodIndex[i] = foodIndex;
+                lastVisualIsCooked[i] = isCooked;
+            }
+        }
+
+        for (int i = CurrentSlotCount; i < PotSlotCount; i++)
+        {
+            if (lastVisualFoodIndex[i] >= 0)
+            {
+                ClearSlotVisual(i);
+                lastVisualFoodIndex[i] = -1;
+                lastVisualIsCooked[i] = false;
+            }
+        }
+
+        if (HasPot != lastPotState)
+        {
+            lastPotState = HasPot;
+            if (HasPot) SpawnPotVisual();
+            else DestroyPotVisual();
         }
     }
 
@@ -143,9 +204,6 @@ public class CampfireCooking : NetworkBehaviour
 
         SlotTimers.Set(freeSlot, CurrentCookTime);
         SlotFoodIndices.Set(freeSlot, foodIndex);
-        slotHasCooked[freeSlot] = false;
-
-        SpawnRawVisual(freeSlot, foodIndex);
         return true;
     }
 
@@ -161,7 +219,7 @@ public class CampfireCooking : NetworkBehaviour
             return false;
         }
 
-        if (!slotHasCooked[slot])
+        if (!HasCookedFood(slot))
         {
             return false;
         }
@@ -226,7 +284,6 @@ public class CampfireCooking : NetworkBehaviour
         }
 
         HasPot = true;
-        SpawnPotVisual();
         return true;
     }
 
@@ -252,7 +309,6 @@ public class CampfireCooking : NetworkBehaviour
 
         HasPot = false;
         inventory.AddItem(ItemType.CookingPot, 1);
-        DestroyPotVisual();
         return true;
     }
 
@@ -290,57 +346,10 @@ public class CampfireCooking : NetworkBehaviour
         return Vector3.up * 0.55f;
     }
 
-    private void SpawnRawVisual(int slot, int foodIndex)
-    {
-        if (foodIndex < 0 || foodIndex >= foodPairs.Length)
-        {
-            return;
-        }
-
-        ClearSlotVisual(slot);
-
-        GameObject rawPrefab = foodPairs[foodIndex].raw;
-        if (rawPrefab != null)
-        {
-            slotVisuals[slot] = Instantiate(rawPrefab, transform);
-            slotVisuals[slot].transform.localPosition = GetSlotPosition(slot);
-            slotVisuals[slot].transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
-        }
-    }
-
-    private void SwapToCookedVisual(int slot)
-    {
-        if (slot < 0 || slot >= CurrentSlotCount)
-        {
-            return;
-        }
-
-        int foodIndex = SlotFoodIndices.Get(slot);
-        if (foodIndex < 0 || foodIndex >= foodPairs.Length)
-        {
-            return;
-        }
-
-        if (slotVisuals[slot] != null)
-        {
-            Destroy(slotVisuals[slot]);
-        }
-
-        GameObject cookedPrefab = foodPairs[foodIndex].cooked;
-        if (cookedPrefab != null)
-        {
-            slotVisuals[slot] = Instantiate(cookedPrefab, transform);
-            slotVisuals[slot].transform.localPosition = GetSlotPosition(slot);
-            slotVisuals[slot].transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
-        }
-    }
-
     private void ClearSlot(int slot)
     {
         SlotTimers.Set(slot, -1f);
         SlotFoodIndices.Set(slot, -1);
-        slotHasCooked[slot] = false;
-        ClearSlotVisual(slot);
     }
 
     private void ClearSlotVisual(int slot)
