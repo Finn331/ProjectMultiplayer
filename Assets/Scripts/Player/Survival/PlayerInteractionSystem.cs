@@ -253,8 +253,8 @@ public class PlayerInteractionSystem : MonoBehaviour
 
         if (takeFoodButton == null)
         {
-            takeFoodButton = this.FindButtonByName("take food");
-            if (takeFoodButton == null) takeFoodButton = this.FindButtonByName("take");
+            takeFoodButton = FindButtonByName("take food");
+            if (takeFoodButton == null) takeFoodButton = FindButtonByName("take");
         }
 
         if (takeFoodButton != null)
