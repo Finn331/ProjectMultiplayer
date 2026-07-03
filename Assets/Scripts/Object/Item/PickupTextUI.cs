@@ -39,7 +39,7 @@ public class PickupTextUI : MonoBehaviour
             }
 
             cg.alpha = 1f;
-            LeanTween.alphaCanvas(rectTransform, 0f, lifeTime)
+            LeanTween.alphaCanvas(cg, 0f, lifeTime)
                 .setEase(LeanTweenType.easeInQuad)
                 .setOnComplete(() => Destroy(gameObject));
         }
