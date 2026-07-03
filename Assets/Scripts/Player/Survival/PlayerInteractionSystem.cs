@@ -310,7 +310,8 @@ public class PlayerInteractionSystem : MonoBehaviour
         var fusionInventory = GetComponent<FusionPlayerInventory>();
         if (fusionInventory != null)
         {
-            return TryInteractCampfireFusion(campfire, fusionInventory);
+            return TryInteractCampfireFusion(campfire);
+            
         }
 
         if (inventory.HasItem(ItemType.RawChicken, 1) || inventory.HasItem(ItemType.RawFish, 1))
@@ -341,7 +342,7 @@ public class PlayerInteractionSystem : MonoBehaviour
         return false;
     }
 
-    private bool TryInteractCampfireFusion(CampfireCooking campfire, FusionPlayerInventory fusionInventory)
+    private bool TryInteractCampfireFusion(CampfireCooking campfire)
     {
         int hotbarSlot = 0;
         MobileHotbarUI hotbar = GetComponent<MobileHotbarUI>();
@@ -399,7 +400,7 @@ public class PlayerInteractionSystem : MonoBehaviour
 
     private bool TryInteractCampfireNetworked(CampfireCooking campfire)
     {
-        return TryInteractCampfireFusion(campfire, null);
+        return TryInteractCampfireFusion(campfire);
     }
 
     private void TryPickupItem(PickableItem item)
