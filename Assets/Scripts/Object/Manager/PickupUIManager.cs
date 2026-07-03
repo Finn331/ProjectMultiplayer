@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.UI;
 
 public class PickupUIManager : MonoBehaviour
 {
@@ -7,39 +8,20 @@ public class PickupUIManager : MonoBehaviour
     public Transform contentParent;
     public GameObject textPrefab;
 
-    private Transform canvasRoot;
-
     private void Awake()
     {
         instance = this;
-
-        if (contentParent != null)
-        {
-            canvasRoot = contentParent;
-            while (canvasRoot.parent != null && canvasRoot.GetComponent<Canvas>() == null)
-            {
-                canvasRoot = canvasRoot.parent;
-            }
-        }
     }
 
     public void ShowPickup(string itemName, int amount)
     {
-        if (textPrefab == null)
+        if (contentParent == null || textPrefab == null)
         {
             return;
         }
 
-        Transform parent = canvasRoot != null ? canvasRoot : contentParent;
-        if (parent == null) return;
-
-        GameObject obj = Instantiate(textPrefab, parent);
-
-        RectTransform objRect = obj.GetComponent<RectTransform>();
-        if (objRect != null)
-        {
-            objRect.anchoredPosition = Vector2.zero;
-        }
+        GameObject obj = Instantiate(textPrefab, contentParent);
+        DisableLayoutOnText(obj);
 
         PickupTextUI textUI = obj.GetComponent<PickupTextUI>();
         if (textUI != null)
@@ -50,26 +32,29 @@ public class PickupUIManager : MonoBehaviour
 
     public void ShowInfo(string message)
     {
-        if (textPrefab == null || string.IsNullOrWhiteSpace(message))
+        if (contentParent == null || textPrefab == null || string.IsNullOrWhiteSpace(message))
         {
             return;
         }
 
-        Transform parent = canvasRoot != null ? canvasRoot : contentParent;
-        if (parent == null) return;
-
-        GameObject obj = Instantiate(textPrefab, parent);
-
-        RectTransform objRect = obj.GetComponent<RectTransform>();
-        if (objRect != null)
-        {
-            objRect.anchoredPosition = Vector2.zero;
-        }
+        GameObject obj = Instantiate(textPrefab, contentParent);
+        DisableLayoutOnText(obj);
 
         PickupTextUI textUI = obj.GetComponent<PickupTextUI>();
         if (textUI != null)
         {
             textUI.SetupMessage(message);
         }
+    }
+
+    private static void DisableLayoutOnText(GameObject obj)
+    {
+        if (obj == null) return;
+        LayoutElement layoutElement = obj.GetComponent<LayoutElement>();
+        if (layoutElement == null)
+        {
+            layoutElement = obj.AddComponent<LayoutElement>();
+        }
+        layoutElement.ignoreLayout = true;
     }
 }

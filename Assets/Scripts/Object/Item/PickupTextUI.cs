@@ -24,7 +24,8 @@ public class PickupTextUI : MonoBehaviour
     {
         if (rectTransform == null) return;
 
-        LeanTween.moveY(rectTransform, floatDistance, lifeTime)
+        float startY = rectTransform.anchoredPosition.y;
+        LeanTween.moveY(rectTransform, startY + floatDistance, lifeTime)
             .setEase(easeType);
 
         if (text != null)
