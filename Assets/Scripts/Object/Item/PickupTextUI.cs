@@ -33,6 +33,12 @@ public class PickupTextUI : MonoBehaviour
         }
 
         float startY = rectTransform.anchoredPosition.y;
+
+        if (text != null)
+        {
+            text.color = Color.white;
+        }
+
         LeanTween.moveY(rectTransform, startY + floatDistance, lifeTime)
             .setEase(easeType);
 
