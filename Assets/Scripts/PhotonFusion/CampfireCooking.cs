@@ -84,9 +84,9 @@ public class CampfireCooking : NetworkBehaviour
         for (int i = 0; i < CurrentSlotCount; i++)
         {
             float timer = SlotTimers.Get(i);
-            if (timer >= 0f)
+            if (timer > 0f)
             {
-                timer -= delta;
+                timer = Mathf.Max(0f, timer - delta);
                 SlotTimers.Set(i, timer);
 
                 if (timer <= 0f && !slotHasCooked[i])
@@ -194,7 +194,7 @@ public class CampfireCooking : NetworkBehaviour
     {
         for (int i = 0; i < CurrentSlotCount; i++)
         {
-            if (SlotTimers.Get(i) < 0f)
+            if (SlotTimers.Get(i) < 0f && SlotFoodIndices.Get(i) < 0)
             {
                 return i;
             }
