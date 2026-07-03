@@ -118,6 +118,10 @@ public class CampfireCooking : NetworkBehaviour
         int freeSlot = FindFreeSlot();
         if (freeSlot < 0)
         {
+            if (PickupUIManager.instance != null)
+            {
+                PickupUIManager.instance.ShowInfo("Campfire Full");
+            }
             return false;
         }
 
