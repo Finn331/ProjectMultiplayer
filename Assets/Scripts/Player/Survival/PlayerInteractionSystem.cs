@@ -20,7 +20,6 @@ public class PlayerInteractionSystem : MonoBehaviour
 
     [Header("UI")]
     public GameObject pickButton;
-    [SerializeField] private Button takeFoodButton;
     [SerializeField] private bool autoBindPickButton = true;
     [SerializeField] private string pickButtonNameContains = "pick";
     [SerializeField] private float interactDebounceSeconds = 0.1f;
@@ -29,7 +28,6 @@ public class PlayerInteractionSystem : MonoBehaviour
     private Interactable currentTarget;
     private Button pickButtonComponent;
     private bool pickButtonBound;
-    private bool takeFoodButtonBound;
     private float nextInteractTime;
     private float baseDetectionRadius = -1f;
     private float baseInteractDistance = -1f;
@@ -110,7 +108,6 @@ public class PlayerInteractionSystem : MonoBehaviour
             {
                 pickButton.SetActive(false);
             }
-            this.HideTakeFoodButton();
 
             return;
         }
@@ -215,110 +212,6 @@ public class PlayerInteractionSystem : MonoBehaviour
         {
             pickButton.SetActive(true);
         }
-
-        this.RefreshTakeFoodButton();
-    }
-
-    private void RefreshTakeFoodButton()
-    {
-        if (currentTarget == null)
-        {
-            this.HideTakeFoodButton();
-            return;
-        }
-
-        CampfireCooking campfire = currentTarget.GetComponent<CampfireCooking>();
-        if (campfire == null)
-        {
-            this.HideTakeFoodButton();
-            return;
-        }
-
-        bool hasCooked = false;
-        int maxSlots = campfire.HasCookingPot ? 8 : 4;
-        for (int i = 0; i < maxSlots; i++)
-        {
-            if (campfire.HasCookedFood(i))
-            {
-                hasCooked = true;
-                break;
-            }
-        }
-
-        if (!hasCooked)
-        {
-            this.HideTakeFoodButton();
-            return;
-        }
-
-        if (takeFoodButton == null)
-        {
-            takeFoodButton = FindButtonByName("take food");
-            if (takeFoodButton == null) takeFoodButton = FindButtonByName("take");
-        }
-
-        if (takeFoodButton != null)
-        {
-            takeFoodButton.gameObject.SetActive(true);
-            takeFoodButton.interactable = true;
-            this.BindTakeFoodButton();
-        }
-    }
-
-    private void BindTakeFoodButton()
-    {
-        if (takeFoodButtonBound || takeFoodButton == null) return;
-        takeFoodButton.onClick.RemoveListener(this.TakeFoodFromCampfire);
-        takeFoodButton.onClick.AddListener(this.TakeFoodFromCampfire);
-        takeFoodButtonBound = true;
-    }
-
-    private void HideTakeFoodButton()
-    {
-        if (takeFoodButtonBound && takeFoodButton != null)
-        {
-            takeFoodButton.onClick.RemoveListener(this.TakeFoodFromCampfire);
-            takeFoodButtonBound = false;
-        }
-
-        if (takeFoodButton != null)
-        {
-            takeFoodButton.gameObject.SetActive(false);
-        }
-    }
-
-    public void TakeFoodFromCampfire()
-    {
-        if (currentTarget == null) return;
-
-        CampfireCooking campfire = currentTarget.GetComponent<CampfireCooking>();
-        if (campfire == null) return;
-
-        int maxSlots = campfire.HasCookingPot ? 8 : 4;
-        for (int i = 0; i < maxSlots; i++)
-        {
-            if (campfire.HasCookedFood(i))
-            {
-                campfire.TryPickupCooked(inventory, i);
-                return;
-            }
-        }
-    }
-
-    private static Button FindButtonByName(string keyword)
-    {
-        Button[] buttons = FindObjectsByType<Button>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-        string loweredKeyword = keyword.ToLowerInvariant();
-        for (int i = 0; i < buttons.Length; i++)
-        {
-            Button button = buttons[i];
-            if (button != null && button.name.ToLowerInvariant().Contains(loweredKeyword))
-            {
-                return button;
-            }
-        }
-
-        return null;
     }
 
     public void TryInteract()
@@ -330,7 +223,6 @@ public class PlayerInteractionSystem : MonoBehaviour
             {
                 pickButton.SetActive(false);
             }
-            this.HideTakeFoodButton();
 
             return;
         }
