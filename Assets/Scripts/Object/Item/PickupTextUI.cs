@@ -24,6 +24,14 @@ public class PickupTextUI : MonoBehaviour
     {
         if (rectTransform == null) return;
 
+        Canvas canvas = GetComponentInParent<Canvas>();
+        if (canvas != null)
+        {
+            Vector3 worldPos = rectTransform.position;
+            rectTransform.SetParent(canvas.transform, true);
+            rectTransform.position = worldPos;
+        }
+
         float startY = rectTransform.anchoredPosition.y;
         LeanTween.moveY(rectTransform, startY + floatDistance, lifeTime)
             .setEase(easeType);
