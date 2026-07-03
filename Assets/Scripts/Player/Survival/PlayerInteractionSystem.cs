@@ -439,7 +439,10 @@ public class PlayerInteractionSystem : MonoBehaviour
             }
         }
 
-        return false;
+        FurnaceUI ui = GetComponent<FurnaceUI>();
+        if (ui == null) ui = gameObject.AddComponent<FurnaceUI>();
+        ui.Open(inventory, furnace);
+        return true;
     }
 
     private bool TryInteractCampfireNetworked(CampfireCooking campfire)

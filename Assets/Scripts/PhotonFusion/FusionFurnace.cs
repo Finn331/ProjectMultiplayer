@@ -8,6 +8,7 @@ public class FusionFurnace : NetworkBehaviour
     private const float FuelBurnTimePerWood = 30f;
 
     [Networked] private float FuelTimer { get; set; }
+    [Networked] private NetworkBool IsLit { get; set; }
     [Networked, Capacity(SlotCount)]
     private NetworkArray<float> SlotTimers { get; }
     [Networked, Capacity(SlotCount)]
@@ -25,6 +26,16 @@ public class FusionFurnace : NetworkBehaviour
 
     public bool HasFuel => FuelTimer > 0f;
     public bool HasOutput(int slot) => slot >= 0 && slot < SlotCount && SlotHasOutput.Get(slot);
+    public float FuelTimerValue => FuelTimer;
+    public float GetSlotTimer(int slot) => slot >= 0 && slot < SlotCount ? SlotTimers.Get(slot) : -1f;
+    public bool IsLitValue => IsLit;
+
+    public void ToggleLit()
+    {
+        if (!HasStateAuthority) return;
+        if (!HasFuel) return;
+        IsLit = !IsLit;
+    }
 
     public override void Spawned()
     {
@@ -52,10 +63,26 @@ public class FusionFurnace : NetworkBehaviour
 
         bool hasFuel = FuelTimer > 0f;
 
+        if (hasFuel && IsLit)
+        {
+            FuelTimer = Mathf.Max(0f, FuelTimer - delta);
+        }
+
+        if (!IsLit && FuelTimer <= 0f)
+        {
+            for (int i = 0; i < SlotCount; i++)
+            {
+                if (SlotTimers.Get(i) > 0f)
+                {
+                    SlotTimers.Set(i, -1f);
+                }
+            }
+        }
+
         for (int i = 0; i < SlotCount; i++)
         {
             float timer = SlotTimers.Get(i);
-            if (timer > 0f && hasFuel)
+            if (timer > 0f && hasFuel && IsLit)
             {
                 timer = Mathf.Max(0f, timer - delta);
                 SlotTimers.Set(i, timer);
