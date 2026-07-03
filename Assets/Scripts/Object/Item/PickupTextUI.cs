@@ -24,14 +24,6 @@ public class PickupTextUI : MonoBehaviour
     {
         if (rectTransform == null) return;
 
-        Transform layoutParent = rectTransform.parent;
-        if (layoutParent != null)
-        {
-            rectTransform.SetParent(layoutParent.parent, false);
-        }
-
-        rectTransform.anchoredPosition = Vector2.zero;
-
         LeanTween.moveY(rectTransform, floatDistance, lifeTime)
             .setEase(easeType);
 
