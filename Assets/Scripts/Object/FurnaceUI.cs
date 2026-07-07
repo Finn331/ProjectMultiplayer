@@ -155,15 +155,17 @@ public class FurnaceUI : MonoBehaviour
             {
                 float t = furnace.GetSlotTimer(i);
                 int inputType = furnace.GetSlotInputType(i);
+                int qty = furnace.GetSlotQuantity(i);
                 ItemType? visualType = inputType == 0 ? ItemType.Iron : (inputType == 1 ? ItemType.RawChicken : (inputType == 2 ? ItemType.RawFish : (inputType == 3 ? ItemType.Wood : (ItemType?)null)));
                 string label = t > 0f ? Mathf.CeilToInt(t) + "s" : (furnace.HasOutput(i) ? "DONE" : "");
-                inputSlots[i].UpdateVisual(t >= 0f ? visualType : null, 0, label);
+                if (qty > 0) label += "\n" + qty;
+                inputSlots[i].UpdateVisual(t >= 0f || qty > 0 ? visualType : null, qty, label);
             }
 
             if (outputSlots[i] != null)
             {
                 int inputType = furnace.GetSlotInputType(i);
-                ItemType outputType = inputType == 0 ? ItemType.IronIngot : (inputType == 1 ? ItemType.CookedChicken : (inputType == 2 ? ItemType.CookedFish : ItemType.IronIngot));
+                ItemType outputType = inputType == 0 ? ItemType.IronIngot : (inputType == 1 ? ItemType.CookedChicken : (inputType == 2 ? ItemType.CookedFish : (inputType == 3 ? ItemType.Ash : ItemType.IronIngot)));
                 outputSlots[i].UpdateVisual(furnace.HasOutput(i) ? outputType : null, 0, furnace.HasOutput(i) ? "READY" : "");
             }
         }

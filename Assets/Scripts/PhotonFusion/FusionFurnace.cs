@@ -15,6 +15,8 @@ public class FusionFurnace : NetworkBehaviour
     private NetworkArray<bool> SlotHasOutput { get; }
     [Networked, Capacity(SlotCount)]
     private NetworkArray<int> SlotInputTypes { get; }
+    [Networked, Capacity(SlotCount)]
+    private NetworkArray<int> SlotQuantities { get; }
 
     private readonly Vector3[] slotPositions = new Vector3[]
     {
@@ -31,6 +33,7 @@ public class FusionFurnace : NetworkBehaviour
     public float FuelTimerValue => FuelTimer;
     public float GetSlotTimer(int slot) => slot >= 0 && slot < SlotCount ? SlotTimers.Get(slot) : -1f;
     public int GetSlotInputType(int slot) => slot >= 0 && slot < SlotCount ? SlotInputTypes.Get(slot) : -1;
+    public int GetSlotQuantity(int slot) => slot >= 0 && slot < SlotCount ? SlotQuantities.Get(slot) : 0;
     public bool IsLitValue => IsLit;
 
     public void ToggleLit()
@@ -55,6 +58,7 @@ public class FusionFurnace : NetworkBehaviour
                 SlotTimers.Set(i, -1f);
                 SlotHasOutput.Set(i, false);
                 SlotInputTypes.Set(i, -1);
+                SlotQuantities.Set(i, 0);
             }
         }
     }
@@ -92,6 +96,14 @@ public class FusionFurnace : NetworkBehaviour
                 if (timer <= 0f)
                 {
                     SlotHasOutput.Set(i, true);
+                    int qty = SlotQuantities.Get(i) - 1;
+                    SlotQuantities.Set(i, Mathf.Max(0, qty));
+                    if (qty > 0)
+                    {
+                        float nextTime = GetCookTime(SlotInputTypes.Get(i));
+                        SlotTimers.Set(i, nextTime);
+                        SlotHasOutput.Set(i, false);
+                    }
                 }
             }
         }
@@ -201,7 +213,7 @@ public class FusionFurnace : NetworkBehaviour
 
         if (inventory.GetSlotAmount(playerSlot) <= 0) return;
 
-        int targetSlot = furnaceSlot >= 0 ? furnaceSlot : FindFreeSlot();
+        int targetSlot = furnaceSlot >= 0 ? furnaceSlot : FindSlotForType(inputType);
         if (targetSlot < 0) return;
 
         if (!inventory.RemoveItemFromSlot(playerSlot, 1, out ItemType removedType)) return;
@@ -211,10 +223,16 @@ public class FusionFurnace : NetworkBehaviour
             return;
         }
 
-        float cookTime = inputType == 0 ? SmeltTimeSeconds : 8f;
-        SlotTimers.Set(targetSlot, cookTime);
-        SlotHasOutput.Set(targetSlot, false);
-        SlotInputTypes.Set(targetSlot, inputType);
+        int existingQty = SlotQuantities.Get(targetSlot);
+        SlotQuantities.Set(targetSlot, existingQty + 1);
+
+        if (existingQty == 0)
+        {
+            float cookTime = GetCookTime(inputType);
+            SlotTimers.Set(targetSlot, cookTime);
+            SlotHasOutput.Set(targetSlot, false);
+            SlotInputTypes.Set(targetSlot, inputType);
+        }
     }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
@@ -241,17 +259,28 @@ public class FusionFurnace : NetworkBehaviour
         SlotTimers.Set(slot, -1f);
         SlotHasOutput.Set(slot, false);
         SlotInputTypes.Set(slot, -1);
+        SlotQuantities.Set(slot, 0);
     }
 
-    private int FindFreeSlot()
+    private float GetCookTime(int inputType)
+    {
+        return inputType == 0 ? SmeltTimeSeconds : 8f;
+    }
+
+    private int FindSlotForType(int inputType)
     {
         for (int i = 0; i < SlotCount; i++)
         {
-            if (SlotTimers.Get(i) < 0f && !SlotHasOutput.Get(i))
-            {
+            if (SlotInputTypes.Get(i) == inputType && SlotQuantities.Get(i) < 16)
                 return i;
-            }
         }
+
+        for (int i = 0; i < SlotCount; i++)
+        {
+            if (SlotTimers.Get(i) < 0f && !SlotHasOutput.Get(i))
+                return i;
+        }
+
         return -1;
     }
 }
