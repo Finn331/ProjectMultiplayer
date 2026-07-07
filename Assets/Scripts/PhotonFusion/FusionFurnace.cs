@@ -239,7 +239,7 @@ public class FusionFurnace : NetworkBehaviour
     private void PickupOutputInternal(PlayerInventory inventory, int slot)
     {
         if (slot < 0 || slot >= SlotCount) return;
-        if (!SlotOutputCounts.Get(slot)) return;
+        if (SlotOutputCounts.Get(slot) <= 0) return;
 
         int inputType = SlotInputTypes.Get(slot);
         ItemType outputItem = inputType == 0 ? ItemType.IronIngot
