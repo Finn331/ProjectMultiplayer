@@ -43,6 +43,7 @@ public class FurnaceSlotUI : MonoBehaviour, IBeginDragHandler, IDragHandler, IEn
 
     public void UpdateVisual(ItemType? itemType, int amount, string label)
     {
+        if (labelText == null) labelText = GetComponentInChildren<TextMeshProUGUI>();
         if (labelText != null) labelText.text = label;
 
         Sprite icon = null;

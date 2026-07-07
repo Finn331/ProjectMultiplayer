@@ -135,7 +135,11 @@ public class FusionFurnace : NetworkBehaviour
         if (inventory == null) return false;
         if (!inventory.HasItem(ItemType.Wood, 1)) return false;
 
-        RPC_AddFuel(inventory.GetComponent<NetworkObject>());
+        NetworkObject inventoryObject = inventory.GetComponentInParent<NetworkObject>();
+        if (inventoryObject == null) return false;
+
+        if (HasStateAuthority) AddFuelInternal(inventory);
+        else RPC_AddFuel(inventoryObject);
         return true;
     }
 
@@ -144,7 +148,11 @@ public class FusionFurnace : NetworkBehaviour
         if (inventory == null) return false;
         if (!inventory.HasItem(ItemType.Iron, 1)) return false;
 
-        RPC_AddIron(inventory.GetComponent<NetworkObject>());
+        NetworkObject inventoryObject = inventory.GetComponentInParent<NetworkObject>();
+        if (inventoryObject == null) return false;
+
+        if (HasStateAuthority) AddIronInternal(inventory);
+        else RPC_AddIron(inventoryObject);
         return true;
     }
 
@@ -152,15 +160,24 @@ public class FusionFurnace : NetworkBehaviour
     {
         if (inventory == null) return false;
 
-        RPC_PickupOutput(inventory.GetComponent<NetworkObject>(), slot);
+        NetworkObject inventoryObject = inventory.GetComponentInParent<NetworkObject>();
+        if (inventoryObject == null) return false;
+
+        if (HasStateAuthority) PickupOutputInternal(inventory, slot);
+        else RPC_PickupOutput(inventoryObject, slot);
         return true;
     }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
     private void RPC_AddFuel(NetworkObject inventoryObject)
     {
-        PlayerInventory inventory = inventoryObject != null ? inventoryObject.GetComponent<PlayerInventory>() : null;
+        PlayerInventory inventory = inventoryObject != null ? inventoryObject.GetComponentInChildren<PlayerInventory>() : null;
         if (inventory == null) return;
+        AddFuelInternal(inventory);
+    }
+
+    private void AddFuelInternal(PlayerInventory inventory)
+    {
         if (!inventory.HasItem(ItemType.Wood, 1)) return;
         if (!inventory.RemoveItem(ItemType.Wood, 1)) return;
         FuelTimer += FuelBurnTimePerWood;
@@ -169,8 +186,13 @@ public class FusionFurnace : NetworkBehaviour
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
     private void RPC_AddIron(NetworkObject inventoryObject)
     {
-        PlayerInventory inventory = inventoryObject != null ? inventoryObject.GetComponent<PlayerInventory>() : null;
+        PlayerInventory inventory = inventoryObject != null ? inventoryObject.GetComponentInChildren<PlayerInventory>() : null;
         if (inventory == null) return;
+        AddIronInternal(inventory);
+    }
+
+    private void AddIronInternal(PlayerInventory inventory)
+    {
         if (!inventory.HasItem(ItemType.Iron, 1)) return;
 
         int freeSlot = FindFreeSlot();
@@ -185,11 +207,15 @@ public class FusionFurnace : NetworkBehaviour
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
     private void RPC_PickupOutput(NetworkObject inventoryObject, int slot)
     {
+        PlayerInventory inventory = inventoryObject != null ? inventoryObject.GetComponentInChildren<PlayerInventory>() : null;
+        if (inventory == null) return;
+        PickupOutputInternal(inventory, slot);
+    }
+
+    private void PickupOutputInternal(PlayerInventory inventory, int slot)
+    {
         if (slot < 0 || slot >= SlotCount) return;
         if (!SlotHasOutput.Get(slot)) return;
-
-        PlayerInventory inventory = inventoryObject != null ? inventoryObject.GetComponent<PlayerInventory>() : null;
-        if (inventory == null) return;
 
         inventory.AddItem(ItemType.IronIngot, 1);
         SlotTimers.Set(slot, -1f);
