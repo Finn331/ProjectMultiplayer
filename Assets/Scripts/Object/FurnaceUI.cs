@@ -154,6 +154,7 @@ public class FurnaceUI : MonoBehaviour
             {
                 outputIcons[i].color = furnace.HasOutput(i) ? new Color(0.85f, 0.85f, 0.9f) : new Color(0.3f, 0.25f, 0.2f);
             }
+        }
 
         if (playerInventory != null)
         {
