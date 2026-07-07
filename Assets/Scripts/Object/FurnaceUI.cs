@@ -20,6 +20,8 @@ public class FurnaceUI : MonoBehaviour
     private Image[] outputIcons = new Image[4];
     private TextMeshProUGUI inventoryLabel;
     private TextMeshProUGUI[] inventorySlotTexts = new TextMeshProUGUI[24];
+    private Button[] inventorySlotButtons = new Button[24];
+    private Button[] outputButtons = new Button[4];
 
     private Button igniteButton;
     private TextMeshProUGUI igniteButtonText;
@@ -94,7 +96,10 @@ public class FurnaceUI : MonoBehaviour
         for (int i = 0; i < 4; i++)
         {
             float x = rightX - 90f + i * 60f;
-            outputIcons[i] = CreateSlot(panelObject.transform, new Vector2(x, 0f), new Color(0.5f, 0.4f, 0.25f));
+            int slotIndex = i;
+            outputButtons[i] = CreateSlotButton(panelObject.transform, new Vector2(x, 0f), () => OnOutputSlotClicked(slotIndex));
+            outputIcons[i] = outputButtons[i].GetComponent<Image>();
+            outputIcons[i].color = new Color(0.5f, 0.4f, 0.25f);
         }
 
         CreateIgniteButton();
@@ -117,14 +122,41 @@ public class FurnaceUI : MonoBehaviour
         int columns = 4;
         int totalSlots = playerInventory.InventorySlotCount;
 
-        for (int i = 0; i < totalSlots && i < inventorySlotTexts.Length; i++)
+        for (int i = 0; i < totalSlots && i < inventorySlotButtons.Length; i++)
         {
             int row = i / columns;
             int col = i % columns;
             float x = leftX - 90f + col * 64f;
             float y = startY - row * 64f;
-            inventorySlotTexts[i] = CreateLabel(panelObject.transform, "", new Vector2(x, y), 10);
+
+            int slotIndex = i;
+            inventorySlotButtons[i] = CreateSlotButton(panelObject.transform, new Vector2(x, y), () => OnInventorySlotClicked(slotIndex));
+            inventorySlotTexts[i] = CreateLabelForSlot(panelObject.transform, "", new Vector2(x, y), 10);
         }
+    }
+
+    private Button CreateSlotButton(Transform parent, Vector2 pos, UnityEngine.Events.UnityAction action)
+    {
+        GameObject go = new GameObject("InvSlot", typeof(RectTransform), typeof(Image), typeof(Button));
+        go.transform.SetParent(parent, false);
+        RectTransform rt = go.GetComponent<RectTransform>();
+        rt.anchorMin = new Vector2(0.5f, 0.5f); rt.anchorMax = new Vector2(0.5f, 0.5f); rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.sizeDelta = new Vector2(52f, 52f);
+        rt.anchoredPosition = pos;
+        Image img = go.GetComponent<Image>();
+        img.color = new Color(0.18f, 0.18f, 0.18f, 0.95f);
+        Button b = go.GetComponent<Button>();
+        b.onClick.AddListener(action);
+        return b;
+    }
+
+    private TextMeshProUGUI CreateLabelForSlot(Transform parent, string text, Vector2 pos, int fontSize)
+    {
+        TextMeshProUGUI label = CreateLabel(parent, text, pos, fontSize);
+        RectTransform rt = label.GetComponent<RectTransform>();
+        rt.sizeDelta = new Vector2(50f, 50f);
+        label.raycastTarget = false;
+        return label;
     }
 
     private void RefreshUI()
@@ -177,6 +209,31 @@ public class FurnaceUI : MonoBehaviour
         if (furnace != null)
         {
             furnace.ToggleLit();
+        }
+    }
+
+    private void OnInventorySlotClicked(int slotIndex)
+    {
+        if (playerInventory == null || furnace == null) return;
+
+        ItemType? itemType = playerInventory.GetSlotItemType(slotIndex);
+        if (itemType == null) return;
+
+        if (itemType == ItemType.Wood)
+        {
+            furnace.TryAddFuel(playerInventory);
+        }
+        else if (itemType == ItemType.Iron)
+        {
+            furnace.TryAddIron(playerInventory);
+        }
+    }
+
+    private void OnOutputSlotClicked(int slotIndex)
+    {
+        if (furnace != null && playerInventory != null)
+        {
+            furnace.TryPickupOutput(playerInventory, slotIndex);
         }
     }
 
