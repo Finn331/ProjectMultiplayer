@@ -4,24 +4,19 @@ using TMPro;
 
 public class FurnaceUI : MonoBehaviour
 {
-    [Header("Furnace")]
-    [SerializeField] private FusionFurnace furnace;
-
     [Header("Layout")]
-    [SerializeField] private Vector2 panelSize = new Vector2(700f, 440f);
-    [SerializeField] private float buttonHeight = 52f;
+    [SerializeField] private Vector2 panelSize = new Vector2(740f, 460f);
 
+    private FusionFurnace furnace;
     private PlayerInventory playerInventory;
     private Canvas furnaceCanvas;
     private GameObject panelObject;
 
     private TextMeshProUGUI fuelTimerText;
-    private TextMeshProUGUI[] inputTimerTexts = new TextMeshProUGUI[4];
-    private Image[] outputIcons = new Image[4];
-    private TextMeshProUGUI inventoryLabel;
-    private TextMeshProUGUI[] inventorySlotTexts = new TextMeshProUGUI[24];
-    private Button[] inventorySlotButtons = new Button[24];
-    private Button[] outputButtons = new Button[4];
+    private FurnaceSlotUI fuelSlot;
+    private FurnaceSlotUI[] inputSlots = new FurnaceSlotUI[4];
+    private FurnaceSlotUI[] outputSlots = new FurnaceSlotUI[4];
+    private FurnaceSlotUI[] inventorySlots = new FurnaceSlotUI[24];
 
     private Button igniteButton;
     private TextMeshProUGUI igniteButtonText;
@@ -38,22 +33,15 @@ public class FurnaceUI : MonoBehaviour
 
     public void Close()
     {
-        if (panelObject != null)
-        {
-            panelObject.SetActive(false);
-        }
+        if (panelObject != null) panelObject.SetActive(false);
     }
 
     private void Update()
     {
         if (furnace == null || !panelObject.activeSelf) return;
         RefreshUI();
-
-        float distance = Vector3.Distance(furnace.transform.position, Camera.main.transform.position);
-        if (distance > 4f)
-        {
+        if (Camera.main != null && Vector3.Distance(furnace.transform.position, Camera.main.transform.position) > 4f)
             Close();
-        }
     }
 
     private void EnsureUI()
@@ -66,97 +54,71 @@ public class FurnaceUI : MonoBehaviour
         panelObject = new GameObject("FurnacePanel", typeof(RectTransform), typeof(Image));
         panelObject.transform.SetParent(furnaceCanvas.transform, false);
         RectTransform pr = panelObject.GetComponent<RectTransform>();
-        pr.anchorMin = new Vector2(0.5f, 0.5f);
-        pr.anchorMax = new Vector2(0.5f, 0.5f);
-        pr.pivot = new Vector2(0.5f, 0.5f);
-        pr.sizeDelta = panelSize;
-        pr.anchoredPosition = Vector2.zero;
+        pr.anchorMin = new Vector2(0.5f, 0.5f); pr.anchorMax = new Vector2(0.5f, 0.5f);
+        pr.pivot = new Vector2(0.5f, 0.5f); pr.sizeDelta = panelSize; pr.anchoredPosition = Vector2.zero;
         panelObject.GetComponent<Image>().color = new Color(0.06f, 0.06f, 0.06f, 0.93f);
 
-        float leftX = -panelSize.x * 0.25f;
-        float rightX = panelSize.x * 0.25f;
+        float left = -panelSize.x * 0.28f;
+        float right = panelSize.x * 0.28f;
 
-        float inventoryY = 20f;
-        CreateLabel(panelObject.transform, "INVENTORY", new Vector2(leftX, panelSize.y * 0.38f), 16);
-        BuildInventorySlots(leftX, inventoryY);
-
-        CreateLabel(panelObject.transform, "FURNACE", new Vector2(rightX, panelSize.y * 0.38f), 16);
-
-        CreateLabel(panelObject.transform, "Fuel", new Vector2(rightX, 130f), 13);
-        fuelTimerText = CreateLabel(panelObject.transform, "0s", new Vector2(rightX, 105f), 14);
-
-        for (int i = 0; i < 4; i++)
+        MakeLabel(panelObject.transform, "INVENTORY", new Vector2(left, 165f), 14);
+        int cols = 4;
+        for (int i = 0; i < 12 && i < inventorySlots.Length; i++)
         {
-            float x = rightX - 90f + i * 60f;
-            inputTimerTexts[i] = CreateLabel(panelObject.transform, "-", new Vector2(x, 60f), 14);
+            float x = left - 78f + (i % cols) * 56f;
+            float y = 140f - (i / cols) * 56f;
+            inventorySlots[i] = CreateSlot("InvSlot" + i, FurnaceSlotUI.SlotKind.Inventory, i, new Vector2(x, y));
         }
 
-        CreateLabel(panelObject.transform, "Input   Output", new Vector2(rightX, 40f), 12);
+        MakeLabel(panelObject.transform, "FURNACE", new Vector2(right, 165f), 14);
 
+        MakeLabel(panelObject.transform, "FUEL", new Vector2(right, 130f), 12);
+        fuelSlot = CreateSlot("FuelSlot", FurnaceSlotUI.SlotKind.FurnaceFuel, 0, new Vector2(right, 100f));
+        fuelTimerText = MakeLabel(panelObject.transform, "0s", new Vector2(right, 75f), 13);
+
+        MakeLabel(panelObject.transform, "INPUT", new Vector2(right, 50f), 12);
         for (int i = 0; i < 4; i++)
         {
-            float x = rightX - 90f + i * 60f;
-            int slotIndex = i;
-            outputButtons[i] = CreateSlotButton(panelObject.transform, new Vector2(x, 0f), () => OnOutputSlotClicked(slotIndex));
-            outputIcons[i] = outputButtons[i].GetComponent<Image>();
-            outputIcons[i].color = new Color(0.5f, 0.4f, 0.25f);
+            float x = right - 84f + i * 56f;
+            inputSlots[i] = CreateSlot("InputSlot" + i, FurnaceSlotUI.SlotKind.FurnaceInput, i, new Vector2(x, 12f));
         }
 
-        CreateIgniteButton();
+        MakeLabel(panelObject.transform, "OUTPUT", new Vector2(right, -60f), 12);
+        for (int i = 0; i < 4; i++)
+        {
+            float x = right - 84f + i * 56f;
+            outputSlots[i] = CreateSlot("OutputSlot" + i, FurnaceSlotUI.SlotKind.FurnaceOutput, i, new Vector2(x, -98f));
+        }
 
-        closeButton = CreateButton(panelObject.transform, "CLOSE", new Vector2(0f, -panelSize.y * 0.42f), 160f, 40f, Close);
+        igniteButton = CreateButton("IGNITE", Vector2.zero, 200f, 48f, ToggleIgnite);
+        igniteButtonText = igniteButton.GetComponentInChildren<TextMeshProUGUI>();
+        closeButton = CreateButton("CLOSE", new Vector2(0f, -panelSize.y * 0.44f), 160f, 36f, Close);
 
         panelObject.SetActive(false);
     }
 
-    private void CreateIgniteButton()
+    private FurnaceSlotUI CreateSlot(string name, FurnaceSlotUI.SlotKind kind, int index, Vector2 pos)
     {
-        igniteButton = CreateButton(panelObject.transform, "IGNITE", Vector2.zero, 200f, buttonHeight, ToggleIgnite);
-        igniteButtonText = igniteButton.GetComponentInChildren<TextMeshProUGUI>();
-    }
-
-    private void BuildInventorySlots(float leftX, float startY)
-    {
-        if (playerInventory == null) return;
-
-        int columns = 4;
-        int totalSlots = playerInventory.InventorySlotCount;
-
-        for (int i = 0; i < totalSlots && i < inventorySlotButtons.Length; i++)
-        {
-            int row = i / columns;
-            int col = i % columns;
-            float x = leftX - 90f + col * 64f;
-            float y = startY - row * 64f;
-
-            int slotIndex = i;
-            inventorySlotButtons[i] = CreateSlotButton(panelObject.transform, new Vector2(x, y), () => OnInventorySlotClicked(slotIndex));
-            inventorySlotTexts[i] = CreateLabelForSlot(panelObject.transform, "", new Vector2(x, y), 10);
-        }
-    }
-
-    private Button CreateSlotButton(Transform parent, Vector2 pos, UnityEngine.Events.UnityAction action)
-    {
-        GameObject go = new GameObject("InvSlot", typeof(RectTransform), typeof(Image), typeof(Button));
-        go.transform.SetParent(parent, false);
+        GameObject go = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(Button), typeof(FurnaceSlotUI), typeof(CanvasGroup));
+        go.transform.SetParent(panelObject.transform, false);
         RectTransform rt = go.GetComponent<RectTransform>();
         rt.anchorMin = new Vector2(0.5f, 0.5f); rt.anchorMax = new Vector2(0.5f, 0.5f); rt.pivot = new Vector2(0.5f, 0.5f);
-        rt.sizeDelta = new Vector2(52f, 52f);
-        rt.anchoredPosition = pos;
-        Image img = go.GetComponent<Image>();
-        img.color = new Color(0.18f, 0.18f, 0.18f, 0.95f);
-        Button b = go.GetComponent<Button>();
-        b.onClick.AddListener(action);
-        return b;
-    }
+        rt.sizeDelta = new Vector2(50f, 50f); rt.anchoredPosition = pos;
+        go.GetComponent<Image>().color = new Color(0.16f, 0.16f, 0.16f, 0.95f);
 
-    private TextMeshProUGUI CreateLabelForSlot(Transform parent, string text, Vector2 pos, int fontSize)
-    {
-        TextMeshProUGUI label = CreateLabel(parent, text, pos, fontSize);
-        RectTransform rt = label.GetComponent<RectTransform>();
-        rt.sizeDelta = new Vector2(50f, 50f);
-        label.raycastTarget = false;
-        return label;
+        FurnaceSlotUI slot = go.GetComponent<FurnaceSlotUI>();
+        slot.Setup(kind, index, this);
+
+        GameObject labelGo = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
+        labelGo.transform.SetParent(go.transform, false);
+        RectTransform lrt = labelGo.GetComponent<RectTransform>();
+        lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one;
+        lrt.sizeDelta = Vector2.zero; lrt.anchoredPosition = Vector2.zero;
+        TextMeshProUGUI txt = labelGo.GetComponent<TextMeshProUGUI>();
+        txt.fontSize = 9; txt.color = Color.white; txt.alignment = TextAlignmentOptions.Center;
+        txt.raycastTarget = false;
+
+        return slot;
     }
 
     private void RefreshUI()
@@ -165,119 +127,112 @@ public class FurnaceUI : MonoBehaviour
 
         if (fuelTimerText != null)
         {
-            fuelTimerText.text = furnace.HasFuel ? Mathf.CeilToInt(furnace.FuelTimerValue) + "s" : "Empty";
+            float fuel = furnace.FuelTimerValue;
+            fuelTimerText.text = furnace.HasFuel ? Mathf.CeilToInt(fuel) + "s" : "Empty";
             fuelTimerText.color = furnace.HasFuel ? Color.white : Color.gray;
+        }
+
+        if (fuelSlot != null)
+        {
+            fuelSlot.UpdateVisual(furnace.HasFuel ? ItemType.Wood : null, 0, "Wood");
+        }
+
+        for (int i = 0; i < 4; i++)
+        {
+            if (inputSlots[i] != null)
+            {
+                float t = furnace.GetSlotTimer(i);
+                inputSlots[i].UpdateVisual(t > 0f ? ItemType.Iron : null, 0, t > 0f ? Mathf.CeilToInt(t) + "s" : "");
+            }
+
+            if (outputSlots[i] != null)
+            {
+                outputSlots[i].UpdateVisual(furnace.HasOutput(i) ? ItemType.IronIngot : null, 0, furnace.HasOutput(i) ? "READY" : "");
+            }
         }
 
         if (igniteButtonText != null)
         {
             igniteButtonText.text = furnace.IsLitValue ? "STOP" : "IGNITE";
-            igniteButton.image.color = furnace.IsLitValue ? new Color(0.85f, 0.25f, 0.15f, 0.9f) : new Color(0.95f, 0.55f, 0.1f, 0.9f);
-        }
-
-        for (int i = 0; i < 4; i++)
-        {
-            if (inputTimerTexts[i] != null)
-            {
-                inputTimerTexts[i].text = furnace.HasOutput(i) ? "Ready" : (furnace.GetSlotTimer(i) > 0f ? Mathf.CeilToInt(furnace.GetSlotTimer(i)) + "s" : "-");
-            }
-
-            if (outputIcons[i] != null)
-            {
-                outputIcons[i].color = furnace.HasOutput(i) ? new Color(0.85f, 0.85f, 0.9f) : new Color(0.3f, 0.25f, 0.2f);
-            }
         }
 
         if (playerInventory != null)
         {
-            for (int slot = 0; slot < playerInventory.InventorySlotCount && slot < inventorySlotTexts.Length; slot++)
+            for (int i = 0; i < 12 && i < inventorySlots.Length; i++)
             {
-                if (inventorySlotTexts[slot] != null)
+                if (inventorySlots[i] != null)
                 {
-                    ItemType? itemType = playerInventory.GetSlotItemType(slot);
-                    int amount = playerInventory.GetSlotAmount(slot);
-                    inventorySlotTexts[slot].text = itemType != null && amount > 0
-                        ? itemType.Value.ToString() + "\n" + amount
-                        : "";
+                    ItemType? it = playerInventory.GetSlotItemType(i);
+                    int amt = playerInventory.GetSlotAmount(i);
+                    inventorySlots[i].UpdateVisual(it, amt, it != null ? it.Value.ToString() : "");
                 }
             }
         }
     }
 
-    private void ToggleIgnite()
+    public bool HasValidItem(FurnaceSlotUI.SlotKind kind, int index)
     {
-        if (furnace != null)
+        if (playerInventory == null) return false;
+
+        switch (kind)
         {
-            furnace.ToggleLit();
+            case FurnaceSlotUI.SlotKind.Inventory:
+                ItemType? it = playerInventory.GetSlotItemType(index);
+                int amt = playerInventory.GetSlotAmount(index);
+                return it != null && amt > 0;
+            case FurnaceSlotUI.SlotKind.FurnaceOutput:
+                return furnace != null && furnace.HasOutput(index);
+            default:
+                return false;
         }
     }
 
-    private void OnInventorySlotClicked(int slotIndex)
+    public void HandleSlotDrop(FurnaceSlotUI.SlotKind fromKind, int fromIndex, FurnaceSlotUI.SlotKind toKind, int toIndex)
     {
         if (playerInventory == null || furnace == null) return;
 
-        ItemType? itemType = playerInventory.GetSlotItemType(slotIndex);
-        if (itemType == null) return;
-
-        if (itemType == ItemType.Wood)
+        if (fromKind == FurnaceSlotUI.SlotKind.Inventory)
         {
-            furnace.TryAddFuel(playerInventory);
+            ItemType? itemType = playerInventory.GetSlotItemType(fromIndex);
+            if (itemType == ItemType.Wood)
+                furnace.TryAddFuel(playerInventory);
+            else if (itemType == ItemType.Iron)
+                furnace.TryAddIron(playerInventory);
         }
-        else if (itemType == ItemType.Iron)
+        else if (fromKind == FurnaceSlotUI.SlotKind.FurnaceOutput)
         {
-            furnace.TryAddIron(playerInventory);
-        }
-    }
-
-    private void OnOutputSlotClicked(int slotIndex)
-    {
-        if (furnace != null && playerInventory != null)
-        {
-            furnace.TryPickupOutput(playerInventory, slotIndex);
+            furnace.TryPickupOutput(playerInventory, fromIndex);
         }
     }
 
-    private Button CreateButton(Transform parent, string label, Vector2 pos, float w, float h, UnityEngine.Events.UnityAction action)
+    private void ToggleIgnite() { furnace?.ToggleLit(); }
+
+    private Button CreateButton(string label, Vector2 pos, float w, float h, UnityEngine.Events.UnityAction action)
     {
         GameObject go = new GameObject(label + "Btn", typeof(RectTransform), typeof(Image), typeof(Button));
-        go.transform.SetParent(parent, false);
+        go.transform.SetParent(panelObject.transform, false);
         RectTransform rt = go.GetComponent<RectTransform>();
-        rt.anchorMin = new Vector2(0.5f, 0.5f); rt.anchorMax = new Vector2(0.5f, 0.5f); rt.pivot = new Vector2(0.5f, 0.5f);
-        rt.sizeDelta = new Vector2(w, h);
-        rt.anchoredPosition = pos;
-        Button b = go.GetComponent<Button>();
-        b.image.color = new Color(0.22f, 0.24f, 0.26f, 0.96f);
+        rt.anchorMin = new Vector2(0.5f, 0.5f); rt.anchorMax = new Vector2(0.5f, 0.5f);
+        rt.pivot = new Vector2(0.5f, 0.5f); rt.sizeDelta = new Vector2(w, h); rt.anchoredPosition = pos;
+        Button b = go.GetComponent<Button>(); b.targetGraphic = go.GetComponent<Image>();
+        go.GetComponent<Image>().color = new Color(0.22f, 0.24f, 0.26f, 0.96f);
         b.onClick.AddListener(action);
-        TextMeshProUGUI txt = CreateLabel(go.transform, label, Vector2.zero, 18);
+        TextMeshProUGUI txt = MakeLabel(go.transform, label, Vector2.zero, 16);
         txt.alignment = TextAlignmentOptions.Center;
         return b;
     }
 
-    private TextMeshProUGUI CreateLabel(Transform parent, string text, Vector2 pos, int fontSize)
+    private TextMeshProUGUI MakeLabel(Transform parent, string text, Vector2 pos, int fontSize)
     {
-        GameObject go = new GameObject("Label_" + text, typeof(RectTransform), typeof(TextMeshProUGUI));
+        GameObject go = new GameObject("Lbl", typeof(RectTransform), typeof(TextMeshProUGUI));
         go.transform.SetParent(parent, false);
         RectTransform rt = go.GetComponent<RectTransform>();
-        rt.anchorMin = new Vector2(0.5f, 0.5f); rt.anchorMax = new Vector2(0.5f, 0.5f); rt.pivot = new Vector2(0.5f, 0.5f);
-        rt.sizeDelta = new Vector2(200f, 28f);
-        rt.anchoredPosition = pos;
+        rt.anchorMin = new Vector2(0.5f, 0.5f); rt.anchorMax = new Vector2(0.5f, 0.5f);
+        rt.pivot = new Vector2(0.5f, 0.5f); rt.sizeDelta = new Vector2(180f, 24f); rt.anchoredPosition = pos;
         TextMeshProUGUI txt = go.GetComponent<TextMeshProUGUI>();
-        txt.text = text; txt.fontSize = fontSize; txt.color = Color.white;
-        txt.alignment = TextAlignmentOptions.Center;
+        txt.text = text; txt.fontSize = fontSize; txt.color = Color.white; txt.alignment = TextAlignmentOptions.Center;
+        txt.raycastTarget = false;
         return txt;
-    }
-
-    private Image CreateSlot(Transform parent, Vector2 pos, Color color)
-    {
-        GameObject go = new GameObject("Slot", typeof(RectTransform), typeof(Image));
-        go.transform.SetParent(parent, false);
-        RectTransform rt = go.GetComponent<RectTransform>();
-        rt.anchorMin = new Vector2(0.5f, 0.5f); rt.anchorMax = new Vector2(0.5f, 0.5f); rt.pivot = new Vector2(0.5f, 0.5f);
-        rt.sizeDelta = new Vector2(50f, 50f);
-        rt.anchoredPosition = pos;
-        Image img = go.GetComponent<Image>();
-        img.color = color;
-        return img;
     }
 
     private Canvas CreateCanvas()
