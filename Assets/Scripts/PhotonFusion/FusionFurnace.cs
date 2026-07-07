@@ -96,7 +96,13 @@ public class FusionFurnace : NetworkBehaviour
 
                 if (timer <= 0f)
                 {
-                    SlotOutputCounts.Set(i, SlotOutputCounts.Get(i) + 1);
+                    int newOutputCount = SlotOutputCounts.Get(i) + 1;
+                    SlotOutputCounts.Set(i, newOutputCount);
+                    if (SlotQuantities.Get(i) > newOutputCount)
+                    {
+                        float nextTime = GetCookTime(SlotInputTypes.Get(i));
+                        SlotTimers.Set(i, nextTime);
+                    }
                 }
             }
         }
@@ -204,20 +210,25 @@ public class FusionFurnace : NetworkBehaviour
         int inputType = itemType == ItemType.Iron ? 0 : (itemType == ItemType.RawChicken ? 1 : (itemType == ItemType.RawFish ? 2 : (itemType == ItemType.Wood ? 3 : -1)));
         if (inputType < 0) return;
 
-        if (inventory.GetSlotAmount(playerSlot) <= 0) return;
+        int availableAmount = inventory.GetSlotAmount(playerSlot);
+        if (availableAmount <= 0) return;
 
         int targetSlot = furnaceSlot >= 0 ? furnaceSlot : FindSlotForType(inputType);
         if (targetSlot < 0) return;
 
-        if (!inventory.RemoveItemFromSlot(playerSlot, 1, out ItemType removedType)) return;
+        int existingQty = SlotQuantities.Get(targetSlot);
+        int maxAdd = 16 - existingQty;
+        int transferAmount = Mathf.Min(availableAmount, maxAdd);
+        if (transferAmount <= 0) return;
+
+        if (!inventory.RemoveItemFromSlot(playerSlot, transferAmount, out ItemType removedType)) return;
         if (removedType != itemType.Value)
         {
-            inventory.AddItemToSlot(removedType, 1, playerSlot);
+            inventory.AddItemToSlot(removedType, transferAmount, playerSlot);
             return;
         }
 
-        int existingQty = SlotQuantities.Get(targetSlot);
-        SlotQuantities.Set(targetSlot, existingQty + 1);
+        SlotQuantities.Set(targetSlot, existingQty + transferAmount);
 
         if (existingQty == 0)
         {
