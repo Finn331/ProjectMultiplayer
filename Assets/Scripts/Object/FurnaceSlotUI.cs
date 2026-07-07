@@ -60,7 +60,6 @@ public class FurnaceSlotUI : MonoBehaviour, IBeginDragHandler, IDragHandler, IEn
             slotImage.color = itemType != null ? new Color(0.3f, 0.35f, 0.4f, 0.95f) : new Color(0.16f, 0.16f, 0.16f, 0.95f);
         }
     }
-    }
 
     public void OnBeginDrag(PointerEventData eventData)
     {
