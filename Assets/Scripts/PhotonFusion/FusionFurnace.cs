@@ -32,7 +32,12 @@ public class FusionFurnace : NetworkBehaviour
 
     public void ToggleLit()
     {
-        if (!HasStateAuthority) return;
+        RPC_ToggleLit();
+    }
+
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    private void RPC_ToggleLit()
+    {
         if (!HasFuel) return;
         IsLit = !IsLit;
     }
@@ -127,39 +132,68 @@ public class FusionFurnace : NetworkBehaviour
 
     public bool TryAddFuel(PlayerInventory inventory)
     {
-        if (!HasStateAuthority || inventory == null) return false;
+        if (inventory == null) return false;
         if (!inventory.HasItem(ItemType.Wood, 1)) return false;
-        if (!inventory.RemoveItem(ItemType.Wood, 1)) return false;
 
-        FuelTimer += FuelBurnTimePerWood;
+        RPC_AddFuel(inventory.GetComponent<NetworkObject>());
         return true;
     }
 
     public bool TryAddIron(PlayerInventory inventory)
     {
-        if (!HasStateAuthority || inventory == null) return false;
+        if (inventory == null) return false;
         if (!inventory.HasItem(ItemType.Iron, 1)) return false;
 
-        int freeSlot = FindFreeSlot();
-        if (freeSlot < 0) return false;
-
-        if (!inventory.RemoveItem(ItemType.Iron, 1)) return false;
-
-        SlotTimers.Set(freeSlot, SmeltTimeSeconds);
-        SlotHasOutput.Set(freeSlot, false);
+        RPC_AddIron(inventory.GetComponent<NetworkObject>());
         return true;
     }
 
     public bool TryPickupOutput(PlayerInventory inventory, int slot)
     {
-        if (!HasStateAuthority || inventory == null) return false;
-        if (slot < 0 || slot >= SlotCount) return false;
-        if (!SlotHasOutput.Get(slot)) return false;
+        if (inventory == null) return false;
+
+        RPC_PickupOutput(inventory.GetComponent<NetworkObject>(), slot);
+        return true;
+    }
+
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    private void RPC_AddFuel(NetworkObject inventoryObject)
+    {
+        PlayerInventory inventory = inventoryObject != null ? inventoryObject.GetComponent<PlayerInventory>() : null;
+        if (inventory == null) return;
+        if (!inventory.HasItem(ItemType.Wood, 1)) return;
+        if (!inventory.RemoveItem(ItemType.Wood, 1)) return;
+        FuelTimer += FuelBurnTimePerWood;
+    }
+
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    private void RPC_AddIron(NetworkObject inventoryObject)
+    {
+        PlayerInventory inventory = inventoryObject != null ? inventoryObject.GetComponent<PlayerInventory>() : null;
+        if (inventory == null) return;
+        if (!inventory.HasItem(ItemType.Iron, 1)) return;
+
+        int freeSlot = FindFreeSlot();
+        if (freeSlot < 0) return;
+
+        if (!inventory.RemoveItem(ItemType.Iron, 1)) return;
+
+        SlotTimers.Set(freeSlot, SmeltTimeSeconds);
+        SlotHasOutput.Set(freeSlot, false);
+    }
+
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    private void RPC_PickupOutput(NetworkObject inventoryObject, int slot)
+    {
+        if (slot < 0 || slot >= SlotCount) return;
+        if (!SlotHasOutput.Get(slot)) return;
+
+        PlayerInventory inventory = inventoryObject != null ? inventoryObject.GetComponent<PlayerInventory>() : null;
+        if (inventory == null) return;
 
         inventory.AddItem(ItemType.IronIngot, 1);
         SlotTimers.Set(slot, -1f);
         SlotHasOutput.Set(slot, false);
-        return true;
     }
 
     private int FindFreeSlot()
