@@ -56,27 +56,20 @@ public class FusionFurnace : NetworkBehaviour
 
         float delta = Runner.DeltaTime;
 
-        if (FuelTimer > 0f)
+        if (IsLit && FuelTimer > 0f)
         {
             FuelTimer = Mathf.Max(0f, FuelTimer - delta);
         }
 
         bool hasFuel = FuelTimer > 0f;
-
-        if (hasFuel && IsLit)
+        if (!hasFuel)
         {
-            FuelTimer = Mathf.Max(0f, FuelTimer - delta);
+            IsLit = false;
         }
 
-        if (!IsLit && FuelTimer <= 0f)
+        if (!IsLit)
         {
-            for (int i = 0; i < SlotCount; i++)
-            {
-                if (SlotTimers.Get(i) > 0f)
-                {
-                    SlotTimers.Set(i, -1f);
-                }
-            }
+            return;
         }
 
         for (int i = 0; i < SlotCount; i++)

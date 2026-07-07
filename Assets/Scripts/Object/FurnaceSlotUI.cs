@@ -45,19 +45,21 @@ public class FurnaceSlotUI : MonoBehaviour, IBeginDragHandler, IDragHandler, IEn
         canvasGroup.blocksRaycasts = false;
 
         dragGhost = new GameObject("DragGhost", typeof(RectTransform), typeof(Image));
-        dragGhost.transform.SetParent(Owner.transform.root, false);
-        dragGhost.GetComponent<Image>().sprite = slotImage != null ? slotImage.sprite : null;
+        Canvas canvas = GetComponentInParent<Canvas>();
+        dragGhost.transform.SetParent(canvas != null ? canvas.transform : transform, false);
         dragGhost.GetComponent<Image>().color = new Color(1f, 1f, 1f, 0.7f);
         RectTransform rt = dragGhost.GetComponent<RectTransform>();
-        rt.sizeDelta = new Vector2(52f, 52f);
-        dragGhost.transform.position = eventData.position;
+        rt.sizeDelta = new Vector2(50f, 50f);
     }
 
     public void OnDrag(PointerEventData eventData)
     {
-        if (dragGhost != null)
+        if (dragGhost != null && dragGhost.transform is RectTransform rt)
         {
-            dragGhost.transform.position = eventData.position;
+            Vector2 localPoint;
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                rt.parent as RectTransform, eventData.position, null, out localPoint);
+            rt.localPosition = localPoint;
         }
     }
 
@@ -74,13 +76,15 @@ public class FurnaceSlotUI : MonoBehaviour, IBeginDragHandler, IDragHandler, IEn
 
         if (Owner == null) return;
 
-        GameObject target = eventData.pointerCurrentRaycast.gameObject;
-        if (target != null)
+        var results = new System.Collections.Generic.List<RaycastResult>();
+        EventSystem.current.RaycastAll(eventData, results);
+        foreach (var result in results)
         {
-            FurnaceSlotUI targetSlot = target.GetComponentInParent<FurnaceSlotUI>();
-            if (targetSlot != null)
+            FurnaceSlotUI target = result.gameObject.GetComponentInParent<FurnaceSlotUI>();
+            if (target != null && target != this)
             {
-                Owner.HandleSlotDrop(Kind, SlotIndex, targetSlot.Kind, targetSlot.SlotIndex);
+                Owner.HandleSlotDrop(Kind, SlotIndex, target.Kind, target.SlotIndex);
+                break;
             }
         }
     }
@@ -88,14 +92,12 @@ public class FurnaceSlotUI : MonoBehaviour, IBeginDragHandler, IDragHandler, IEn
     public void OnDrop(PointerEventData eventData)
     {
         if (Owner == null) return;
+        if (eventData.pointerDrag == null) return;
 
-        FurnaceSlotUI sourceSlot = eventData.pointerDrag != null
-            ? eventData.pointerDrag.GetComponentInParent<FurnaceSlotUI>()
-            : null;
-
-        if (sourceSlot != null)
+        FurnaceSlotUI source = eventData.pointerDrag.GetComponentInParent<FurnaceSlotUI>();
+        if (source != null && source != this)
         {
-            Owner.HandleSlotDrop(sourceSlot.Kind, sourceSlot.SlotIndex, Kind, SlotIndex);
+            Owner.HandleSlotDrop(source.Kind, source.SlotIndex, Kind, SlotIndex);
         }
     }
 }
