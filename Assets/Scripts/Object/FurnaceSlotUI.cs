@@ -16,6 +16,7 @@ public class FurnaceSlotUI : MonoBehaviour, IBeginDragHandler, IDragHandler, IEn
     private TextMeshProUGUI labelText;
     private CanvasGroup canvasGroup;
     private static GameObject dragGhost;
+    private static Vector2 dragStartPos;
     private static bool dropHandled;
     private static ItemIconDatabase cachedIconDb;
 
@@ -69,6 +70,7 @@ public class FurnaceSlotUI : MonoBehaviour, IBeginDragHandler, IDragHandler, IEn
         if (!Owner.HasValidItem(Kind, SlotIndex)) return;
 
         dropHandled = false;
+        dragStartPos = eventData.position;
 
         canvasGroup.alpha = 0.6f;
         canvasGroup.blocksRaycasts = false;
@@ -106,14 +108,14 @@ public class FurnaceSlotUI : MonoBehaviour, IBeginDragHandler, IDragHandler, IEn
 
         if (Owner == null) return;
 
-        if (!dropHandled)
+        if (!dropHandled && Vector2.Distance(dragStartPos, eventData.position) > 15f)
         {
             var results = new System.Collections.Generic.List<RaycastResult>();
             EventSystem.current.RaycastAll(eventData, results);
             foreach (var result in results)
             {
                 FurnaceSlotUI target = result.gameObject.GetComponentInParent<FurnaceSlotUI>();
-                if (target != null && target != this)
+                if (target != null && target != this && IsFurnaceTarget(target.Kind))
                 {
                     Owner.HandleSlotDrop(Kind, SlotIndex, target.Kind, target.SlotIndex);
                     dropHandled = true;
@@ -134,5 +136,10 @@ public class FurnaceSlotUI : MonoBehaviour, IBeginDragHandler, IDragHandler, IEn
             Owner.HandleSlotDrop(source.Kind, source.SlotIndex, Kind, SlotIndex);
             dropHandled = true;
         }
+    }
+
+    private static bool IsFurnaceTarget(SlotKind kind)
+    {
+        return kind == SlotKind.FurnaceFuel || kind == SlotKind.FurnaceInput;
     }
 }
