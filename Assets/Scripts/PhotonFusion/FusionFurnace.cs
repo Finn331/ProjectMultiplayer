@@ -143,6 +143,19 @@ public class FusionFurnace : NetworkBehaviour
         return true;
     }
 
+    public bool TryAddFuelFromSlot(PlayerInventory inventory, int playerSlot)
+    {
+        if (inventory == null) return false;
+        if (inventory.GetSlotItemType(playerSlot) != ItemType.Wood || inventory.GetSlotAmount(playerSlot) <= 0) return false;
+
+        NetworkObject inventoryObject = inventory.GetComponentInParent<NetworkObject>();
+        if (inventoryObject == null) return false;
+
+        if (HasStateAuthority) AddFuelFromSlotInternal(inventory, playerSlot);
+        else RPC_AddFuelFromSlot(inventoryObject, playerSlot);
+        return true;
+    }
+
     public bool TryAddIron(PlayerInventory inventory)
     {
         if (inventory == null) return false;
@@ -153,6 +166,19 @@ public class FusionFurnace : NetworkBehaviour
 
         if (HasStateAuthority) AddIronInternal(inventory);
         else RPC_AddIron(inventoryObject);
+        return true;
+    }
+
+    public bool TryAddIronFromSlot(PlayerInventory inventory, int playerSlot)
+    {
+        if (inventory == null) return false;
+        if (inventory.GetSlotItemType(playerSlot) != ItemType.Iron || inventory.GetSlotAmount(playerSlot) <= 0) return false;
+
+        NetworkObject inventoryObject = inventory.GetComponentInParent<NetworkObject>();
+        if (inventoryObject == null) return false;
+
+        if (HasStateAuthority) AddIronFromSlotInternal(inventory, playerSlot);
+        else RPC_AddIronFromSlot(inventoryObject, playerSlot);
         return true;
     }
 
@@ -184,6 +210,27 @@ public class FusionFurnace : NetworkBehaviour
     }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    private void RPC_AddFuelFromSlot(NetworkObject inventoryObject, int playerSlot)
+    {
+        PlayerInventory inventory = inventoryObject != null ? inventoryObject.GetComponentInChildren<PlayerInventory>() : null;
+        if (inventory == null) return;
+        AddFuelFromSlotInternal(inventory, playerSlot);
+    }
+
+    private void AddFuelFromSlotInternal(PlayerInventory inventory, int playerSlot)
+    {
+        if (inventory.GetSlotItemType(playerSlot) != ItemType.Wood) return;
+        if (inventory.GetSlotAmount(playerSlot) <= 0) return;
+        if (!inventory.RemoveItemFromSlot(playerSlot, 1, out ItemType removedType)) return;
+        if (removedType != ItemType.Wood)
+        {
+            inventory.AddItemToSlot(removedType, 1, playerSlot);
+            return;
+        }
+        FuelTimer += FuelBurnTimePerWood;
+    }
+
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
     private void RPC_AddIron(NetworkObject inventoryObject)
     {
         PlayerInventory inventory = inventoryObject != null ? inventoryObject.GetComponentInChildren<PlayerInventory>() : null;
@@ -199,6 +246,33 @@ public class FusionFurnace : NetworkBehaviour
         if (freeSlot < 0) return;
 
         if (!inventory.RemoveItem(ItemType.Iron, 1)) return;
+
+        SlotTimers.Set(freeSlot, SmeltTimeSeconds);
+        SlotHasOutput.Set(freeSlot, false);
+    }
+
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    private void RPC_AddIronFromSlot(NetworkObject inventoryObject, int playerSlot)
+    {
+        PlayerInventory inventory = inventoryObject != null ? inventoryObject.GetComponentInChildren<PlayerInventory>() : null;
+        if (inventory == null) return;
+        AddIronFromSlotInternal(inventory, playerSlot);
+    }
+
+    private void AddIronFromSlotInternal(PlayerInventory inventory, int playerSlot)
+    {
+        if (inventory.GetSlotItemType(playerSlot) != ItemType.Iron) return;
+        if (inventory.GetSlotAmount(playerSlot) <= 0) return;
+
+        int freeSlot = FindFreeSlot();
+        if (freeSlot < 0) return;
+
+        if (!inventory.RemoveItemFromSlot(playerSlot, 1, out ItemType removedType)) return;
+        if (removedType != ItemType.Iron)
+        {
+            inventory.AddItemToSlot(removedType, 1, playerSlot);
+            return;
+        }
 
         SlotTimers.Set(freeSlot, SmeltTimeSeconds);
         SlotHasOutput.Set(freeSlot, false);

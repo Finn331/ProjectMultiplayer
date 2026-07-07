@@ -16,6 +16,7 @@ public class FurnaceSlotUI : MonoBehaviour, IBeginDragHandler, IDragHandler, IEn
     private TextMeshProUGUI labelText;
     private CanvasGroup canvasGroup;
     private static GameObject dragGhost;
+    private static bool dropHandled;
     private static ItemIconDatabase cachedIconDb;
 
     public void Setup(SlotKind kind, int index, FurnaceUI owner)
@@ -67,6 +68,8 @@ public class FurnaceSlotUI : MonoBehaviour, IBeginDragHandler, IDragHandler, IEn
         if (Owner == null) return;
         if (!Owner.HasValidItem(Kind, SlotIndex)) return;
 
+        dropHandled = false;
+
         canvasGroup.alpha = 0.6f;
         canvasGroup.blocksRaycasts = false;
 
@@ -103,15 +106,19 @@ public class FurnaceSlotUI : MonoBehaviour, IBeginDragHandler, IDragHandler, IEn
 
         if (Owner == null) return;
 
-        var results = new System.Collections.Generic.List<RaycastResult>();
-        EventSystem.current.RaycastAll(eventData, results);
-        foreach (var result in results)
+        if (!dropHandled)
         {
-            FurnaceSlotUI target = result.gameObject.GetComponentInParent<FurnaceSlotUI>();
-            if (target != null && target != this)
+            var results = new System.Collections.Generic.List<RaycastResult>();
+            EventSystem.current.RaycastAll(eventData, results);
+            foreach (var result in results)
             {
-                Owner.HandleSlotDrop(Kind, SlotIndex, target.Kind, target.SlotIndex);
-                break;
+                FurnaceSlotUI target = result.gameObject.GetComponentInParent<FurnaceSlotUI>();
+                if (target != null && target != this)
+                {
+                    Owner.HandleSlotDrop(Kind, SlotIndex, target.Kind, target.SlotIndex);
+                    dropHandled = true;
+                    break;
+                }
             }
         }
     }
@@ -125,6 +132,7 @@ public class FurnaceSlotUI : MonoBehaviour, IBeginDragHandler, IDragHandler, IEn
         if (source != null && source != this)
         {
             Owner.HandleSlotDrop(source.Kind, source.SlotIndex, Kind, SlotIndex);
+            dropHandled = true;
         }
     }
 }

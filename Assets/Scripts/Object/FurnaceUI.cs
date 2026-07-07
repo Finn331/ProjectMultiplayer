@@ -206,10 +206,23 @@ public class FurnaceUI : MonoBehaviour
         if (fromKind == FurnaceSlotUI.SlotKind.Inventory)
         {
             ItemType? itemType = playerInventory.GetSlotItemType(fromIndex);
-            if (itemType == ItemType.Wood)
-                furnace.TryAddFuel(playerInventory);
-            else if (itemType == ItemType.Iron)
-                furnace.TryAddIron(playerInventory);
+            if (itemType == ItemType.Wood && toKind == FurnaceSlotUI.SlotKind.FurnaceFuel)
+            {
+                furnace.TryAddFuelFromSlot(playerInventory, fromIndex);
+            }
+            else if (itemType == ItemType.Iron && toKind == FurnaceSlotUI.SlotKind.FurnaceInput)
+            {
+                furnace.TryAddIronFromSlot(playerInventory, fromIndex);
+            }
+            else if (itemType == ItemType.RawChicken || itemType == ItemType.RawFish)
+            {
+                if (PickupUIManager.instance != null)
+                    PickupUIManager.instance.ShowInfo("Use Campfire for food");
+            }
+            else if (PickupUIManager.instance != null)
+            {
+                PickupUIManager.instance.ShowInfo("Invalid furnace item");
+            }
         }
         else if (fromKind == FurnaceSlotUI.SlotKind.FurnaceOutput)
         {
