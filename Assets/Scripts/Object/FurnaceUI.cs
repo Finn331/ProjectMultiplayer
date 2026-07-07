@@ -181,7 +181,7 @@ public class FurnaceUI : MonoBehaviour
                 {
                     ItemType? it = playerInventory.GetSlotItemType(i);
                     int amt = playerInventory.GetSlotAmount(i);
-                    inventorySlots[i].UpdateVisual(it, amt, it != null ? it.Value.ToString() : "");
+                    inventorySlots[i].UpdateVisual(it, amt, it != null && amt > 0 ? it.Value.ToString() + "\n" + amt : "");
                 }
             }
         }
@@ -216,7 +216,7 @@ public class FurnaceUI : MonoBehaviour
 
             if (itemType == ItemType.Wood && toKind == FurnaceSlotUI.SlotKind.FurnaceFuel)
                 furnace.TryAddToFurnaceFromSlot(playerInventory, fromIndex, true, -1);
-            else if ((itemType == ItemType.Iron || itemType == ItemType.RawChicken || itemType == ItemType.RawFish) && (toKind == FurnaceSlotUI.SlotKind.FurnaceInput || toKind == FurnaceSlotUI.SlotKind.Inventory))
+            else if ((itemType == ItemType.Iron || itemType == ItemType.RawChicken || itemType == ItemType.RawFish) && toKind == FurnaceSlotUI.SlotKind.FurnaceInput)
                 furnace.TryAddToFurnaceFromSlot(playerInventory, fromIndex, false, -1);
         }
         else if (fromKind == FurnaceSlotUI.SlotKind.FurnaceOutput)
