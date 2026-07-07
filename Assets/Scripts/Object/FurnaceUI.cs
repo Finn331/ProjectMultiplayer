@@ -18,6 +18,8 @@ public class FurnaceUI : MonoBehaviour
     private TextMeshProUGUI fuelTimerText;
     private TextMeshProUGUI[] inputTimerTexts = new TextMeshProUGUI[4];
     private Image[] outputIcons = new Image[4];
+    private TextMeshProUGUI inventoryLabel;
+    private TextMeshProUGUI[] inventorySlotTexts = new TextMeshProUGUI[24];
 
     private Button igniteButton;
     private TextMeshProUGUI igniteButtonText;
@@ -112,28 +114,16 @@ public class FurnaceUI : MonoBehaviour
     {
         if (playerInventory == null) return;
 
-        int totalSlots = playerInventory.TotalSlotCount;
-        int inventorySlots = playerInventory.InventorySlotCount;
         int columns = 4;
+        int totalSlots = playerInventory.InventorySlotCount;
 
-        for (int i = 0; i < inventorySlots; i++)
+        for (int i = 0; i < totalSlots && i < inventorySlotTexts.Length; i++)
         {
             int row = i / columns;
             int col = i % columns;
             float x = leftX - 90f + col * 64f;
             float y = startY - row * 64f;
-            CreateSlot(panelObject.transform, new Vector2(x, y), new Color(0.18f, 0.18f, 0.18f, 0.95f));
-        }
-
-        CreateLabel(panelObject.transform, "HOTBAR", new Vector2(leftX, startY - Mathf.Ceil(inventorySlots / (float)columns) * 64f - 10f), 12);
-
-        int hotbarStart = inventorySlots;
-        for (int i = hotbarStart; i < totalSlots; i++)
-        {
-            int col = i - hotbarStart;
-            float x = leftX - 100f + col * 52f;
-            float y = startY - Mathf.Ceil(inventorySlots / (float)columns) * 64f - 40f;
-            CreateSlot(panelObject.transform, new Vector2(x, y), new Color(0.22f, 0.22f, 0.22f, 0.95f));
+            inventorySlotTexts[i] = CreateLabel(panelObject.transform, "", new Vector2(x, y), 10);
         }
     }
 
@@ -162,9 +152,24 @@ public class FurnaceUI : MonoBehaviour
 
             if (outputIcons[i] != null)
             {
-                outputIcons[i].color = furnace.HasOutput(i) ? new Color(0.85f, 0.85f, 0.9f) : new Color(0.3f, 0.25f, 0.2f);
+            outputIcons[i].color = furnace.HasOutput(i) ? new Color(0.85f, 0.85f, 0.9f) : new Color(0.3f, 0.25f, 0.2f);
+        }
+
+        if (playerInventory != null)
+        {
+            for (int i = 0; i < playerInventory.InventorySlotCount && i < inventorySlotTexts.Length; i++)
+            {
+                if (inventorySlotTexts[i] != null)
+                {
+                    ItemType? itemType = playerInventory.GetSlotItemType(i);
+                    int amount = playerInventory.GetSlotAmount(i);
+                    inventorySlotTexts[i].text = itemType != null && amount > 0
+                        ? itemType.Value.ToString() + "\n" + amount
+                        : "";
+                }
             }
         }
+    }
     }
 
     private void ToggleIgnite()
