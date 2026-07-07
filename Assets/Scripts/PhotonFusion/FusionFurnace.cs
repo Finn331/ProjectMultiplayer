@@ -196,7 +196,7 @@ public class FusionFurnace : NetworkBehaviour
         ItemType? itemType = inventory.GetSlotItemType(playerSlot);
         if (itemType == null) return;
 
-        int inputType = itemType == ItemType.Iron ? 0 : (itemType == ItemType.RawChicken ? 1 : (itemType == ItemType.RawFish ? 2 : -1));
+        int inputType = itemType == ItemType.Iron ? 0 : (itemType == ItemType.RawChicken ? 1 : (itemType == ItemType.RawFish ? 2 : (itemType == ItemType.Wood ? 3 : -1)));
         if (inputType < 0) return;
 
         if (inventory.GetSlotAmount(playerSlot) <= 0) return;
@@ -233,7 +233,9 @@ public class FusionFurnace : NetworkBehaviour
         int inputType = SlotInputTypes.Get(slot);
         ItemType outputItem = inputType == 0 ? ItemType.IronIngot
             : (inputType == 1 ? ItemType.CookedChicken
-            : (inputType == 2 ? ItemType.CookedFish : ItemType.IronIngot));
+            : (inputType == 2 ? ItemType.CookedFish
+            : (inputType == 3 ? ItemType.Ash
+            : ItemType.IronIngot)));
 
         inventory.AddItem(outputItem, 1);
         SlotTimers.Set(slot, -1f);

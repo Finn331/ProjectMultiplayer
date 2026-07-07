@@ -22,7 +22,9 @@ public enum ItemType
     Iron,
     CookingPot,
     IronIngot,
-    Furnace
+    Furnace,
+    Ash,
+    Fertilizer
 }
 
 public class PickableItem : MonoBehaviour

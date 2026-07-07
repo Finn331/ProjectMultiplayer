@@ -185,6 +185,20 @@ public class BandageCraftingSystem : MonoBehaviour
 
         AddDefaultRecipeIfMissing(new CraftingRecipe
         {
+            recipeId = "fertilizer",
+            displayName = "Fertilizer",
+            outputItemType = ItemType.Fertilizer,
+            outputAmount = 1,
+            context = CraftingContext.Simple,
+            ingredients = new List<CraftingIngredient>
+            {
+                new CraftingIngredient { itemType = ItemType.Ash, amount = 2 },
+                new CraftingIngredient { itemType = ItemType.Fiber, amount = 2 }
+            }
+        });
+
+        AddDefaultRecipeIfMissing(new CraftingRecipe
+        {
             recipeId = "crafting_table",
             displayName = "Crafting Table",
             outputItemType = ItemType.CraftingTable,

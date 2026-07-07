@@ -155,7 +155,7 @@ public class FurnaceUI : MonoBehaviour
             {
                 float t = furnace.GetSlotTimer(i);
                 int inputType = furnace.GetSlotInputType(i);
-                ItemType? visualType = inputType == 0 ? ItemType.Iron : (inputType == 1 ? ItemType.RawChicken : (inputType == 2 ? ItemType.RawFish : (ItemType?)null));
+                ItemType? visualType = inputType == 0 ? ItemType.Iron : (inputType == 1 ? ItemType.RawChicken : (inputType == 2 ? ItemType.RawFish : (inputType == 3 ? ItemType.Wood : (ItemType?)null)));
                 string label = t > 0f ? Mathf.CeilToInt(t) + "s" : (furnace.HasOutput(i) ? "DONE" : "");
                 inputSlots[i].UpdateVisual(t >= 0f ? visualType : null, 0, label);
             }
@@ -216,6 +216,8 @@ public class FurnaceUI : MonoBehaviour
 
             if (itemType == ItemType.Wood && toKind == FurnaceSlotUI.SlotKind.FurnaceFuel)
                 furnace.TryAddToFurnaceFromSlot(playerInventory, fromIndex, true, -1);
+            else if (itemType == ItemType.Wood && toKind == FurnaceSlotUI.SlotKind.FurnaceInput)
+                furnace.TryAddToFurnaceFromSlot(playerInventory, fromIndex, false, -1);
             else if ((itemType == ItemType.Iron || itemType == ItemType.RawChicken || itemType == ItemType.RawFish) && toKind == FurnaceSlotUI.SlotKind.FurnaceInput)
                 furnace.TryAddToFurnaceFromSlot(playerInventory, fromIndex, false, -1);
         }
