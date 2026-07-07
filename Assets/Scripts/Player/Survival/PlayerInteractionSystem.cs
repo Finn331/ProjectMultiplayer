@@ -423,12 +423,12 @@ public class PlayerInteractionSystem : MonoBehaviour
 
         if (selectedItem == ItemType.Wood && inventory.GetSlotAmount(globalSlot) > 0)
         {
-            return furnace.TryAddFuel(inventory);
+            return furnace.TryAddToFurnaceFromSlot(inventory, -1, true, -1);
         }
 
-        if (selectedItem == ItemType.Iron && inventory.GetSlotAmount(globalSlot) > 0)
+        if ((selectedItem == ItemType.Iron || selectedItem == ItemType.RawChicken || selectedItem == ItemType.RawFish) && inventory.GetSlotAmount(globalSlot) > 0)
         {
-            return furnace.TryAddIron(inventory);
+            return furnace.TryAddToFurnaceFromSlot(inventory, globalSlot, false, -1);
         }
 
         for (int i = 0; i < 4; i++)
