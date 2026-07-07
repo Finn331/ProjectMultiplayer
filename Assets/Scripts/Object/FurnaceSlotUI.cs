@@ -72,6 +72,7 @@ public class FurnaceSlotUI : MonoBehaviour, IBeginDragHandler, IDragHandler, IEn
         dragGhost = new GameObject("DragGhost", typeof(RectTransform), typeof(Image));
         Canvas canvas = GetComponentInParent<Canvas>();
         dragGhost.transform.SetParent(canvas != null ? canvas.transform : transform, false);
+        dragGhost.GetComponent<Image>().raycastTarget = false;
         dragGhost.GetComponent<Image>().color = new Color(1f, 1f, 1f, 0.7f);
         RectTransform rt = dragGhost.GetComponent<RectTransform>();
         rt.sizeDelta = new Vector2(50f, 50f);

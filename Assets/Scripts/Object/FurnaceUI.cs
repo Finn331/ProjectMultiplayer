@@ -5,7 +5,7 @@ using TMPro;
 public class FurnaceUI : MonoBehaviour
 {
     [Header("Layout")]
-    [SerializeField] private Vector2 panelSize = new Vector2(740f, 460f);
+    [SerializeField] private Vector2 panelSize = new Vector2(760f, 560f);
 
     private FusionFurnace furnace;
     private PlayerInventory playerInventory;
@@ -61,13 +61,25 @@ public class FurnaceUI : MonoBehaviour
         float left = -panelSize.x * 0.28f;
         float right = panelSize.x * 0.28f;
 
-        MakeLabel(panelObject.transform, "INVENTORY", new Vector2(left, 165f), 14);
+        MakeLabel(panelObject.transform, "INVENTORY", new Vector2(left, 190f), 14);
         int cols = 4;
-        for (int i = 0; i < 12 && i < inventorySlots.Length; i++)
+        int invSlotCount = playerInventory != null ? playerInventory.InventorySlotCount : 12;
+        for (int i = 0; i < invSlotCount && i < inventorySlots.Length; i++)
         {
             float x = left - 78f + (i % cols) * 56f;
-            float y = 140f - (i / cols) * 56f;
+            float y = 165f - (i / cols) * 56f;
             inventorySlots[i] = CreateSlot("InvSlot" + i, FurnaceSlotUI.SlotKind.Inventory, i, new Vector2(x, y));
+        }
+
+        MakeLabel(panelObject.transform, "HOTBAR", new Vector2(left, 165f - Mathf.Ceil(invSlotCount / (float)cols) * 56f - 8f), 12);
+        int hotbarStart = playerInventory != null ? playerInventory.HotbarStartIndex : 12;
+        int hotbarEnd = playerInventory != null ? playerInventory.TotalSlotCount : 17;
+        for (int i = hotbarStart; i < hotbarEnd && i < inventorySlots.Length; i++)
+        {
+            int hotbarIdx = i - hotbarStart;
+            float x = left - 78f + (hotbarIdx % 5) * 50f;
+            float y = 165f - Mathf.Ceil(invSlotCount / (float)cols) * 56f - 40f;
+            inventorySlots[i] = CreateSlot("HotbarSlot" + hotbarIdx, FurnaceSlotUI.SlotKind.Inventory, i, new Vector2(x, y));
         }
 
         MakeLabel(panelObject.transform, "FURNACE", new Vector2(right, 165f), 14);
@@ -92,7 +104,7 @@ public class FurnaceUI : MonoBehaviour
 
         igniteButton = CreateButton("IGNITE", Vector2.zero, 200f, 48f, ToggleIgnite);
         igniteButtonText = igniteButton.GetComponentInChildren<TextMeshProUGUI>();
-        closeButton = CreateButton("CLOSE", new Vector2(0f, -panelSize.y * 0.44f), 160f, 36f, Close);
+        closeButton = CreateButton("CLOSE", new Vector2(0f, -panelSize.y * 0.46f), 160f, 36f, Close);
 
         panelObject.SetActive(false);
     }
@@ -158,7 +170,7 @@ public class FurnaceUI : MonoBehaviour
 
         if (playerInventory != null)
         {
-            for (int i = 0; i < 12 && i < inventorySlots.Length; i++)
+            for (int i = 0; i < playerInventory.TotalSlotCount && i < inventorySlots.Length; i++)
             {
                 if (inventorySlots[i] != null)
                 {
