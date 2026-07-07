@@ -96,14 +96,6 @@ public class FusionFurnace : NetworkBehaviour
                 if (timer <= 0f)
                 {
                     SlotHasOutput.Set(i, true);
-                    int qty = SlotQuantities.Get(i) - 1;
-                    SlotQuantities.Set(i, Mathf.Max(0, qty));
-                    if (qty > 0)
-                    {
-                        float nextTime = GetCookTime(SlotInputTypes.Get(i));
-                        SlotTimers.Set(i, nextTime);
-                        SlotHasOutput.Set(i, false);
-                    }
                 }
             }
         }
@@ -163,7 +155,7 @@ public class FusionFurnace : NetworkBehaviour
         else
         {
             if (itemType == null) return false;
-            if (itemType != ItemType.Iron && itemType != ItemType.RawChicken && itemType != ItemType.RawFish) return false;
+            if (itemType != ItemType.Iron && itemType != ItemType.RawChicken && itemType != ItemType.RawFish && itemType != ItemType.Wood) return false;
             if (inventory.GetSlotAmount(playerSlot) <= 0) return false;
         }
 
@@ -256,10 +248,22 @@ public class FusionFurnace : NetworkBehaviour
             : ItemType.IronIngot)));
 
         inventory.AddItem(outputItem, 1);
-        SlotTimers.Set(slot, -1f);
         SlotHasOutput.Set(slot, false);
-        SlotInputTypes.Set(slot, -1);
-        SlotQuantities.Set(slot, 0);
+
+        int remaining = SlotQuantities.Get(slot) - 1;
+        SlotQuantities.Set(slot, Mathf.Max(0, remaining));
+
+        if (remaining > 0)
+        {
+            float nextTime = GetCookTime(inputType);
+            SlotTimers.Set(slot, nextTime);
+        }
+        else
+        {
+            SlotTimers.Set(slot, -1f);
+            SlotInputTypes.Set(slot, -1);
+            SlotQuantities.Set(slot, 0);
+        }
     }
 
     private float GetCookTime(int inputType)
