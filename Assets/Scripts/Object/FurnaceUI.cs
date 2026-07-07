@@ -154,12 +154,17 @@ public class FurnaceUI : MonoBehaviour
             if (inputSlots[i] != null)
             {
                 float t = furnace.GetSlotTimer(i);
-                inputSlots[i].UpdateVisual(t > 0f ? ItemType.Iron : null, 0, t > 0f ? Mathf.CeilToInt(t) + "s" : "");
+                int inputType = furnace.GetSlotInputType(i);
+                ItemType? visualType = inputType == 0 ? ItemType.Iron : (inputType == 1 ? ItemType.RawChicken : (inputType == 2 ? ItemType.RawFish : (ItemType?)null));
+                string label = t > 0f ? Mathf.CeilToInt(t) + "s" : (furnace.HasOutput(i) ? "DONE" : "");
+                inputSlots[i].UpdateVisual(t >= 0f ? visualType : null, 0, label);
             }
 
             if (outputSlots[i] != null)
             {
-                outputSlots[i].UpdateVisual(furnace.HasOutput(i) ? ItemType.IronIngot : null, 0, furnace.HasOutput(i) ? "READY" : "");
+                int inputType = furnace.GetSlotInputType(i);
+                ItemType outputType = inputType == 0 ? ItemType.IronIngot : (inputType == 1 ? ItemType.CookedChicken : (inputType == 2 ? ItemType.CookedFish : ItemType.IronIngot));
+                outputSlots[i].UpdateVisual(furnace.HasOutput(i) ? outputType : null, 0, furnace.HasOutput(i) ? "READY" : "");
             }
         }
 
@@ -202,27 +207,17 @@ public class FurnaceUI : MonoBehaviour
     public void HandleSlotDrop(FurnaceSlotUI.SlotKind fromKind, int fromIndex, FurnaceSlotUI.SlotKind toKind, int toIndex)
     {
         if (playerInventory == null || furnace == null) return;
+        if (fromKind != FurnaceSlotUI.SlotKind.Inventory && fromKind != FurnaceSlotUI.SlotKind.FurnaceOutput) return;
 
         if (fromKind == FurnaceSlotUI.SlotKind.Inventory)
         {
             ItemType? itemType = playerInventory.GetSlotItemType(fromIndex);
+            if (itemType == null) return;
+
             if (itemType == ItemType.Wood && toKind == FurnaceSlotUI.SlotKind.FurnaceFuel)
-            {
-                furnace.TryAddFuelFromSlot(playerInventory, fromIndex);
-            }
-            else if (itemType == ItemType.Iron && toKind == FurnaceSlotUI.SlotKind.FurnaceInput)
-            {
-                furnace.TryAddIronFromSlot(playerInventory, fromIndex);
-            }
-            else if (itemType == ItemType.RawChicken || itemType == ItemType.RawFish)
-            {
-                if (PickupUIManager.instance != null)
-                    PickupUIManager.instance.ShowInfo("Use Campfire for food");
-            }
-            else if (PickupUIManager.instance != null)
-            {
-                PickupUIManager.instance.ShowInfo("Invalid furnace item");
-            }
+                furnace.TryAddToFurnaceFromSlot(playerInventory, fromIndex, true, -1);
+            else if ((itemType == ItemType.Iron || itemType == ItemType.RawChicken || itemType == ItemType.RawFish) && (toKind == FurnaceSlotUI.SlotKind.FurnaceInput || toKind == FurnaceSlotUI.SlotKind.Inventory))
+                furnace.TryAddToFurnaceFromSlot(playerInventory, fromIndex, false, -1);
         }
         else if (fromKind == FurnaceSlotUI.SlotKind.FurnaceOutput)
         {
