@@ -165,8 +165,9 @@ public class FurnaceUI : MonoBehaviour
             if (outputSlots[i] != null)
             {
                 int inputType = furnace.GetSlotInputType(i);
+                int outCount = furnace.GetOutputCount(i);
                 ItemType outputType = inputType == 0 ? ItemType.IronIngot : (inputType == 1 ? ItemType.CookedChicken : (inputType == 2 ? ItemType.CookedFish : (inputType == 3 ? ItemType.Ash : ItemType.IronIngot)));
-                outputSlots[i].UpdateVisual(furnace.HasOutput(i) ? outputType : null, 0, furnace.HasOutput(i) ? "READY" : "");
+                outputSlots[i].UpdateVisual(furnace.HasOutput(i) ? outputType : null, outCount, outCount > 0 ? "READY\n" + outCount : "");
             }
         }
 

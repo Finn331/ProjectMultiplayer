@@ -12,7 +12,7 @@ public class FusionFurnace : NetworkBehaviour
     [Networked, Capacity(SlotCount)]
     private NetworkArray<float> SlotTimers { get; }
     [Networked, Capacity(SlotCount)]
-    private NetworkArray<bool> SlotHasOutput { get; }
+    private NetworkArray<int> SlotOutputCounts { get; }
     [Networked, Capacity(SlotCount)]
     private NetworkArray<int> SlotInputTypes { get; }
     [Networked, Capacity(SlotCount)]
@@ -29,7 +29,8 @@ public class FusionFurnace : NetworkBehaviour
     private readonly GameObject[] slotVisuals = new GameObject[SlotCount];
 
     public bool HasFuel => FuelTimer > 0f;
-    public bool HasOutput(int slot) => slot >= 0 && slot < SlotCount && SlotHasOutput.Get(slot);
+    public bool HasOutput(int slot) => slot >= 0 && slot < SlotCount && SlotOutputCounts.Get(slot) > 0;
+    public int GetOutputCount(int slot) => slot >= 0 && slot < SlotCount ? SlotOutputCounts.Get(slot) : 0;
     public float FuelTimerValue => FuelTimer;
     public float GetSlotTimer(int slot) => slot >= 0 && slot < SlotCount ? SlotTimers.Get(slot) : -1f;
     public int GetSlotInputType(int slot) => slot >= 0 && slot < SlotCount ? SlotInputTypes.Get(slot) : -1;
@@ -56,7 +57,7 @@ public class FusionFurnace : NetworkBehaviour
             for (int i = 0; i < SlotCount; i++)
             {
                 SlotTimers.Set(i, -1f);
-                SlotHasOutput.Set(i, false);
+                SlotOutputCounts.Set(i, 0);
                 SlotInputTypes.Set(i, -1);
                 SlotQuantities.Set(i, 0);
             }
@@ -95,7 +96,7 @@ public class FusionFurnace : NetworkBehaviour
 
                 if (timer <= 0f)
                 {
-                    SlotHasOutput.Set(i, true);
+                    SlotOutputCounts.Set(i, SlotOutputCounts.Get(i) + 1);
                 }
             }
         }
@@ -105,7 +106,7 @@ public class FusionFurnace : NetworkBehaviour
     {
         for (int i = 0; i < SlotCount; i++)
         {
-            bool hasOutput = SlotHasOutput.Get(i);
+            bool hasOutput = SlotOutputCounts.Get(i) > 0;
             float timer = SlotTimers.Get(i);
             bool hasInput = timer > 0f || hasOutput;
 
@@ -222,7 +223,7 @@ public class FusionFurnace : NetworkBehaviour
         {
             float cookTime = GetCookTime(inputType);
             SlotTimers.Set(targetSlot, cookTime);
-            SlotHasOutput.Set(targetSlot, false);
+            SlotOutputCounts.Set(targetSlot, 0);
             SlotInputTypes.Set(targetSlot, inputType);
         }
     }
@@ -238,7 +239,7 @@ public class FusionFurnace : NetworkBehaviour
     private void PickupOutputInternal(PlayerInventory inventory, int slot)
     {
         if (slot < 0 || slot >= SlotCount) return;
-        if (!SlotHasOutput.Get(slot)) return;
+        if (!SlotOutputCounts.Get(slot)) return;
 
         int inputType = SlotInputTypes.Get(slot);
         ItemType outputItem = inputType == 0 ? ItemType.IronIngot
@@ -248,7 +249,7 @@ public class FusionFurnace : NetworkBehaviour
             : ItemType.IronIngot)));
 
         inventory.AddItem(outputItem, 1);
-        SlotHasOutput.Set(slot, false);
+        SlotOutputCounts.Set(slot, Mathf.Max(0, SlotOutputCounts.Get(slot) - 1));
 
         int remaining = SlotQuantities.Get(slot) - 1;
         SlotQuantities.Set(slot, Mathf.Max(0, remaining));
@@ -281,7 +282,7 @@ public class FusionFurnace : NetworkBehaviour
 
         for (int i = 0; i < SlotCount; i++)
         {
-            if (SlotTimers.Get(i) < 0f && !SlotHasOutput.Get(i))
+            if (SlotTimers.Get(i) < 0f && SlotOutputCounts.Get(i) == 0)
                 return i;
         }
 
