@@ -152,24 +152,23 @@ public class FurnaceUI : MonoBehaviour
 
             if (outputIcons[i] != null)
             {
-            outputIcons[i].color = furnace.HasOutput(i) ? new Color(0.85f, 0.85f, 0.9f) : new Color(0.3f, 0.25f, 0.2f);
-        }
+                outputIcons[i].color = furnace.HasOutput(i) ? new Color(0.85f, 0.85f, 0.9f) : new Color(0.3f, 0.25f, 0.2f);
+            }
 
         if (playerInventory != null)
         {
-            for (int i = 0; i < playerInventory.InventorySlotCount && i < inventorySlotTexts.Length; i++)
+            for (int slot = 0; slot < playerInventory.InventorySlotCount && slot < inventorySlotTexts.Length; slot++)
             {
-                if (inventorySlotTexts[i] != null)
+                if (inventorySlotTexts[slot] != null)
                 {
-                    ItemType? itemType = playerInventory.GetSlotItemType(i);
-                    int amount = playerInventory.GetSlotAmount(i);
-                    inventorySlotTexts[i].text = itemType != null && amount > 0
+                    ItemType? itemType = playerInventory.GetSlotItemType(slot);
+                    int amount = playerInventory.GetSlotAmount(slot);
+                    inventorySlotTexts[slot].text = itemType != null && amount > 0
                         ? itemType.Value.ToString() + "\n" + amount
                         : "";
                 }
             }
         }
-    }
     }
 
     private void ToggleIgnite()
