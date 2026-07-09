@@ -113,6 +113,7 @@ public class FusionFurnace : NetworkBehaviour
 
             float progress = CookTimers.Get(i) + delta;
             float cookTime = GetCookTime(inputType);
+            if (progress > cookTime * 2f) progress = 0f;
             if (progress >= cookTime)
             {
                 progress = 0f;
@@ -352,6 +353,10 @@ public class FusionFurnace : NetworkBehaviour
         if (remaining <= 0)
         {
             InputTypes.Set(slot, -1);
+            CookTimers.Set(slot, 0f);
+        }
+        else
+        {
             CookTimers.Set(slot, 0f);
         }
     }
