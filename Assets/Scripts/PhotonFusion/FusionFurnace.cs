@@ -284,6 +284,28 @@ public class FusionFurnace : NetworkBehaviour
         return true;
     }
 
+    public bool TryPickupInput(PlayerInventory inventory, int slot)
+    {
+        if (inventory == null) return false;
+        NetworkObject inventoryObject = inventory.GetComponentInParent<NetworkObject>();
+        if (inventoryObject == null) return false;
+
+        if (HasStateAuthority) PickupInputInternal(inventory, slot);
+        else RPC_PickupInput(inventoryObject, slot);
+        return true;
+    }
+
+    public bool TryPickupFuel(PlayerInventory inventory)
+    {
+        if (inventory == null) return false;
+        NetworkObject inventoryObject = inventory.GetComponentInParent<NetworkObject>();
+        if (inventoryObject == null) return false;
+
+        if (HasStateAuthority) PickupFuelInternal(inventory);
+        else RPC_PickupFuel(inventoryObject);
+        return true;
+    }
+
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
     private void RPC_PickupOutput(NetworkObject inventoryObject, int slot)
     {
@@ -303,6 +325,49 @@ public class FusionFurnace : NetworkBehaviour
         int remaining = outputAmount - accepted;
         OutputAmounts.Set(slot, Mathf.Max(0, remaining));
         if (remaining <= 0) OutputTypes.Set(slot, -1);
+    }
+
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    private void RPC_PickupInput(NetworkObject inventoryObject, int slot)
+    {
+        PlayerInventory inventory = inventoryObject != null ? inventoryObject.GetComponentInChildren<PlayerInventory>() : null;
+        if (inventory == null) return;
+        PickupInputInternal(inventory, slot);
+    }
+
+    private void PickupInputInternal(PlayerInventory inventory, int slot)
+    {
+        if (slot < 0 || slot >= SlotCount) return;
+        int inputType = InputTypes.Get(slot);
+        int inputAmount = InputAmounts.Get(slot);
+        if (inputType < 0 || inputAmount <= 0) return;
+
+        int accepted = inventory.AddItem((ItemType)inputType, inputAmount);
+        int remaining = inputAmount - accepted;
+        InputAmounts.Set(slot, Mathf.Max(0, remaining));
+        if (remaining <= 0)
+        {
+            InputTypes.Set(slot, -1);
+            CookTimers.Set(slot, 0f);
+        }
+    }
+
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    private void RPC_PickupFuel(NetworkObject inventoryObject)
+    {
+        PlayerInventory inventory = inventoryObject != null ? inventoryObject.GetComponentInChildren<PlayerInventory>() : null;
+        if (inventory == null) return;
+        PickupFuelInternal(inventory);
+    }
+
+    private void PickupFuelInternal(PlayerInventory inventory)
+    {
+        if (FuelType < 0 || FuelAmount <= 0) return;
+
+        int accepted = inventory.AddItem((ItemType)FuelType, FuelAmount);
+        int remaining = FuelAmount - accepted;
+        FuelAmount = Mathf.Max(0, remaining);
+        if (remaining <= 0) FuelType = -1;
     }
 
     private void AddOutput(int slot, int outputType, int amount)
