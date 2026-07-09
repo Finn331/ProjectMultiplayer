@@ -18,7 +18,6 @@ public class FurnaceUI : MonoBehaviour
     private FurnaceSlotUI[] inventorySlots = new FurnaceSlotUI[24];
 
     private Image fuelBarFill;
-    private Image[] cookBarFills = new Image[4];
 
     private Button igniteButton;
     private TextMeshProUGUI igniteButtonText;
@@ -124,26 +123,7 @@ public class FurnaceUI : MonoBehaviour
         for (int i = 0; i < 4; i++)
         {
             float x = right - 84f + i * 56f;
-            inputSlots[i] = CreateSlot("InputSlot" + i, FurnaceSlotUI.SlotKind.FurnaceInput, i, new Vector2(x, 55f));
-
-            GameObject cookBarGo = new GameObject("CookBar" + i, typeof(RectTransform), typeof(Image));
-            cookBarGo.transform.SetParent(panelObject.transform, false);
-            RectTransform cbRect = cookBarGo.GetComponent<RectTransform>();
-            cbRect.anchorMin = new Vector2(0.5f, 0.5f); cbRect.anchorMax = new Vector2(0.5f, 0.5f);
-            cbRect.pivot = new Vector2(0.5f, 0.5f); cbRect.sizeDelta = new Vector2(48f, 4f);
-            cbRect.anchoredPosition = new Vector2(x, 30f);
-            cookBarGo.GetComponent<Image>().color = new Color(0.2f, 0.2f, 0.2f, 0.9f);
-
-            GameObject cookFillGo = new GameObject("CookBarFill" + i, typeof(RectTransform), typeof(Image));
-            cookFillGo.transform.SetParent(cookBarGo.transform, false);
-            RectTransform cfRect = cookFillGo.GetComponent<RectTransform>();
-            cfRect.anchorMin = Vector2.zero; cfRect.anchorMax = Vector2.one;
-            cfRect.pivot = new Vector2(0f, 0.5f); cfRect.sizeDelta = Vector2.zero; cfRect.anchoredPosition = Vector2.zero;
-            cookBarFills[i] = cookFillGo.GetComponent<Image>();
-            cookBarFills[i].type = Image.Type.Filled;
-            cookBarFills[i].fillMethod = Image.FillMethod.Horizontal;
-            cookBarFills[i].color = new Color(0.2f, 0.8f, 0.3f, 0.9f);
-            cookBarFills[i].raycastTarget = false;
+            inputSlots[i] = CreateSlot("InputSlot" + i, FurnaceSlotUI.SlotKind.FurnaceInput, i, new Vector2(x, 40f));
         }
 
         MakeLabel(panelObject.transform, "OUTPUT", new Vector2(right, 0f), 12);
@@ -315,15 +295,6 @@ public class FurnaceUI : MonoBehaviour
                 string label = qty > 0 ? remaining + "s" : "";
                 if (qty > 0) label += "\n" + qty;
                 inputSlots[i].UpdateVisual(qty > 0 ? visualType : null, qty, label);
-            }
-
-            if (cookBarFills[i] != null)
-            {
-                float t = furnace.GetSlotTimer(i);
-                int qty = furnace.GetSlotQuantity(i);
-                int inputType = furnace.GetSlotInputType(i);
-                float cookTime = inputType >= 0 ? GetCookTimeForDisplay(inputType) : 1f;
-                cookBarFills[i].fillAmount = (qty > 0) ? Mathf.Clamp01(t / cookTime) : 0f;
             }
 
             if (outputSlots[i] != null)
