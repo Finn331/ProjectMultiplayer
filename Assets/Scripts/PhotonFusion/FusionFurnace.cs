@@ -123,6 +123,7 @@ public class FusionFurnace : NetworkBehaviour
                 {
                     InputTypes.Set(i, -1);
                     CookTimers.Set(i, 0f);
+                    InputAmounts.Set(i, 0);
                 }
                 else
                 {

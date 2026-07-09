@@ -310,17 +310,20 @@ public class FurnaceUI : MonoBehaviour
                 int qty = furnace.GetSlotQuantity(i);
                 float t = furnace.GetSlotTimer(i);
                 ItemType? visualType = inputType >= 0 ? (ItemType)inputType : (ItemType?)null;
-                string label = t > 0f ? Mathf.CeilToInt(t) + "s" : "";
+                float cookTime = inputType >= 0 ? GetCookTimeForDisplay(inputType) : 1f;
+                float remaining = qty > 0 ? Mathf.Max(0f, Mathf.Ceil(cookTime - t)) : 0f;
+                string label = qty > 0 ? remaining + "s" : "";
                 if (qty > 0) label += "\n" + qty;
-                inputSlots[i].UpdateVisual(t >= 0f || qty > 0 ? visualType : null, qty, label);
+                inputSlots[i].UpdateVisual(qty > 0 ? visualType : null, qty, label);
             }
 
             if (cookBarFills[i] != null)
             {
                 float t = furnace.GetSlotTimer(i);
+                int qty = furnace.GetSlotQuantity(i);
                 int inputType = furnace.GetSlotInputType(i);
                 float cookTime = inputType >= 0 ? GetCookTimeForDisplay(inputType) : 1f;
-                cookBarFills[i].fillAmount = t > 0f ? Mathf.Clamp01(t / cookTime) : 0f;
+                cookBarFills[i].fillAmount = (qty > 0) ? Mathf.Clamp01(t / cookTime) : 0f;
             }
 
             if (outputSlots[i] != null)
