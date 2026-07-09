@@ -4,19 +4,22 @@ using UnityEngine;
 public class FusionFurnace : NetworkBehaviour
 {
     private const int SlotCount = 4;
+    private const int MaxStack = 16;
     public const float SmeltTimeSeconds = 10f;
+    private const float FoodCookTimeSeconds = 8f;
+    private const float WoodToAshTimeSeconds = 8f;
     private const float FuelBurnTimePerWood = 30f;
 
-    [Networked] private float FuelTimer { get; set; }
+    [Networked] private float BurnTimer { get; set; }
     [Networked] private NetworkBool IsLit { get; set; }
-    [Networked, Capacity(SlotCount)]
-    private NetworkArray<float> SlotTimers { get; }
-    [Networked, Capacity(SlotCount)]
-    private NetworkArray<int> SlotOutputCounts { get; }
-    [Networked, Capacity(SlotCount)]
-    private NetworkArray<int> SlotInputTypes { get; }
-    [Networked, Capacity(SlotCount)]
-    private NetworkArray<int> SlotQuantities { get; }
+    [Networked] private int FuelType { get; set; }
+    [Networked] private int FuelAmount { get; set; }
+
+    [Networked, Capacity(SlotCount)] private NetworkArray<int> InputTypes { get; }
+    [Networked, Capacity(SlotCount)] private NetworkArray<int> InputAmounts { get; }
+    [Networked, Capacity(SlotCount)] private NetworkArray<float> CookTimers { get; }
+    [Networked, Capacity(SlotCount)] private NetworkArray<int> OutputTypes { get; }
+    [Networked, Capacity(SlotCount)] private NetworkArray<int> OutputAmounts { get; }
 
     private readonly Vector3[] slotPositions = new Vector3[]
     {
@@ -28,82 +31,107 @@ public class FusionFurnace : NetworkBehaviour
 
     private readonly GameObject[] slotVisuals = new GameObject[SlotCount];
 
-    public bool HasFuel => FuelTimer > 0f;
-    public bool HasOutput(int slot) => slot >= 0 && slot < SlotCount && SlotOutputCounts.Get(slot) > 0;
-    public int GetOutputCount(int slot) => slot >= 0 && slot < SlotCount ? SlotOutputCounts.Get(slot) : 0;
-    public float FuelTimerValue => FuelTimer;
-    public float GetSlotTimer(int slot) => slot >= 0 && slot < SlotCount ? SlotTimers.Get(slot) : -1f;
-    public int GetSlotInputType(int slot) => slot >= 0 && slot < SlotCount ? SlotInputTypes.Get(slot) : -1;
-    public int GetSlotQuantity(int slot) => slot >= 0 && slot < SlotCount ? SlotQuantities.Get(slot) : 0;
+    public bool HasFuel => BurnTimer > 0f || FuelAmount > 0;
+    public float FuelTimerValue => BurnTimer;
+    public int FuelStackAmount => FuelAmount;
     public bool IsLitValue => IsLit;
+
+    public bool HasOutput(int slot) => slot >= 0 && slot < SlotCount && OutputAmounts.Get(slot) > 0;
+    public int GetOutputCount(int slot) => slot >= 0 && slot < SlotCount ? OutputAmounts.Get(slot) : 0;
+    public int GetOutputType(int slot) => slot >= 0 && slot < SlotCount ? OutputTypes.Get(slot) : -1;
+
+    public float GetSlotTimer(int slot) => slot >= 0 && slot < SlotCount ? CookTimers.Get(slot) : -1f;
+    public int GetSlotInputType(int slot) => slot >= 0 && slot < SlotCount ? InputTypes.Get(slot) : -1;
+    public int GetSlotQuantity(int slot) => slot >= 0 && slot < SlotCount ? InputAmounts.Get(slot) : 0;
 
     public void ToggleLit()
     {
-        RPC_ToggleLit();
+        if (HasStateAuthority) ToggleLitInternal();
+        else RPC_ToggleLit();
     }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
     private void RPC_ToggleLit()
     {
-        if (!HasFuel) return;
+        ToggleLitInternal();
+    }
+
+    private void ToggleLitInternal()
+    {
+        if (!IsLit && BurnTimer <= 0f && FuelAmount <= 0) return;
         IsLit = !IsLit;
     }
 
     public override void Spawned()
     {
-        if (HasStateAuthority)
+        if (!HasStateAuthority) return;
+
+        BurnTimer = 0f;
+        IsLit = false;
+        FuelType = -1;
+        FuelAmount = 0;
+
+        for (int i = 0; i < SlotCount; i++)
         {
-            FuelTimer = 0f;
-            for (int i = 0; i < SlotCount; i++)
-            {
-                SlotTimers.Set(i, -1f);
-                SlotOutputCounts.Set(i, 0);
-                SlotInputTypes.Set(i, -1);
-                SlotQuantities.Set(i, 0);
-            }
+            InputTypes.Set(i, -1);
+            InputAmounts.Set(i, 0);
+            CookTimers.Set(i, 0f);
+            OutputTypes.Set(i, -1);
+            OutputAmounts.Set(i, 0);
         }
     }
 
     public override void FixedUpdateNetwork()
     {
-        if (!HasStateAuthority) return;
+        if (!HasStateAuthority || !IsLit) return;
+
+        if (BurnTimer <= 0f)
+        {
+            if (FuelAmount <= 0)
+            {
+                IsLit = false;
+                return;
+            }
+
+            FuelAmount -= 1;
+            BurnTimer = GetFuelBurnTime(FuelType);
+            if (FuelAmount <= 0) FuelType = -1;
+        }
 
         float delta = Runner.DeltaTime;
-
-        if (IsLit && FuelTimer > 0f)
-        {
-            FuelTimer = Mathf.Max(0f, FuelTimer - delta);
-        }
-
-        bool hasFuel = FuelTimer > 0f;
-        if (!hasFuel)
-        {
-            IsLit = false;
-        }
-
-        if (!IsLit)
-        {
-            return;
-        }
+        BurnTimer = Mathf.Max(0f, BurnTimer - delta);
 
         for (int i = 0; i < SlotCount; i++)
         {
-            float timer = SlotTimers.Get(i);
-            if (timer > 0f && hasFuel && IsLit)
-            {
-                timer = Mathf.Max(0f, timer - delta);
-                SlotTimers.Set(i, timer);
+            int inputType = InputTypes.Get(i);
+            int inputAmount = InputAmounts.Get(i);
+            if (inputType < 0 || inputAmount <= 0) continue;
 
-                if (timer <= 0f)
+            int outputType = GetOutputTypeForInput(inputType);
+            int outputSlot = FindOutputSlot(outputType);
+            if (outputSlot < 0) continue;
+
+            float progress = CookTimers.Get(i) + delta;
+            float cookTime = GetCookTime(inputType);
+            if (progress >= cookTime)
+            {
+                progress = 0f;
+                InputAmounts.Set(i, inputAmount - 1);
+                AddOutput(outputSlot, outputType, 1);
+
+                if (inputAmount - 1 <= 0)
                 {
-                    int newOutputCount = SlotOutputCounts.Get(i) + 1;
-                    SlotOutputCounts.Set(i, newOutputCount);
-                    if (SlotQuantities.Get(i) > newOutputCount)
-                    {
-                        float nextTime = GetCookTime(SlotInputTypes.Get(i));
-                        SlotTimers.Set(i, nextTime);
-                    }
+                    InputTypes.Set(i, -1);
+                    CookTimers.Set(i, 0f);
                 }
+                else
+                {
+                    CookTimers.Set(i, progress);
+                }
+            }
+            else
+            {
+                CookTimers.Set(i, progress);
             }
         }
     }
@@ -112,32 +140,21 @@ public class FusionFurnace : NetworkBehaviour
     {
         for (int i = 0; i < SlotCount; i++)
         {
-            bool hasOutput = SlotOutputCounts.Get(i) > 0;
-            float timer = SlotTimers.Get(i);
-            bool hasInput = timer > 0f || hasOutput;
+            bool hasInput = InputAmounts.Get(i) > 0;
+            bool hasOutput = OutputAmounts.Get(i) > 0;
+            bool shouldShow = hasInput || hasOutput;
 
-            if (hasInput && slotVisuals[i] == null)
+            if (shouldShow && slotVisuals[i] == null)
             {
-                slotVisuals[i] = GameObject.CreatePrimitive(hasOutput ? PrimitiveType.Cube : PrimitiveType.Cube);
-                slotVisuals[i].name = hasOutput ? "IronIngotVisual" : "IronVisual";
+                slotVisuals[i] = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                slotVisuals[i].name = hasOutput ? "FurnaceOutputVisual" : "FurnaceInputVisual";
                 slotVisuals[i].transform.SetParent(transform, false);
                 slotVisuals[i].transform.localPosition = slotPositions[i];
                 slotVisuals[i].transform.localScale = hasOutput
                     ? new Vector3(0.15f, 0.06f, 0.25f)
                     : new Vector3(0.2f, 0.2f, 0.2f);
-
-                if (hasOutput)
-                {
-                    Renderer r = slotVisuals[i].GetComponent<Renderer>();
-                    if (r != null) r.material.color = new Color(0.8f, 0.8f, 0.85f);
-                }
-                else
-                {
-                    Renderer r = slotVisuals[i].GetComponent<Renderer>();
-                    if (r != null) r.material.color = new Color(0.4f, 0.3f, 0.25f);
-                }
             }
-            else if (!hasInput && slotVisuals[i] != null)
+            else if (!shouldShow && slotVisuals[i] != null)
             {
                 Destroy(slotVisuals[i]);
                 slotVisuals[i] = null;
@@ -147,43 +164,43 @@ public class FusionFurnace : NetworkBehaviour
 
     public bool TryAddFuel(PlayerInventory inventory)
     {
-        return TryAddToFurnaceFromSlot(inventory, -1, true, -1);
+        if (inventory == null || !inventory.HasItem(ItemType.Wood, 1)) return false;
+        NetworkObject inventoryObject = inventory.GetComponentInParent<NetworkObject>();
+        if (inventoryObject == null) return false;
+
+        if (HasStateAuthority) AddFuelInternal(inventory, -1);
+        else RPC_AddFuel(inventoryObject, -1);
+        return true;
     }
 
     public bool TryAddToFurnaceFromSlot(PlayerInventory inventory, int playerSlot, bool isFuel, int furnaceSlot)
     {
         if (inventory == null) return false;
+        NetworkObject inventoryObject = inventory.GetComponentInParent<NetworkObject>();
+        if (inventoryObject == null) return false;
 
-        ItemType? itemType = isFuel ? null : (playerSlot >= 0 ? inventory.GetSlotItemType(playerSlot) : null);
         if (isFuel)
         {
-            if (!inventory.HasItem(ItemType.Wood, 1)) return false;
+            if (playerSlot >= 0 && inventory.GetSlotItemType(playerSlot) != ItemType.Wood) return false;
+            if (playerSlot >= 0 && inventory.GetSlotAmount(playerSlot) <= 0) return false;
         }
         else
         {
-            if (itemType == null) return false;
-            if (itemType != ItemType.Iron && itemType != ItemType.RawChicken && itemType != ItemType.RawFish && itemType != ItemType.Wood) return false;
-            if (inventory.GetSlotAmount(playerSlot) <= 0) return false;
+            ItemType? itemType = inventory.GetSlotItemType(playerSlot);
+            if (!IsValidInput(itemType)) return false;
         }
-
-        NetworkObject inventoryObject = inventory.GetComponentInParent<NetworkObject>();
-        if (inventoryObject == null) return false;
 
         if (HasStateAuthority) AddToFurnaceInternal(inventory, playerSlot, isFuel, furnaceSlot);
         else RPC_AddToFurnace(inventoryObject, playerSlot, isFuel, furnaceSlot);
         return true;
     }
 
-    public bool TryPickupOutput(PlayerInventory inventory, int slot)
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    private void RPC_AddFuel(NetworkObject inventoryObject, int playerSlot)
     {
-        if (inventory == null) return false;
-
-        NetworkObject inventoryObject = inventory.GetComponentInParent<NetworkObject>();
-        if (inventoryObject == null) return false;
-
-        if (HasStateAuthority) PickupOutputInternal(inventory, slot);
-        else RPC_PickupOutput(inventoryObject, slot);
-        return true;
+        PlayerInventory inventory = inventoryObject != null ? inventoryObject.GetComponentInChildren<PlayerInventory>() : null;
+        if (inventory == null) return;
+        AddFuelInternal(inventory, playerSlot);
     }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
@@ -198,29 +215,26 @@ public class FusionFurnace : NetworkBehaviour
     {
         if (isFuel)
         {
-            if (!inventory.HasItem(ItemType.Wood, 1)) return;
-            if (!inventory.RemoveItem(ItemType.Wood, 1)) return;
-            FuelTimer += FuelBurnTimePerWood;
+            AddFuelInternal(inventory, playerSlot);
             return;
         }
 
         ItemType? itemType = inventory.GetSlotItemType(playerSlot);
-        if (itemType == null) return;
+        if (!IsValidInput(itemType)) return;
 
-        int inputType = itemType == ItemType.Iron ? 0 : (itemType == ItemType.RawChicken ? 1 : (itemType == ItemType.RawFish ? 2 : (itemType == ItemType.Wood ? 3 : -1)));
-        if (inputType < 0) return;
-
-        int availableAmount = inventory.GetSlotAmount(playerSlot);
-        if (availableAmount <= 0) return;
-
-        int targetSlot = furnaceSlot >= 0 ? furnaceSlot : FindSlotForType(inputType);
+        int inputType = (int)itemType.Value;
+        int targetSlot = furnaceSlot >= 0 ? furnaceSlot : FindInputSlot(inputType);
         if (targetSlot < 0) return;
 
-        int existingQty = SlotQuantities.Get(targetSlot);
-        int maxAdd = 16 - existingQty;
-        int transferAmount = Mathf.Min(availableAmount, maxAdd);
-        if (transferAmount <= 0) return;
+        int currentType = InputTypes.Get(targetSlot);
+        int currentAmount = InputAmounts.Get(targetSlot);
+        if (currentType >= 0 && currentType != inputType) return;
 
+        int freeSpace = MaxStack - currentAmount;
+        if (freeSpace <= 0) return;
+
+        int transferAmount = Mathf.Min(inventory.GetSlotAmount(playerSlot), freeSpace);
+        if (transferAmount <= 0) return;
         if (!inventory.RemoveItemFromSlot(playerSlot, transferAmount, out ItemType removedType)) return;
         if (removedType != itemType.Value)
         {
@@ -228,15 +242,46 @@ public class FusionFurnace : NetworkBehaviour
             return;
         }
 
-        SlotQuantities.Set(targetSlot, existingQty + transferAmount);
+        InputTypes.Set(targetSlot, inputType);
+        InputAmounts.Set(targetSlot, currentAmount + transferAmount);
+    }
 
-        if (existingQty == 0)
+    private void AddFuelInternal(PlayerInventory inventory, int playerSlot)
+    {
+        int availableAmount = playerSlot >= 0 ? inventory.GetSlotAmount(playerSlot) : 1;
+        if (availableAmount <= 0) return;
+
+        int freeSpace = FuelType == -1 || FuelType == (int)ItemType.Wood ? MaxStack - FuelAmount : 0;
+        if (freeSpace <= 0) return;
+
+        int transferAmount = Mathf.Min(availableAmount, freeSpace);
+        if (playerSlot >= 0)
         {
-            float cookTime = GetCookTime(inputType);
-            SlotTimers.Set(targetSlot, cookTime);
-            SlotOutputCounts.Set(targetSlot, 0);
-            SlotInputTypes.Set(targetSlot, inputType);
+            if (!inventory.RemoveItemFromSlot(playerSlot, transferAmount, out ItemType removedType)) return;
+            if (removedType != ItemType.Wood)
+            {
+                inventory.AddItemToSlot(removedType, transferAmount, playerSlot);
+                return;
+            }
         }
+        else if (!inventory.RemoveItem(ItemType.Wood, transferAmount))
+        {
+            return;
+        }
+
+        FuelType = (int)ItemType.Wood;
+        FuelAmount += transferAmount;
+    }
+
+    public bool TryPickupOutput(PlayerInventory inventory, int slot)
+    {
+        if (inventory == null) return false;
+        NetworkObject inventoryObject = inventory.GetComponentInParent<NetworkObject>();
+        if (inventoryObject == null) return false;
+
+        if (HasStateAuthority) PickupOutputInternal(inventory, slot);
+        else RPC_PickupOutput(inventoryObject, slot);
+        return true;
     }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
@@ -250,53 +295,84 @@ public class FusionFurnace : NetworkBehaviour
     private void PickupOutputInternal(PlayerInventory inventory, int slot)
     {
         if (slot < 0 || slot >= SlotCount) return;
-        if (SlotOutputCounts.Get(slot) <= 0) return;
+        int outputType = OutputTypes.Get(slot);
+        int outputAmount = OutputAmounts.Get(slot);
+        if (outputType < 0 || outputAmount <= 0) return;
 
-        int inputType = SlotInputTypes.Get(slot);
-        ItemType outputItem = inputType == 0 ? ItemType.IronIngot
-            : (inputType == 1 ? ItemType.CookedChicken
-            : (inputType == 2 ? ItemType.CookedFish
-            : (inputType == 3 ? ItemType.Ash
-            : ItemType.IronIngot)));
-
-        inventory.AddItem(outputItem, 1);
-        SlotOutputCounts.Set(slot, Mathf.Max(0, SlotOutputCounts.Get(slot) - 1));
-
-        int remaining = SlotQuantities.Get(slot) - 1;
-        SlotQuantities.Set(slot, Mathf.Max(0, remaining));
-
-        if (remaining > 0)
-        {
-            float nextTime = GetCookTime(inputType);
-            SlotTimers.Set(slot, nextTime);
-        }
-        else
-        {
-            SlotTimers.Set(slot, -1f);
-            SlotInputTypes.Set(slot, -1);
-            SlotQuantities.Set(slot, 0);
-        }
+        int accepted = inventory.AddItem((ItemType)outputType, outputAmount);
+        int remaining = outputAmount - accepted;
+        OutputAmounts.Set(slot, Mathf.Max(0, remaining));
+        if (remaining <= 0) OutputTypes.Set(slot, -1);
     }
 
-    private float GetCookTime(int inputType)
+    private void AddOutput(int slot, int outputType, int amount)
     {
-        return inputType == 0 ? SmeltTimeSeconds : 8f;
+        if (OutputTypes.Get(slot) == -1) OutputTypes.Set(slot, outputType);
+        OutputAmounts.Set(slot, Mathf.Min(MaxStack, OutputAmounts.Get(slot) + amount));
     }
 
-    private int FindSlotForType(int inputType)
+    private int FindInputSlot(int inputType)
     {
         for (int i = 0; i < SlotCount; i++)
         {
-            if (SlotInputTypes.Get(i) == inputType && SlotQuantities.Get(i) < 16)
+            if (InputTypes.Get(i) == inputType && InputAmounts.Get(i) < MaxStack)
                 return i;
         }
 
         for (int i = 0; i < SlotCount; i++)
         {
-            if (SlotTimers.Get(i) < 0f && SlotOutputCounts.Get(i) == 0)
+            if (InputTypes.Get(i) < 0 && InputAmounts.Get(i) <= 0)
                 return i;
         }
 
         return -1;
+    }
+
+    private int FindOutputSlot(int outputType)
+    {
+        for (int i = 0; i < SlotCount; i++)
+        {
+            if (OutputTypes.Get(i) == outputType && OutputAmounts.Get(i) < MaxStack)
+                return i;
+        }
+
+        for (int i = 0; i < SlotCount; i++)
+        {
+            if (OutputTypes.Get(i) < 0 && OutputAmounts.Get(i) <= 0)
+                return i;
+        }
+
+        return -1;
+    }
+
+    private static bool IsValidInput(ItemType? itemType)
+    {
+        return itemType == ItemType.Iron
+            || itemType == ItemType.RawChicken
+            || itemType == ItemType.RawFish
+            || itemType == ItemType.Wood;
+    }
+
+    private static int GetOutputTypeForInput(int inputType)
+    {
+        ItemType itemType = (ItemType)inputType;
+        if (itemType == ItemType.Iron) return (int)ItemType.IronIngot;
+        if (itemType == ItemType.RawChicken) return (int)ItemType.CookedChicken;
+        if (itemType == ItemType.RawFish) return (int)ItemType.CookedFish;
+        if (itemType == ItemType.Wood) return (int)ItemType.Ash;
+        return -1;
+    }
+
+    private static float GetCookTime(int inputType)
+    {
+        ItemType itemType = (ItemType)inputType;
+        if (itemType == ItemType.Iron) return SmeltTimeSeconds;
+        if (itemType == ItemType.Wood) return WoodToAshTimeSeconds;
+        return FoodCookTimeSeconds;
+    }
+
+    private static float GetFuelBurnTime(int fuelType)
+    {
+        return fuelType == (int)ItemType.Wood ? FuelBurnTimePerWood : 0f;
     }
 }

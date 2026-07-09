@@ -146,7 +146,9 @@ public class FurnaceUI : MonoBehaviour
 
         if (fuelSlot != null)
         {
-            fuelSlot.UpdateVisual(furnace.HasFuel ? ItemType.Wood : null, 0, "Wood");
+            int fuelAmount = furnace.FuelStackAmount;
+            string fuelLabel = fuelAmount > 0 ? "Wood\n" + fuelAmount : "Wood";
+            fuelSlot.UpdateVisual(furnace.HasFuel ? ItemType.Wood : null, fuelAmount, fuelLabel);
         }
 
         for (int i = 0; i < 4; i++)
@@ -156,17 +158,17 @@ public class FurnaceUI : MonoBehaviour
                 float t = furnace.GetSlotTimer(i);
                 int inputType = furnace.GetSlotInputType(i);
                 int qty = furnace.GetSlotQuantity(i);
-                ItemType? visualType = inputType == 0 ? ItemType.Iron : (inputType == 1 ? ItemType.RawChicken : (inputType == 2 ? ItemType.RawFish : (inputType == 3 ? ItemType.Wood : (ItemType?)null)));
-                string label = t > 0f ? Mathf.CeilToInt(t) + "s" : (furnace.HasOutput(i) ? "DONE" : "");
+                ItemType? visualType = inputType >= 0 ? (ItemType)inputType : (ItemType?)null;
+                string label = t > 0f ? Mathf.CeilToInt(t) + "s" : "";
                 if (qty > 0) label += "\n" + qty;
                 inputSlots[i].UpdateVisual(t >= 0f || qty > 0 ? visualType : null, qty, label);
             }
 
             if (outputSlots[i] != null)
             {
-                int inputType = furnace.GetSlotInputType(i);
+                int outputTypeValue = furnace.GetOutputType(i);
                 int outCount = furnace.GetOutputCount(i);
-                ItemType outputType = inputType == 0 ? ItemType.IronIngot : (inputType == 1 ? ItemType.CookedChicken : (inputType == 2 ? ItemType.CookedFish : (inputType == 3 ? ItemType.Ash : ItemType.IronIngot)));
+                ItemType? outputType = outputTypeValue >= 0 ? (ItemType)outputTypeValue : (ItemType?)null;
                 outputSlots[i].UpdateVisual(furnace.HasOutput(i) ? outputType : null, outCount, outCount > 0 ? "READY\n" + outCount : "");
             }
         }
