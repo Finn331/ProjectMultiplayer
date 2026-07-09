@@ -115,7 +115,7 @@ public class FurnaceSlotUI : MonoBehaviour, IBeginDragHandler, IDragHandler, IEn
             foreach (var result in results)
             {
                 FurnaceSlotUI target = result.gameObject.GetComponentInParent<FurnaceSlotUI>();
-                if (target != null && target != this && IsFurnaceTarget(target.Kind))
+                if (target != null && target != this)
                 {
                     Owner.HandleSlotDrop(Kind, SlotIndex, target.Kind, target.SlotIndex);
                     dropHandled = true;
@@ -136,10 +136,5 @@ public class FurnaceSlotUI : MonoBehaviour, IBeginDragHandler, IDragHandler, IEn
             Owner.HandleSlotDrop(source.Kind, source.SlotIndex, Kind, SlotIndex);
             dropHandled = true;
         }
-    }
-
-    private static bool IsFurnaceTarget(SlotKind kind)
-    {
-        return kind == SlotKind.FurnaceFuel || kind == SlotKind.FurnaceInput;
     }
 }

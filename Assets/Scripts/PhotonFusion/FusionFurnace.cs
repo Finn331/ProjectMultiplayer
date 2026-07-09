@@ -173,7 +173,7 @@ public class FusionFurnace : NetworkBehaviour
         return true;
     }
 
-    public bool TryAddToFurnaceFromSlot(PlayerInventory inventory, int playerSlot, bool isFuel, int furnaceSlot)
+    public bool TryAddToFurnaceFromSlot(PlayerInventory inventory, int playerSlot, bool isFuel, int furnaceSlot, int amount = 0)
     {
         if (inventory == null) return false;
         NetworkObject inventoryObject = inventory.GetComponentInParent<NetworkObject>();
@@ -190,8 +190,8 @@ public class FusionFurnace : NetworkBehaviour
             if (!IsValidInput(itemType)) return false;
         }
 
-        if (HasStateAuthority) AddToFurnaceInternal(inventory, playerSlot, isFuel, furnaceSlot);
-        else RPC_AddToFurnace(inventoryObject, playerSlot, isFuel, furnaceSlot);
+        if (HasStateAuthority) AddToFurnaceInternal(inventory, playerSlot, isFuel, furnaceSlot, amount);
+        else RPC_AddToFurnace(inventoryObject, playerSlot, isFuel, furnaceSlot, amount);
         return true;
     }
 
@@ -204,14 +204,14 @@ public class FusionFurnace : NetworkBehaviour
     }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
-    private void RPC_AddToFurnace(NetworkObject inventoryObject, int playerSlot, bool isFuel, int furnaceSlot)
+    private void RPC_AddToFurnace(NetworkObject inventoryObject, int playerSlot, bool isFuel, int furnaceSlot, int amount)
     {
         PlayerInventory inventory = inventoryObject != null ? inventoryObject.GetComponentInChildren<PlayerInventory>() : null;
         if (inventory == null) return;
-        AddToFurnaceInternal(inventory, playerSlot, isFuel, furnaceSlot);
+        AddToFurnaceInternal(inventory, playerSlot, isFuel, furnaceSlot, amount);
     }
 
-    private void AddToFurnaceInternal(PlayerInventory inventory, int playerSlot, bool isFuel, int furnaceSlot)
+    private void AddToFurnaceInternal(PlayerInventory inventory, int playerSlot, bool isFuel, int furnaceSlot, int amount)
     {
         if (isFuel)
         {
@@ -233,7 +233,9 @@ public class FusionFurnace : NetworkBehaviour
         int freeSpace = MaxStack - currentAmount;
         if (freeSpace <= 0) return;
 
-        int transferAmount = Mathf.Min(inventory.GetSlotAmount(playerSlot), freeSpace);
+        int available = inventory.GetSlotAmount(playerSlot);
+        int requested = amount > 0 ? amount : available;
+        int transferAmount = Mathf.Min(Mathf.Min(available, requested), freeSpace);
         if (transferAmount <= 0) return;
         if (!inventory.RemoveItemFromSlot(playerSlot, transferAmount, out ItemType removedType)) return;
         if (removedType != itemType.Value)

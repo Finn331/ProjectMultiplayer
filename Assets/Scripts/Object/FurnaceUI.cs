@@ -258,9 +258,9 @@ public class FurnaceUI : MonoBehaviour
             if (itemType == null) return;
 
             if (targetKind == FurnaceSlotUI.SlotKind.FurnaceFuel && itemType == ItemType.Wood)
-                furnace.TryAddToFurnaceFromSlot(playerInventory, source.SlotIndex, true, -1);
+                furnace.TryAddToFurnaceFromSlot(playerInventory, source.SlotIndex, true, -1, amount);
             else if (targetKind == FurnaceSlotUI.SlotKind.FurnaceInput && IsValidInput(itemType))
-                furnace.TryAddToFurnaceFromSlot(playerInventory, source.SlotIndex, false, -1);
+                furnace.TryAddToFurnaceFromSlot(playerInventory, source.SlotIndex, false, -1, amount);
         }
         else if (source.Kind == FurnaceSlotUI.SlotKind.FurnaceOutput)
         {
