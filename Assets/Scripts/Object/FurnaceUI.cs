@@ -115,6 +115,8 @@ public class FurnaceUI : MonoBehaviour
         ffRect.anchorMin = Vector2.zero; ffRect.anchorMax = Vector2.one;
         ffRect.pivot = new Vector2(0f, 0.5f); ffRect.sizeDelta = Vector2.zero; ffRect.anchoredPosition = Vector2.zero;
         fuelBarFill = fuelFillGo.GetComponent<Image>();
+        fuelBarFill.type = Image.Type.Filled;
+        fuelBarFill.fillMethod = Image.FillMethod.Horizontal;
         fuelBarFill.color = new Color(0.9f, 0.5f, 0.1f, 0.9f);
         fuelBarFill.raycastTarget = false;
 
@@ -138,6 +140,8 @@ public class FurnaceUI : MonoBehaviour
             cfRect.anchorMin = Vector2.zero; cfRect.anchorMax = Vector2.one;
             cfRect.pivot = new Vector2(0f, 0.5f); cfRect.sizeDelta = Vector2.zero; cfRect.anchoredPosition = Vector2.zero;
             cookBarFills[i] = cookFillGo.GetComponent<Image>();
+            cookBarFills[i].type = Image.Type.Filled;
+            cookBarFills[i].fillMethod = Image.FillMethod.Horizontal;
             cookBarFills[i].color = new Color(0.2f, 0.8f, 0.3f, 0.9f);
             cookBarFills[i].raycastTarget = false;
         }
