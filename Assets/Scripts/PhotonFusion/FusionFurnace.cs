@@ -168,7 +168,7 @@ public class FusionFurnace : NetworkBehaviour
         NetworkObject inventoryObject = inventory.GetComponentInParent<NetworkObject>();
         if (inventoryObject == null) return false;
 
-        if (HasStateAuthority) AddFuelInternal(inventory, -1);
+        if (HasStateAuthority) AddFuelInternal(inventory, -1, 0);
         else RPC_AddFuel(inventoryObject, -1);
         return true;
     }
@@ -200,7 +200,7 @@ public class FusionFurnace : NetworkBehaviour
     {
         PlayerInventory inventory = inventoryObject != null ? inventoryObject.GetComponentInChildren<PlayerInventory>() : null;
         if (inventory == null) return;
-        AddFuelInternal(inventory, playerSlot);
+        AddFuelInternal(inventory, playerSlot, 0);
     }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
@@ -215,7 +215,7 @@ public class FusionFurnace : NetworkBehaviour
     {
         if (isFuel)
         {
-            AddFuelInternal(inventory, playerSlot);
+            AddFuelInternal(inventory, playerSlot, amount);
             return;
         }
 
@@ -248,7 +248,7 @@ public class FusionFurnace : NetworkBehaviour
         InputAmounts.Set(targetSlot, currentAmount + transferAmount);
     }
 
-    private void AddFuelInternal(PlayerInventory inventory, int playerSlot)
+    private void AddFuelInternal(PlayerInventory inventory, int playerSlot, int amount)
     {
         int availableAmount = playerSlot >= 0 ? inventory.GetSlotAmount(playerSlot) : 1;
         if (availableAmount <= 0) return;
@@ -256,7 +256,8 @@ public class FusionFurnace : NetworkBehaviour
         int freeSpace = FuelType == -1 || FuelType == (int)ItemType.Wood ? MaxStack - FuelAmount : 0;
         if (freeSpace <= 0) return;
 
-        int transferAmount = Mathf.Min(availableAmount, freeSpace);
+        int requested = amount > 0 ? amount : availableAmount;
+        int transferAmount = Mathf.Min(Mathf.Min(availableAmount, requested), freeSpace);
         if (playerSlot >= 0)
         {
             if (!inventory.RemoveItemFromSlot(playerSlot, transferAmount, out ItemType removedType)) return;
