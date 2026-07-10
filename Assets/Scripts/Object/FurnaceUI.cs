@@ -385,8 +385,8 @@ public class FurnaceUI : MonoBehaviour
                 furnace.TryPickupInput(playerInventory, fromIndex);
             else if (fromKind == FurnaceSlotUI.SlotKind.FurnaceFuel)
                 furnace.TryPickupFuel(playerInventory);
-            else if (fromKind == FurnaceSlotUI.SlotKind.Inventory && PickupUIManager.instance != null)
-                PickupUIManager.instance.ShowInfo("Use Inventory to rearrange");
+            else if (fromKind == FurnaceSlotUI.SlotKind.Inventory)
+                MoveInventorySlot(fromIndex, toIndex);
             return;
         }
 
@@ -394,6 +394,39 @@ public class FurnaceUI : MonoBehaviour
     }
 
     private void ToggleIgnite() { furnace?.ToggleLit(); }
+
+    private void MoveInventorySlot(int fromSlot, int toSlot)
+    {
+        if (playerInventory == null) return;
+        if (fromSlot == toSlot) return;
+
+        ItemType? fromType = playerInventory.GetSlotItemType(fromSlot);
+        int fromAmount = playerInventory.GetSlotAmount(fromSlot);
+        if (fromType == null || fromAmount <= 0) return;
+
+        ItemType? toType = playerInventory.GetSlotItemType(toSlot);
+        int toAmount = playerInventory.GetSlotAmount(toSlot);
+
+        if (!playerInventory.RemoveItemFromSlot(fromSlot, fromAmount, out ItemType removedType)) return;
+        if (removedType != fromType.Value)
+        {
+            playerInventory.AddItemToSlot(removedType, fromAmount, fromSlot);
+            return;
+        }
+
+        int accepted = playerInventory.AddItemToSlot(fromType.Value, fromAmount, toSlot);
+        int leftover = fromAmount - accepted;
+        if (leftover > 0)
+        {
+            playerInventory.AddItemToSlot(fromType.Value, leftover, fromSlot);
+        }
+
+        if (toType != null && toAmount > 0 && accepted >= fromAmount)
+        {
+            playerInventory.RemoveItemFromSlot(toSlot, toAmount, out _);
+            playerInventory.AddItemToSlot(toType.Value, toAmount, fromSlot);
+        }
+    }
 
     private FurnaceSlotUI CreateSlot(string name, FurnaceSlotUI.SlotKind kind, int index, Vector2 pos)
     {
