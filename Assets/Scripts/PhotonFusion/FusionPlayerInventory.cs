@@ -302,8 +302,8 @@ public class FusionPlayerInventory : NetworkBehaviour
             {
                 rigidbody.drag = 0f;
                 rigidbody.angularDrag = 1f;
-                Vector3 randomPush = dropForward + Vector3.up + new Vector3(offset2D.x, 0f, offset2D.y);
-                rigidbody.AddForce(randomPush.normalized * 1.8f, ForceMode.VelocityChange);
+                Vector3 randomPush = (dropForward + Vector3.up * 2f + new Vector3(offset2D.x * 0.5f, 0f, offset2D.y * 0.5f)).normalized;
+                rigidbody.AddForce(randomPush * 1.2f, ForceMode.VelocityChange);
             }
 
             int itemLayer = LayerMask.NameToLayer("Item");
@@ -322,6 +322,12 @@ public class FusionPlayerInventory : NetworkBehaviour
                     treeDropColliders[ci].enabled = true;
                     treeDropColliders[ci].isTrigger = false;
                 }
+            }
+
+            Interactable dropInteractable = droppedObject.GetComponent<Interactable>();
+            if (dropInteractable != null)
+            {
+                dropInteractable.enabled = true;
             }
 
             successCount++;
