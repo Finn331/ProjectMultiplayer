@@ -40,7 +40,7 @@ public class FurnaceSlotUI : MonoBehaviour, IBeginDragHandler, IDragHandler, IEn
         irt.anchoredPosition = Vector2.zero;
         iconImage.preserveAspect = true;
 
-        if (cachedIconDb == null) cachedIconDb = FindFirstObjectByType<ItemIconDatabase>();
+        if (cachedIconDb == null) cachedIconDb = Resources.Load<ItemIconDatabase>("ItemIconDatabase");
     }
 
     public void UpdateVisual(ItemType? itemType, int amount, string label)
