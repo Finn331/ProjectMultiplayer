@@ -946,6 +946,9 @@ MonoBehaviour:
     type: 3}
   cookedFishDropPrefab: {fileID: 6339178896466320526, guid: 65b759abfe2f81141be4cd9444886116,
     type: 3}
+  woodDropModelPrefab: {fileID: 1612604254436862065, guid: db1b6110189fe3b4e84e6e4b77f1b4ae,
+    type: 3}
+  stoneDropModelPrefab: {fileID: 0}
   placeablePrefabs:
   - itemType: 10
     prefab:

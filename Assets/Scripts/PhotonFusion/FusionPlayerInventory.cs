@@ -38,6 +38,10 @@ public class FusionPlayerInventory : NetworkBehaviour
     [SerializeField] private GameObject rawFishDropPrefab;
     [SerializeField] private GameObject cookedFishDropPrefab;
 
+    [Header("Model Drop Prefabs")]
+    [SerializeField] private GameObject woodDropModelPrefab;
+    [SerializeField] private GameObject stoneDropModelPrefab;
+
     [Header("Placeables")]
     [SerializeField] private PlaceablePrefabBinding[] placeablePrefabs;
     [SerializeField] private float maxPlacementDistance = 4f;
@@ -432,6 +436,18 @@ public class FusionPlayerInventory : NetworkBehaviour
             || itemType == ItemType.RawFish || itemType == ItemType.CookedFish)
         {
             droppedObject = SpawnFoodDropObject(itemType, position);
+        }
+        else if (itemType == ItemType.Wood)
+        {
+            FusionPlayerInventory instance = FindObjectOfType<FusionPlayerInventory>();
+            if (instance != null && instance.woodDropModelPrefab != null)
+                droppedObject = Instantiate(instance.woodDropModelPrefab, position, Quaternion.identity);
+        }
+        else if (itemType == ItemType.Stone)
+        {
+            FusionPlayerInventory instance = FindObjectOfType<FusionPlayerInventory>();
+            if (instance != null && instance.stoneDropModelPrefab != null)
+                droppedObject = Instantiate(instance.stoneDropModelPrefab, position, Quaternion.identity);
         }
         else
         {
