@@ -96,6 +96,9 @@ public class FusionFurnace : NetworkBehaviour
             FuelAmount -= 1;
             BurnTimer = GetFuelBurnTime(FuelType);
             if (FuelAmount <= 0) FuelType = -1;
+
+            int ashSlot = FindOutputSlot((int)ItemType.Ash);
+            if (ashSlot >= 0) AddOutput(ashSlot, (int)ItemType.Ash, 1);
         }
 
         float delta = Runner.DeltaTime;
