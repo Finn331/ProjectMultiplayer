@@ -926,7 +926,7 @@ MonoBehaviour:
   - itemType: 0
     prefab:
       RawGuidValue: 00000000000000000000000000000000
-    prefabObject: {fileID: 1612604254436862065, guid: db1b6110189fe3b4e84e6e4b77f1b4ae,
+    prefabObject: {fileID: 5804142493525070282, guid: 81f9cb41b51d56648acbfa75867f0822,
       type: 3}
   - itemType: 1
     prefab:
