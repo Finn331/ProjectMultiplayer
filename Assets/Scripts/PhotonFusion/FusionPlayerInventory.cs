@@ -306,6 +306,24 @@ public class FusionPlayerInventory : NetworkBehaviour
                 rigidbody.AddForce(randomPush.normalized * 1.8f, ForceMode.VelocityChange);
             }
 
+            int itemLayer = LayerMask.NameToLayer("Item");
+            if (itemLayer >= 0)
+            {
+                droppedObject.gameObject.layer = itemLayer;
+                UnityEngine.Transform[] children = droppedObject.GetComponentsInChildren<UnityEngine.Transform>(true);
+                for (int ci = 0; ci < children.Length; ci++) children[ci].gameObject.layer = itemLayer;
+            }
+
+            UnityEngine.Collider[] treeDropColliders = droppedObject.GetComponentsInChildren<UnityEngine.Collider>(true);
+            for (int ci = 0; ci < treeDropColliders.Length; ci++)
+            {
+                if (treeDropColliders[ci] != null)
+                {
+                    treeDropColliders[ci].enabled = true;
+                    treeDropColliders[ci].isTrigger = false;
+                }
+            }
+
             successCount++;
         }
 
