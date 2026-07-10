@@ -385,6 +385,8 @@ public class FurnaceUI : MonoBehaviour
                 furnace.TryPickupInput(playerInventory, fromIndex);
             else if (fromKind == FurnaceSlotUI.SlotKind.FurnaceFuel)
                 furnace.TryPickupFuel(playerInventory);
+            else if (fromKind == FurnaceSlotUI.SlotKind.Inventory && PickupUIManager.instance != null)
+                PickupUIManager.instance.ShowInfo("Use Inventory to rearrange");
             return;
         }
 
