@@ -252,19 +252,19 @@ public class FusionPlayerInventory : NetworkBehaviour
 
     private static Vector3 GetSafeTreeDropPosition(Vector3 desiredPosition)
     {
-        Vector3 rayStart = desiredPosition + Vector3.up * 4f;
         int itemLayer = LayerMask.NameToLayer("Item");
         int ignoreRaycastLayer = LayerMask.NameToLayer("Ignore Raycast");
         int mask = ~0;
         if (itemLayer >= 0) mask &= ~(1 << itemLayer);
         if (ignoreRaycastLayer >= 0) mask &= ~(1 << ignoreRaycastLayer);
 
-        if (Physics.Raycast(rayStart, Vector3.down, out RaycastHit hit, 12f, mask, QueryTriggerInteraction.Ignore))
+        Vector3 rayStart = desiredPosition + Vector3.up * 8f;
+        if (Physics.Raycast(rayStart, Vector3.down, out RaycastHit hit, 30f, mask, QueryTriggerInteraction.Ignore))
         {
             return hit.point + Vector3.up * 0.15f;
         }
 
-        return desiredPosition + Vector3.up * 0.15f;
+        return desiredPosition;
     }
 
     public bool SpawnTreeDropsFromData(Vector3 treePosition, Vector3 dropBasePosition, Vector3 dropForward, ItemType itemType, int spawnCount, int amountPerDrop, float scatter)
@@ -319,14 +319,12 @@ public class FusionPlayerInventory : NetworkBehaviour
             Rigidbody rigidbody = droppedObject.GetComponent<Rigidbody>();
             if (rigidbody != null)
             {
-                rigidbody.useGravity = false;
-                rigidbody.isKinematic = true;
-                rigidbody.collisionDetectionMode = CollisionDetectionMode.Discrete;
-                rigidbody.interpolation = RigidbodyInterpolation.None;
-                rigidbody.drag = 0f;
-                rigidbody.angularDrag = 1f;
-                rigidbody.velocity = Vector3.zero;
-                rigidbody.angularVelocity = Vector3.zero;
+                rigidbody.useGravity = true;
+                rigidbody.isKinematic = false;
+                rigidbody.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+                rigidbody.drag = 2f;
+                rigidbody.angularDrag = 3f;
+                rigidbody.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
             }
 
             int itemLayer = LayerMask.NameToLayer("Item");
