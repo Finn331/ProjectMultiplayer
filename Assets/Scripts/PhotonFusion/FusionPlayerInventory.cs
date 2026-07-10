@@ -250,6 +250,17 @@ public class FusionPlayerInventory : NetworkBehaviour
             tree.DropScatterRadius);
     }
 
+    private static Vector3 GetSafeTreeDropPosition(Vector3 desiredPosition)
+    {
+        Vector3 rayStart = desiredPosition + Vector3.up * 4f;
+        if (Physics.Raycast(rayStart, Vector3.down, out RaycastHit hit, 12f, ~0, QueryTriggerInteraction.Ignore))
+        {
+            return hit.point + Vector3.up * 0.35f;
+        }
+
+        return desiredPosition + Vector3.up * 0.35f;
+    }
+
     public bool SpawnTreeDropsFromData(Vector3 treePosition, Vector3 dropBasePosition, Vector3 dropForward, ItemType itemType, int spawnCount, int amountPerDrop, float scatter)
     {
         if (!IsNetworkReady() || !HasFusionLocalAuthority())
@@ -268,14 +279,14 @@ public class FusionPlayerInventory : NetworkBehaviour
 
         int clampedSpawnCount = Mathf.Max(1, spawnCount);
         int clampedAmountPerDrop = Mathf.Max(1, amountPerDrop);
-        float clampedScatter = Mathf.Max(0f, scatter);
+        float clampedScatter = Mathf.Clamp(scatter, 0f, 0.85f);
         int successCount = 0;
 
         for (int i = 0; i < clampedSpawnCount; i++)
         {
             int sceneDropId = FusionSceneDropUtility.ComputeSceneDropId(treePosition, itemType, i);
             Vector2 offset2D = FusionSceneDropUtility.ComputeDeterministicScatter(sceneDropId, clampedScatter);
-            Vector3 spawnPosition = dropBasePosition + new Vector3(offset2D.x, 0f, offset2D.y);
+            Vector3 spawnPosition = GetSafeTreeDropPosition(dropBasePosition + new Vector3(offset2D.x, 0f, offset2D.y));
 
             NetworkObject droppedObject = dropNetworkPrefab != null
                 ? Runner.Spawn(dropNetworkPrefab, spawnPosition, Quaternion.identity, Object.InputAuthority)
@@ -300,10 +311,15 @@ public class FusionPlayerInventory : NetworkBehaviour
             Rigidbody rigidbody = droppedObject.GetComponent<Rigidbody>();
             if (rigidbody != null)
             {
-                rigidbody.drag = 0f;
+                rigidbody.useGravity = true;
+                rigidbody.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+                rigidbody.interpolation = RigidbodyInterpolation.Interpolate;
+                rigidbody.drag = 1.5f;
                 rigidbody.angularDrag = 1f;
-                Vector3 randomPush = (dropForward + Vector3.up * 2f + new Vector3(offset2D.x * 0.5f, 0f, offset2D.y * 0.5f)).normalized;
-                rigidbody.AddForce(randomPush * 1.2f, ForceMode.VelocityChange);
+                rigidbody.velocity = Vector3.zero;
+                rigidbody.angularVelocity = Vector3.zero;
+                Vector3 randomPush = (Vector3.up * 0.8f + new Vector3(offset2D.x * 0.2f, 0f, offset2D.y * 0.2f)).normalized;
+                rigidbody.AddForce(randomPush * 0.35f, ForceMode.VelocityChange);
             }
 
             int itemLayer = LayerMask.NameToLayer("Item");
