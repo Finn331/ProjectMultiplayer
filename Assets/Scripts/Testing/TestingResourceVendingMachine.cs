@@ -7,7 +7,7 @@ public class TestingResourceVendingMachine : MonoBehaviour
     private const int DispenseAmount = 5;
 
     [SerializeField] private string panelTitle = "Testing Resources";
-    [SerializeField] private Vector2 panelSize = new Vector2(360f, 720f);
+    [SerializeField] private Vector2 panelSize = new Vector2(360f, 780f);
 
     private PlayerInventory currentInventory;
     private Canvas vendingCanvas;
@@ -133,6 +133,21 @@ public class TestingResourceVendingMachine : MonoBehaviour
         }
     }
 
+    private void DispenseCampfire()
+    {
+        if (currentInventory == null)
+        {
+            ShowInfo("Open vending first");
+            return;
+        }
+
+        int accepted = currentInventory.AddItem(ItemType.Campfire, 1);
+        if (accepted > 0)
+        {
+            ShowInfo("Campfire +" + accepted);
+        }
+    }
+
     private void Dispense(ItemType itemType, string label)
     {
         if (currentInventory == null)
@@ -197,7 +212,8 @@ public class TestingResourceVendingMachine : MonoBehaviour
         CreateButton(panelObject.transform, "IRON x5", new Vector2(0f, -270f), DispenseIron);
         CreateButton(panelObject.transform, "COOKING POT x1", new Vector2(0f, -330f), DispenseCookingPot);
         CreateButton(panelObject.transform, "FURNACE x1", new Vector2(0f, -390f), DispenseFurnace);
-        CreateButton(panelObject.transform, "CLOSE", new Vector2(0f, -450f), Close);
+        CreateButton(panelObject.transform, "CAMPFIRE x1", new Vector2(0f, -450f), DispenseCampfire);
+        CreateButton(panelObject.transform, "CLOSE", new Vector2(0f, -510f), Close);
 
         panelObject.SetActive(false);
     }
