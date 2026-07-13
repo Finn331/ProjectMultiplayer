@@ -6,17 +6,23 @@ public class TestingResourceVendingMachine : MonoBehaviour
 {
     private const int DispenseAmount = 5;
 
-    [SerializeField] private string panelTitle = "Testing Resources";
-    [SerializeField] private Vector2 panelSize = new Vector2(360f, 560f);
+    [Header("UI References (assign in Editor)")]
+    [SerializeField] private GameObject vendingPanel;
+    [SerializeField] private Button closeButton;
 
     private PlayerInventory currentInventory;
-    private Canvas vendingCanvas;
-    private GameObject panelObject;
+
+    private void Awake()
+    {
+        if (vendingPanel != null)
+            vendingPanel.SetActive(false);
+        if (closeButton != null)
+            closeButton.onClick.AddListener(Close);
+    }
 
     public void OpenForInteractor(PlayerInteractionSystem interactor)
     {
         currentInventory = null;
-        Close();
 
         if (interactor == null)
         {
@@ -31,8 +37,13 @@ public class TestingResourceVendingMachine : MonoBehaviour
             return;
         }
 
-        EnsureUI();
-        panelObject.SetActive(true);
+        if (vendingPanel == null)
+        {
+            ShowInfo("Vending UI not set up");
+            return;
+        }
+
+        vendingPanel.SetActive(true);
     }
 
     public void OpenForNearestInteractor()
@@ -44,10 +55,7 @@ public class TestingResourceVendingMachine : MonoBehaviour
         for (int i = 0; i < interactors.Length; i++)
         {
             PlayerInteractionSystem candidate = interactors[i];
-            if (candidate == null)
-            {
-                continue;
-            }
+            if (candidate == null) continue;
 
             float distanceSqr = (candidate.transform.position - transform.position).sqrMagnitude;
             if (distanceSqr <= nearestSqr)
@@ -62,114 +70,61 @@ public class TestingResourceVendingMachine : MonoBehaviour
 
     public void Close()
     {
-        if (panelObject != null)
-        {
-            panelObject.SetActive(false);
-        }
+        if (vendingPanel != null)
+            vendingPanel.SetActive(false);
     }
 
-    private void DispenseWood()
-    {
-        Dispense(ItemType.Wood, "Wood");
-    }
+    public void DispenseWood() { Dispense(ItemType.Wood, "Wood"); }
+    public void DispenseFiber() { Dispense(ItemType.Fiber, "Fiber"); }
+    public void DispenseStone() { Dispense(ItemType.Stone, "Stone"); }
+    public void DispenseCloth() { Dispense(ItemType.Cloth, "Cloth"); }
+    public void DispenseRawMeat() { Dispense(ItemType.RawChicken, "Raw Chicken"); }
+    public void DispenseRawFish() { Dispense(ItemType.RawFish, "Raw Fish"); }
+    public void DispenseIron() { Dispense(ItemType.Iron, "Iron"); }
 
-    private void DispenseFiber()
+    public void DispenseCookingPot()
     {
-        Dispense(ItemType.Fiber, "Fiber");
-    }
-
-    private void DispenseStone()
-    {
-        Dispense(ItemType.Stone, "Stone");
-    }
-
-    private void DispenseCloth()
-    {
-        Dispense(ItemType.Cloth, "Cloth");
-    }
-
-    private void DispenseRawMeat()
-    {
-        Dispense(ItemType.RawChicken, "Raw Chicken");
-    }
-
-    private void DispenseRawFish()
-    {
-        Dispense(ItemType.RawFish, "Raw Fish");
-    }
-
-    private void DispenseIron()
-    {
-        Dispense(ItemType.Iron, "Iron");
-    }
-
-    private void DispenseCookingPot()
-    {
-        if (currentInventory == null)
-        {
-            ShowInfo("Open vending first");
-            return;
-        }
-
+        if (currentInventory == null) { ShowInfo("Open vending first"); return; }
         int accepted = currentInventory.AddItem(ItemType.CookingPot, 1);
-        if (accepted > 0)
-        {
-            ShowInfo("Cooking Pot +" + accepted);
-        }
+        if (accepted > 0) ShowInfo("Cooking Pot +" + accepted);
     }
 
-    private void DispenseFurnace()
+    public void DispenseFurnace()
     {
-        if (currentInventory == null)
-        {
-            ShowInfo("Open vending first");
-            return;
-        }
-
+        if (currentInventory == null) { ShowInfo("Open vending first"); return; }
         int accepted = currentInventory.AddItem(ItemType.Furnace, 1);
-        if (accepted > 0)
-        {
-            ShowInfo("Furnace +" + accepted);
-        }
+        if (accepted > 0) ShowInfo("Furnace +" + accepted);
     }
 
-    private void DispenseCampfire()
+    public void DispenseCampfire()
     {
-        if (currentInventory == null)
-        {
-            ShowInfo("Open vending first");
-            return;
-        }
-
+        if (currentInventory == null) { ShowInfo("Open vending first"); return; }
         int accepted = currentInventory.AddItem(ItemType.Campfire, 1);
-        if (accepted > 0)
-        {
-            ShowInfo("Campfire +" + accepted);
-        }
+        if (accepted > 0) ShowInfo("Campfire +" + accepted);
     }
 
-    private void DispenseWall()
+    public void DispenseWall()
     {
         if (currentInventory == null) { ShowInfo("Open vending first"); return; }
         int accepted = currentInventory.AddItem(ItemType.WallItem, 1);
         if (accepted > 0) ShowInfo("Wall +" + accepted);
     }
 
-    private void DispenseFloor()
+    public void DispenseFloor()
     {
         if (currentInventory == null) { ShowInfo("Open vending first"); return; }
         int accepted = currentInventory.AddItem(ItemType.FloorItem, 1);
         if (accepted > 0) ShowInfo("Floor +" + accepted);
     }
 
-    private void DispenseRoof()
+    public void DispenseRoof()
     {
         if (currentInventory == null) { ShowInfo("Open vending first"); return; }
         int accepted = currentInventory.AddItem(ItemType.RoofItem, 1);
         if (accepted > 0) ShowInfo("Roof +" + accepted);
     }
 
-    private void DispenseDoor()
+    public void DispenseDoor()
     {
         if (currentInventory == null) { ShowInfo("Open vending first"); return; }
         int accepted = currentInventory.AddItem(ItemType.DoorItem, 1);
@@ -178,220 +133,17 @@ public class TestingResourceVendingMachine : MonoBehaviour
 
     private void Dispense(ItemType itemType, string label)
     {
-        if (currentInventory == null)
-        {
-            ShowInfo("Open vending first");
-            return;
-        }
-
+        if (currentInventory == null) { ShowInfo("Open vending first"); return; }
         int accepted = currentInventory.AddItem(itemType, DispenseAmount);
-        if (accepted > 0)
-        {
-            ShowInfo(label + " +" + accepted);
-        }
-
-        if (accepted < DispenseAmount)
-        {
-            ShowInfo("Inventory Full");
-        }
-    }
-
-    private void EnsureUI()
-    {
-        if (panelObject != null)
-        {
-            return;
-        }
-
-        vendingCanvas = FindFirstObjectByType<Canvas>();
-        if (vendingCanvas == null)
-        {
-            GameObject canvasObject = new GameObject("Testing Resource Vending Canvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
-            MarkDontSave(canvasObject);
-            vendingCanvas = canvasObject.GetComponent<Canvas>();
-            vendingCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
-
-            CanvasScaler scaler = canvasObject.GetComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1080f, 1920f);
-        }
-
-        panelObject = new GameObject("Testing Resource Vending Panel", typeof(RectTransform), typeof(Image));
-        MarkDontSave(panelObject);
-        panelObject.transform.SetParent(vendingCanvas.transform, false);
-
-        RectTransform panelRect = panelObject.GetComponent<RectTransform>();
-        panelRect.anchorMin = new Vector2(0.5f, 0.5f);
-        panelRect.anchorMax = new Vector2(0.5f, 0.5f);
-        panelRect.pivot = new Vector2(0.5f, 0.5f);
-        panelRect.sizeDelta = panelSize;
-        panelRect.anchoredPosition = Vector2.zero;
-
-        Image panelImage = panelObject.GetComponent<Image>();
-        panelImage.color = new Color(0.08f, 0.08f, 0.08f, 0.92f);
-
-        CreateText(panelObject.transform, panelTitle, new Vector2(0f, panelSize.y * 0.5f - 40f), 28, TextAnchor.MiddleCenter);
-
-        float titleBottom = panelSize.y * 0.5f - 75f;
-        float closeTop = -panelSize.y * 0.5f + 60f;
-        float scrollHeight = Mathf.Abs(titleBottom - closeTop) - 20f;
-        float scrollY = titleBottom - scrollHeight * 0.5f - 5f;
-
-        GameObject scrollView = CreateScrollView(panelObject.transform, new Vector2(0f, scrollY), new Vector2(panelSize.x - 20f, scrollHeight));
-        RectTransform contentRect = scrollView.transform.Find("Viewport/Content").GetComponent<RectTransform>();
-
-        CreateButton(contentRect, "WOOD x5", Vector2.zero, DispenseWood);
-        CreateButton(contentRect, "FIBER x5", Vector2.zero, DispenseFiber);
-        CreateButton(contentRect, "STONE x5", Vector2.zero, DispenseStone);
-        CreateButton(contentRect, "CLOTH x5", Vector2.zero, DispenseCloth);
-        CreateButton(contentRect, "RAW CHICKEN x5", Vector2.zero, DispenseRawMeat);
-        CreateButton(contentRect, "RAW FISH x5", Vector2.zero, DispenseRawFish);
-        CreateButton(contentRect, "IRON x5", Vector2.zero, DispenseIron);
-        CreateButton(contentRect, "COOKING POT x1", Vector2.zero, DispenseCookingPot);
-        CreateButton(contentRect, "FURNACE x1", Vector2.zero, DispenseFurnace);
-        CreateButton(contentRect, "CAMPFIRE x1", Vector2.zero, DispenseCampfire);
-        CreateButton(contentRect, "WALL x1", Vector2.zero, DispenseWall);
-        CreateButton(contentRect, "FLOOR x1", Vector2.zero, DispenseFloor);
-        CreateButton(contentRect, "ROOF x1", Vector2.zero, DispenseRoof);
-        CreateButton(contentRect, "DOOR x1", Vector2.zero, DispenseDoor);
-
-        CreateButton(panelObject.transform, "CLOSE", new Vector2(0f, closeTop), Close);
-
-        panelObject.SetActive(false);
-    }
-
-    private static GameObject CreateScrollView(Transform parent, Vector2 anchoredPosition, Vector2 size)
-    {
-        GameObject scrollGo = new GameObject("ScrollView", typeof(RectTransform), typeof(ScrollRect));
-        MarkDontSave(scrollGo);
-        scrollGo.transform.SetParent(parent, false);
-
-        RectTransform scrollRect = scrollGo.GetComponent<RectTransform>();
-        scrollRect.anchorMin = new Vector2(0.5f, 0.5f);
-        scrollRect.anchorMax = new Vector2(0.5f, 0.5f);
-        scrollRect.pivot = new Vector2(0.5f, 0.5f);
-        scrollRect.sizeDelta = size;
-        scrollRect.anchoredPosition = anchoredPosition;
-
-        GameObject viewportGo = new GameObject("Viewport", typeof(RectTransform), typeof(Image), typeof(Mask));
-        MarkDontSave(viewportGo);
-        viewportGo.transform.SetParent(scrollGo.transform, false);
-
-        RectTransform viewportRect = viewportGo.GetComponent<RectTransform>();
-        viewportRect.anchorMin = Vector2.zero;
-        viewportRect.anchorMax = Vector2.one;
-        viewportRect.pivot = new Vector2(0f, 1f);
-        viewportRect.sizeDelta = Vector2.zero;
-        viewportRect.anchoredPosition = Vector2.zero;
-
-        viewportGo.GetComponent<Image>().color = Color.white;
-        viewportGo.GetComponent<Mask>().showMaskGraphic = false;
-
-        GameObject contentGo = new GameObject("Content", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
-        MarkDontSave(contentGo);
-        contentGo.transform.SetParent(viewportGo.transform, false);
-
-        RectTransform contentRect = contentGo.GetComponent<RectTransform>();
-        contentRect.anchorMin = new Vector2(0f, 1f);
-        contentRect.anchorMax = new Vector2(1f, 1f);
-        contentRect.pivot = new Vector2(0.5f, 1f);
-        contentRect.sizeDelta = new Vector2(0f, 0f);
-        contentRect.anchoredPosition = Vector2.zero;
-
-        VerticalLayoutGroup layoutGroup = contentGo.GetComponent<VerticalLayoutGroup>();
-        layoutGroup.childAlignment = TextAnchor.UpperCenter;
-        layoutGroup.childForceExpandWidth = true;
-        layoutGroup.childForceExpandHeight = false;
-        layoutGroup.spacing = 4f;
-        layoutGroup.padding = new RectOffset(5, 5, 5, 5);
-
-        ContentSizeFitter fitter = contentGo.GetComponent<ContentSizeFitter>();
-        fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-
-        ScrollRect scroll = scrollGo.GetComponent<ScrollRect>();
-        scroll.viewport = viewportRect;
-        scroll.content = contentRect;
-        scroll.horizontal = false;
-        scroll.vertical = true;
-        scroll.movementType = ScrollRect.MovementType.Clamped;
-
-        return scrollGo;
-    }
-
-    private static void CreateButton(Transform parent, string label, Vector2 anchoredPosition, UnityEngine.Events.UnityAction action)
-    {
-        GameObject buttonObject = new GameObject(label + " Button", typeof(RectTransform), typeof(Image), typeof(Button));
-        MarkDontSave(buttonObject);
-        buttonObject.transform.SetParent(parent, false);
-
-        RectTransform rect = buttonObject.GetComponent<RectTransform>();
-        bool inLayout = parent.GetComponent<VerticalLayoutGroup>() != null;
-
-        if (inLayout)
-        {
-            rect.anchorMin = new Vector2(0f, 1f);
-            rect.anchorMax = new Vector2(1f, 1f);
-            rect.pivot = new Vector2(0.5f, 1f);
-            rect.sizeDelta = new Vector2(0f, 48f);
-            rect.anchoredPosition = Vector2.zero;
-        }
-        else
-        {
-            rect.anchorMin = new Vector2(0.5f, 0.5f);
-            rect.anchorMax = new Vector2(0.5f, 0.5f);
-            rect.pivot = new Vector2(0.5f, 0.5f);
-            rect.sizeDelta = new Vector2(260f, 48f);
-            rect.anchoredPosition = anchoredPosition;
-        }
-
-        Image image = buttonObject.GetComponent<Image>();
-        image.color = new Color(0.22f, 0.24f, 0.26f, 0.96f);
-
-        Button button = buttonObject.GetComponent<Button>();
-        button.onClick.AddListener(action);
-
-        CreateText(buttonObject.transform, label, Vector2.zero, 22, TextAnchor.MiddleCenter);
-    }
-
-    private static Text CreateText(Transform parent, string text, Vector2 anchoredPosition, int fontSize, TextAnchor alignment)
-    {
-        GameObject textObject = new GameObject(text + " Text", typeof(RectTransform), typeof(Text));
-        MarkDontSave(textObject);
-        textObject.transform.SetParent(parent, false);
-
-        RectTransform rect = textObject.GetComponent<RectTransform>();
-        rect.anchorMin = new Vector2(0.5f, 0.5f);
-        rect.anchorMax = new Vector2(0.5f, 0.5f);
-        rect.pivot = new Vector2(0.5f, 0.5f);
-        rect.sizeDelta = new Vector2(320f, 44f);
-        rect.anchoredPosition = anchoredPosition;
-
-        Text uiText = textObject.GetComponent<Text>();
-        uiText.text = text;
-        uiText.alignment = alignment;
-        uiText.fontSize = fontSize;
-        uiText.color = Color.white;
-        uiText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        return uiText;
-    }
-
-    private static void MarkDontSave(GameObject target)
-    {
-        if (target != null)
-        {
-            target.hideFlags = HideFlags.DontSave;
-        }
+        if (accepted > 0) ShowInfo(label + " +" + accepted);
+        if (accepted < DispenseAmount) ShowInfo("Inventory Full");
     }
 
     private static void ShowInfo(string message)
     {
         if (PickupUIManager.instance != null)
-        {
             PickupUIManager.instance.ShowInfo(message);
-        }
         else
-        {
             Debug.Log(message);
-        }
     }
 }
