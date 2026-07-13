@@ -280,6 +280,59 @@ public class BandageCraftingSystem : MonoBehaviour
                 new CraftingIngredient { itemType = ItemType.Stone, amount = 8 }
             }
         });
+
+        AddDefaultRecipeIfMissing(new CraftingRecipe
+        {
+            recipeId = "wall",
+            displayName = "Wall",
+            outputItemType = ItemType.WallItem,
+            outputAmount = 1,
+            context = CraftingContext.CraftingTable,
+            ingredients = new List<CraftingIngredient>
+            {
+                new CraftingIngredient { itemType = ItemType.Wood, amount = 10 }
+            }
+        });
+
+        AddDefaultRecipeIfMissing(new CraftingRecipe
+        {
+            recipeId = "floor",
+            displayName = "Floor",
+            outputItemType = ItemType.FloorItem,
+            outputAmount = 1,
+            context = CraftingContext.CraftingTable,
+            ingredients = new List<CraftingIngredient>
+            {
+                new CraftingIngredient { itemType = ItemType.Wood, amount = 8 }
+            }
+        });
+
+        AddDefaultRecipeIfMissing(new CraftingRecipe
+        {
+            recipeId = "roof",
+            displayName = "Roof",
+            outputItemType = ItemType.RoofItem,
+            outputAmount = 1,
+            context = CraftingContext.CraftingTable,
+            ingredients = new List<CraftingIngredient>
+            {
+                new CraftingIngredient { itemType = ItemType.Wood, amount = 12 }
+            }
+        });
+
+        AddDefaultRecipeIfMissing(new CraftingRecipe
+        {
+            recipeId = "door",
+            displayName = "Door",
+            outputItemType = ItemType.DoorItem,
+            outputAmount = 1,
+            context = CraftingContext.CraftingTable,
+            ingredients = new List<CraftingIngredient>
+            {
+                new CraftingIngredient { itemType = ItemType.Wood, amount = 15 },
+                new CraftingIngredient { itemType = ItemType.Iron, amount = 2 }
+            }
+        });
     }
 
     private void AddDefaultRecipeIfMissing(CraftingRecipe defaultRecipe)

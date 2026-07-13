@@ -24,6 +24,13 @@ public class PlayerInteractionSystem : MonoBehaviour
     [SerializeField] private string pickButtonNameContains = "pick";
     [SerializeField] private float interactDebounceSeconds = 0.1f;
 
+    [Header("Building")]
+    [SerializeField] private float demolishHoldTime = 1.5f;
+    private float demolishHoldTimer;
+    private BuildingPiece currentBuildingTarget;
+    private GameObject hpBarObject;
+    private UnityEngine.UI.Image hpBarFill;
+
     private readonly List<Interactable> currentInteractables = new List<Interactable>();
     private Interactable currentTarget;
     private Button pickButtonComponent;
@@ -119,6 +126,7 @@ public class PlayerInteractionSystem : MonoBehaviour
 
         this.DetectInteractable();
         this.CheckInteractableInFront();
+        this.DetectBuildingPiece();
     }
 
     private void DetectInteractable()
@@ -243,6 +251,18 @@ public class PlayerInteractionSystem : MonoBehaviour
         if (item != null)
         {
             this.TryPickupItem(item);
+            return;
+        }
+
+        if (currentBuildingTarget != null)
+        {
+            demolishHoldTimer += Time.unscaledDeltaTime;
+            if (demolishHoldTimer >= demolishHoldTime)
+            {
+                currentBuildingTarget.Demolish();
+                demolishHoldTimer = 0f;
+                currentBuildingTarget = null;
+            }
             return;
         }
 
@@ -573,5 +593,59 @@ public class PlayerInteractionSystem : MonoBehaviour
     {
         FusionPlayerSurvival survival = GetComponent<FusionPlayerSurvival>();
         return survival != null && survival.IsDowned;
+    }
+
+    private void DetectBuildingPiece()
+    {
+        currentBuildingTarget = null;
+        if (playerCamera == null) return;
+
+        Ray ray = new Ray(playerCamera.transform.position, playerCamera.transform.forward);
+        if (!Physics.Raycast(ray, out RaycastHit hit, interactDistance)) return;
+
+        BuildingPiece piece = hit.collider.GetComponentInParent<BuildingPiece>();
+        if (piece == null)
+        {
+            HideHpBar();
+            demolishHoldTimer = 0f;
+            return;
+        }
+
+        currentBuildingTarget = piece;
+        ShowHpBar(piece);
+    }
+
+    private void ShowHpBar(BuildingPiece piece)
+    {
+        if (hpBarObject == null)
+        {
+            hpBarObject = new GameObject("BuildingHpBar", typeof(RectTransform), typeof(UnityEngine.UI.Image));
+            hpBarObject.transform.SetParent(FindFirstObjectByType<Canvas>()?.transform, false);
+            hpBarObject.GetComponent<UnityEngine.UI.Image>().color = new Color(0.1f, 0.1f, 0.1f, 0.8f);
+            hpBarObject.GetComponent<RectTransform>().sizeDelta = new Vector2(200f, 8f);
+
+            GameObject fillGo = new GameObject("Fill", typeof(RectTransform), typeof(UnityEngine.UI.Image));
+            fillGo.transform.SetParent(hpBarObject.transform, false);
+            hpBarFill = fillGo.GetComponent<UnityEngine.UI.Image>();
+            hpBarFill.color = Color.red;
+            hpBarFill.type = UnityEngine.UI.Image.Type.Filled;
+            hpBarFill.fillMethod = UnityEngine.UI.Image.FillMethod.Horizontal;
+            RectTransform fillRt = fillGo.GetComponent<RectTransform>();
+            fillRt.anchorMin = Vector2.zero; fillRt.anchorMax = Vector2.one;
+            fillRt.sizeDelta = Vector2.zero; fillRt.anchoredPosition = Vector2.zero;
+        }
+
+        hpBarObject.SetActive(true);
+        if (Camera.main != null)
+        {
+            Vector3 screenPos = Camera.main.WorldToScreenPoint(piece.transform.position + Vector3.up * 2f);
+            ((RectTransform)hpBarObject.transform).position = screenPos;
+        }
+        if (hpBarFill != null) hpBarFill.fillAmount = piece.HealthRatio;
+    }
+
+    private void HideHpBar()
+    {
+        if (hpBarObject != null) hpBarObject.SetActive(false);
     }
 }

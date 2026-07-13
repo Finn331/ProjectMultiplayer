@@ -110,7 +110,28 @@ public class PlaceableItemSystem : MonoBehaviour
         return itemType == ItemType.CraftingTable
             || itemType == ItemType.Campfire
             || itemType == ItemType.StorageChest
-            || itemType == ItemType.Furnace;
+            || itemType == ItemType.Furnace
+            || itemType == ItemType.WallItem
+            || itemType == ItemType.FloorItem
+            || itemType == ItemType.RoofItem
+            || itemType == ItemType.DoorItem;
+    }
+
+    private static bool IsBuildingItem(ItemType itemType)
+    {
+        return itemType == ItemType.WallItem
+            || itemType == ItemType.FloorItem
+            || itemType == ItemType.RoofItem
+            || itemType == ItemType.DoorItem;
+    }
+
+    private static Vector3 SnapToGrid(Vector3 worldPosition)
+    {
+        const float gridSize = 1f;
+        float snappedX = Mathf.Round(worldPosition.x / gridSize) * gridSize;
+        float snappedY = Mathf.Round(worldPosition.y / gridSize) * gridSize;
+        float snappedZ = Mathf.Round(worldPosition.z / gridSize) * gridSize;
+        return new Vector3(snappedX, snappedY, snappedZ);
     }
 
     public void TogglePlacementMode()
@@ -197,6 +218,11 @@ public class PlaceableItemSystem : MonoBehaviour
         if (hasGround)
         {
             targetPosition = hit.point + hit.normal * groundOffset;
+        }
+
+        if (IsBuildingItem(selectedItemType))
+        {
+            targetPosition = SnapToGrid(targetPosition);
         }
 
         Quaternion targetRotation = Quaternion.Euler(0f, transform.eulerAngles.y + previewYawOffset, 0f);
@@ -306,6 +332,23 @@ public class PlaceableItemSystem : MonoBehaviour
         if (!IsPlaceable(itemType))
         {
             return false;
+        }
+
+        if (IsBuildingItem(itemType))
+        {
+            BuildingPieceType pieceType = itemType switch
+            {
+                ItemType.WallItem => BuildingPieceType.Wall,
+                ItemType.FloorItem => BuildingPieceType.Floor,
+                ItemType.RoofItem => BuildingPieceType.Roof,
+                ItemType.DoorItem => BuildingPieceType.Door,
+                _ => BuildingPieceType.Wall
+            };
+            GameObject placed = new GameObject("Building_" + pieceType);
+            placed.transform.SetPositionAndRotation(position, rotation);
+            BuildingPiece piece = placed.AddComponent<BuildingPiece>();
+            piece.Initialize(pieceType, Vector3Int.RoundToInt(position), 0);
+            return true;
         }
 
         GameObject placedObject = GameObject.CreatePrimitive(itemType == ItemType.Campfire ? PrimitiveType.Cylinder : PrimitiveType.Cube);

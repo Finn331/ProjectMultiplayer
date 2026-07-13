@@ -148,6 +148,34 @@ public class TestingResourceVendingMachine : MonoBehaviour
         }
     }
 
+    private void DispenseWall()
+    {
+        if (currentInventory == null) { ShowInfo("Open vending first"); return; }
+        int accepted = currentInventory.AddItem(ItemType.WallItem, 1);
+        if (accepted > 0) ShowInfo("Wall +" + accepted);
+    }
+
+    private void DispenseFloor()
+    {
+        if (currentInventory == null) { ShowInfo("Open vending first"); return; }
+        int accepted = currentInventory.AddItem(ItemType.FloorItem, 1);
+        if (accepted > 0) ShowInfo("Floor +" + accepted);
+    }
+
+    private void DispenseRoof()
+    {
+        if (currentInventory == null) { ShowInfo("Open vending first"); return; }
+        int accepted = currentInventory.AddItem(ItemType.RoofItem, 1);
+        if (accepted > 0) ShowInfo("Roof +" + accepted);
+    }
+
+    private void DispenseDoor()
+    {
+        if (currentInventory == null) { ShowInfo("Open vending first"); return; }
+        int accepted = currentInventory.AddItem(ItemType.DoorItem, 1);
+        if (accepted > 0) ShowInfo("Door +" + accepted);
+    }
+
     private void Dispense(ItemType itemType, string label)
     {
         if (currentInventory == null)
@@ -222,6 +250,10 @@ public class TestingResourceVendingMachine : MonoBehaviour
         CreateButton(contentRect, "COOKING POT x1", Vector2.zero, DispenseCookingPot);
         CreateButton(contentRect, "FURNACE x1", Vector2.zero, DispenseFurnace);
         CreateButton(contentRect, "CAMPFIRE x1", Vector2.zero, DispenseCampfire);
+        CreateButton(contentRect, "WALL x1", Vector2.zero, DispenseWall);
+        CreateButton(contentRect, "FLOOR x1", Vector2.zero, DispenseFloor);
+        CreateButton(contentRect, "ROOF x1", Vector2.zero, DispenseRoof);
+        CreateButton(contentRect, "DOOR x1", Vector2.zero, DispenseDoor);
 
         CreateButton(panelObject.transform, "CLOSE", new Vector2(0f, closeTop), Close);
 

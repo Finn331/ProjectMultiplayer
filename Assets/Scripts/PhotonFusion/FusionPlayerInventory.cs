@@ -459,7 +459,11 @@ public class FusionPlayerInventory : NetworkBehaviour
             || itemType == ItemType.Fiber
             || itemType == ItemType.Cloth
             || itemType == ItemType.Furnace
-            || itemType == ItemType.IronIngot;
+            || itemType == ItemType.IronIngot
+            || itemType == ItemType.WallItem
+            || itemType == ItemType.FloorItem
+            || itemType == ItemType.RoofItem
+            || itemType == ItemType.DoorItem;
     }
 
     private static void SpawnSceneDropLocal(Vector3 position, Vector3 forward, ItemType itemType, int amount, int sceneDropId)
@@ -805,6 +809,11 @@ public class FusionPlayerInventory : NetworkBehaviour
 
         if (!TryGetPlaceablePrefab(itemType, out NetworkPrefabRef placeablePrefab, out GameObject placeablePrefabObject, out Vector3 bounds))
         {
+            if (IsBuildingItem(itemType))
+            {
+                PlaceBuildingPiece(itemType, position, rotation);
+                return;
+            }
             return;
         }
 
@@ -996,5 +1005,29 @@ public class FusionPlayerInventory : NetworkBehaviour
     private bool HasFusionLocalAuthority()
     {
         return Object != null && (Object.HasInputAuthority || Object.HasStateAuthority);
+    }
+
+    private static bool IsBuildingItem(ItemType itemType)
+    {
+        return itemType == ItemType.WallItem
+            || itemType == ItemType.FloorItem
+            || itemType == ItemType.RoofItem
+            || itemType == ItemType.DoorItem;
+    }
+
+    private void PlaceBuildingPiece(ItemType itemType, Vector3 position, Quaternion rotation)
+    {
+        BuildingPieceType pieceType = itemType switch
+        {
+            ItemType.WallItem => BuildingPieceType.Wall,
+            ItemType.FloorItem => BuildingPieceType.Floor,
+            ItemType.RoofItem => BuildingPieceType.Roof,
+            ItemType.DoorItem => BuildingPieceType.Door,
+            _ => BuildingPieceType.Wall
+        };
+        GameObject placed = new GameObject("Building_" + pieceType);
+        placed.transform.SetPositionAndRotation(position, rotation);
+        BuildingPiece piece = placed.AddComponent<BuildingPiece>();
+        piece.Initialize(pieceType, Vector3Int.RoundToInt(position), 0);
     }
 }

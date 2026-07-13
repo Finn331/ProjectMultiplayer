@@ -24,7 +24,11 @@ public enum ItemType
     IronIngot,
     Furnace,
     Ash,
-    Fertilizer
+    Fertilizer,
+    WallItem,
+    FloorItem,
+    RoofItem,
+    DoorItem
 }
 
 public class PickableItem : MonoBehaviour
