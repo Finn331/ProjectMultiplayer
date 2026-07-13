@@ -308,46 +308,12 @@ public class PlayerInteractionSystem : MonoBehaviour
 
     private bool TryInteractCampfire(CampfireCooking campfire)
     {
-        if (campfire == null || inventory == null)
-        {
-            return false;
-        }
-
-        if (networkInventoryBridge != null && networkInventoryBridge.UseNetworkedInventory)
-        {
-            return TryInteractCampfireNetworked(campfire);
-        }
+        if (campfire == null || inventory == null) return false;
 
         var fusionInventory = GetComponent<FusionPlayerInventory>();
         if (fusionInventory != null)
         {
             return TryInteractCampfireFusion(campfire);
-            
-        }
-
-        if (inventory.HasItem(ItemType.RawChicken, 1) || inventory.HasItem(ItemType.RawFish, 1))
-        {
-            ItemType rawType = inventory.HasItem(ItemType.RawChicken, 1) ? ItemType.RawChicken : ItemType.RawFish;
-            return campfire.TryPlaceRawMeat(inventory, rawType);
-        }
-
-        if (inventory.HasItem(ItemType.CookingPot, 1))
-        {
-            return campfire.TryPlaceCookingPot(inventory);
-        }
-
-        int maxSlots = campfire.HasCookingPot ? 8 : 4;
-        for (int i = 0; i < maxSlots; i++)
-        {
-            if (campfire.HasCookedFood(i))
-            {
-                return campfire.TryPickupCooked(inventory, i);
-            }
-        }
-
-        if (campfire.HasCookingPot)
-        {
-            return campfire.TryRemoveCookingPot(inventory);
         }
 
         return false;
@@ -357,56 +323,34 @@ public class PlayerInteractionSystem : MonoBehaviour
     {
         int hotbarSlot = 0;
         MobileHotbarUI hotbar = GetComponent<MobileHotbarUI>();
-        if (hotbar != null)
-        {
-            hotbarSlot = hotbar.SelectedSlotIndex;
-        }
+        if (hotbar != null) hotbarSlot = hotbar.SelectedSlotIndex;
 
         int globalSlot = inventory.HotbarStartIndex + hotbarSlot;
         ItemType? selectedItem = globalSlot >= 0 && globalSlot < inventory.TotalSlotCount
-            ? inventory.GetSlotItemType(globalSlot)
-            : null;
+            ? inventory.GetSlotItemType(globalSlot) : null;
 
-        if (selectedItem == ItemType.RawChicken || selectedItem == ItemType.RawFish)
+        if (selectedItem == ItemType.Wood && inventory.GetSlotAmount(globalSlot) > 0)
         {
-            if (inventory.GetSlotAmount(globalSlot) > 0)
+            return campfire.TryAddToCampfireFromSlot(inventory, -1, true, -1);
+        }
+
+        if ((selectedItem == ItemType.RawChicken || selectedItem == ItemType.RawFish) && inventory.GetSlotAmount(globalSlot) > 0)
+        {
+            return campfire.TryAddToCampfireFromSlot(inventory, globalSlot, false, -1);
+        }
+
+        for (int i = 0; i < 3; i++)
+        {
+            if (campfire.HasOutput(i))
             {
-                return campfire.TryPlaceRawMeat(inventory, selectedItem.Value);
+                return campfire.TryPickupOutput(inventory, i);
             }
         }
 
-        if (selectedItem == ItemType.CookingPot && inventory.GetSlotAmount(globalSlot) > 0)
-        {
-            return campfire.TryPlaceCookingPot(inventory);
-        }
-
-        if (!campfire.HasCookingPot)
-        {
-            for (int i = 0; i < 4; i++)
-            {
-                if (campfire.HasCookedFood(i))
-                {
-                    return campfire.TryPickupCooked(inventory, i);
-                }
-            }
-        }
-        else
-        {
-            for (int i = 0; i < 8; i++)
-            {
-                if (campfire.HasCookedFood(i))
-                {
-                    return campfire.TryPickupCooked(inventory, i);
-                }
-            }
-
-            if (campfire.TryRemoveCookingPot(inventory))
-            {
-                return true;
-            }
-        }
-
-        return false;
+        CampfireUI ui = GetComponent<CampfireUI>();
+        if (ui == null) ui = gameObject.AddComponent<CampfireUI>();
+        ui.Open(inventory, campfire);
+        return true;
     }
 
     private bool TryInteractFurnace(FusionFurnace furnace)
@@ -443,11 +387,6 @@ public class PlayerInteractionSystem : MonoBehaviour
         if (ui == null) ui = gameObject.AddComponent<FurnaceUI>();
         ui.Open(inventory, furnace);
         return true;
-    }
-
-    private bool TryInteractCampfireNetworked(CampfireCooking campfire)
-    {
-        return TryInteractCampfireFusion(campfire);
     }
 
     private void TryPickupItem(PickableItem item)

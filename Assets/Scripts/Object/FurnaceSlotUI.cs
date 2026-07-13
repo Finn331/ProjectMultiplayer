@@ -10,6 +10,7 @@ public class FurnaceSlotUI : MonoBehaviour, IBeginDragHandler, IDragHandler, IEn
     public SlotKind Kind;
     public int SlotIndex;
     public FurnaceUI Owner;
+    public CampfireUI CampfireOwner;
 
     private Image slotImage;
     private Image iconImage;
@@ -74,8 +75,9 @@ public class FurnaceSlotUI : MonoBehaviour, IBeginDragHandler, IDragHandler, IEn
 
     public void OnBeginDrag(PointerEventData eventData)
     {
-        if (Owner == null) return;
-        if (!Owner.HasValidItem(Kind, SlotIndex)) return;
+        if (Owner == null && CampfireOwner == null) return;
+        if (Owner != null && !Owner.HasValidItem(Kind, SlotIndex)) return;
+        if (CampfireOwner != null && !CampfireOwner.HasValidItem(Kind, SlotIndex)) return;
 
         dropHandled = false;
         dragStartPos = eventData.position;
@@ -114,7 +116,7 @@ public class FurnaceSlotUI : MonoBehaviour, IBeginDragHandler, IDragHandler, IEn
             dragGhost = null;
         }
 
-        if (Owner == null) return;
+        if (Owner == null && CampfireOwner == null) return;
 
         if (!dropHandled && Vector2.Distance(dragStartPos, eventData.position) > 15f)
         {
@@ -125,7 +127,8 @@ public class FurnaceSlotUI : MonoBehaviour, IBeginDragHandler, IDragHandler, IEn
                 FurnaceSlotUI target = result.gameObject.GetComponentInParent<FurnaceSlotUI>();
                 if (target != null && target != this)
                 {
-                    Owner.HandleSlotDrop(Kind, SlotIndex, target.Kind, target.SlotIndex);
+                    if (Owner != null) Owner.HandleSlotDrop(Kind, SlotIndex, target.Kind, target.SlotIndex);
+                    else if (CampfireOwner != null) CampfireOwner.HandleSlotDrop(Kind, SlotIndex, target.Kind, target.SlotIndex);
                     dropHandled = true;
                     break;
                 }
@@ -135,13 +138,14 @@ public class FurnaceSlotUI : MonoBehaviour, IBeginDragHandler, IDragHandler, IEn
 
     public void OnDrop(PointerEventData eventData)
     {
-        if (Owner == null) return;
+        if (Owner == null && CampfireOwner == null) return;
         if (eventData.pointerDrag == null) return;
 
         FurnaceSlotUI source = eventData.pointerDrag.GetComponentInParent<FurnaceSlotUI>();
         if (source != null && source != this)
         {
-            Owner.HandleSlotDrop(source.Kind, source.SlotIndex, Kind, SlotIndex);
+            if (Owner != null) Owner.HandleSlotDrop(source.Kind, source.SlotIndex, Kind, SlotIndex);
+            else if (CampfireOwner != null) CampfireOwner.HandleSlotDrop(source.Kind, source.SlotIndex, Kind, SlotIndex);
             dropHandled = true;
         }
     }

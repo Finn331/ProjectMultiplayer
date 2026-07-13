@@ -3,361 +3,423 @@ using UnityEngine;
 
 public class CampfireCooking : NetworkBehaviour
 {
-    private const int BaseSlotCount = 4;
-    private const int PotSlotCount = 8;
-    public const float CookTimeSeconds = 20f;
-    private const float PotCookTimeSeconds = 12f;
+    private const int SlotCount = 3;
+    private const int MaxStack = 8;
+    public const float CookTimeSeconds = 15f;
+    private const float FuelBurnTimePerWood = 30f;
 
-    [SerializeField] private GameObject drumstickRawPrefab;
-    [SerializeField] private GameObject drumstickCookedPrefab;
-    [SerializeField] private GameObject steakRawPrefab;
-    [SerializeField] private GameObject steakCookedPrefab;
-    [SerializeField] private GameObject fishFilletRawPrefab;
-    [SerializeField] private GameObject fishFilletCookedPrefab;
-    [SerializeField] private GameObject wholeBirdRawPrefab;
-    [SerializeField] private GameObject wholeBirdCookedPrefab;
+    [Networked] private float BurnTimer { get; set; }
+    [Networked] private NetworkBool IsLit { get; set; }
+    [Networked] private int FuelAmount { get; set; }
 
-    [Networked] private NetworkBool HasPot { get; set; }
+    [Networked, Capacity(SlotCount)] private NetworkArray<int> InputTypes { get; }
+    [Networked, Capacity(SlotCount)] private NetworkArray<int> InputAmounts { get; }
+    [Networked, Capacity(SlotCount)] private NetworkArray<float> CookTimers { get; }
+    [Networked, Capacity(SlotCount)] private NetworkArray<int> OutputTypes { get; }
+    [Networked, Capacity(SlotCount)] private NetworkArray<int> OutputAmounts { get; }
 
-    [Networked, Capacity(PotSlotCount)]
-    private NetworkArray<float> SlotTimers { get; }
-    [Networked, Capacity(PotSlotCount)]
-    private NetworkArray<int> SlotFoodIndices { get; }
-
-    private readonly GameObject[] slotVisuals = new GameObject[PotSlotCount];
-    private readonly int[] lastVisualFoodIndex = new int[PotSlotCount];
-    private readonly bool[] lastVisualIsCooked = new bool[PotSlotCount];
-
-    private readonly Vector3[] baseSlotPositions = new Vector3[]
+    private readonly Vector3[] slotPositions = new Vector3[]
     {
-        new Vector3(0.2f, 0.55f, 0.2f),
-        new Vector3(-0.2f, 0.55f, 0.2f),
-        new Vector3(0.2f, 0.55f, -0.2f),
-        new Vector3(-0.2f, 0.55f, -0.2f)
-    };
-    private readonly Vector3[] potSlotPositions = new Vector3[]
-    {
-        new Vector3(0.35f, 0.7f, 0.35f),
-        new Vector3(-0.35f, 0.7f, 0.35f),
-        new Vector3(0.35f, 0.7f, -0.35f),
-        new Vector3(-0.35f, 0.7f, -0.35f),
-        new Vector3(0.15f, 0.7f, 0.15f),
-        new Vector3(-0.15f, 0.7f, 0.15f),
-        new Vector3(0.15f, 0.7f, -0.15f),
-        new Vector3(-0.15f, 0.7f, -0.15f)
+        new Vector3(0.15f, 0.55f, 0f),
+        new Vector3(-0.15f, 0.55f, 0.15f),
+        new Vector3(-0.15f, 0.55f, -0.15f)
     };
 
-    private GameObject potVisual;
-    private bool lastPotState;
-    private (GameObject raw, GameObject cooked)[] foodPairs;
+    private readonly GameObject[] slotVisuals = new GameObject[SlotCount];
 
-    private int CurrentSlotCount => HasPot ? PotSlotCount : BaseSlotCount;
-    private float CurrentCookTime => HasPot ? PotCookTimeSeconds : CookTimeSeconds;
+    public bool HasFuel => BurnTimer > 0f || FuelAmount > 0;
+    public float FuelTimerValue => BurnTimer;
+    public int FuelStackAmount => FuelAmount;
+    public bool IsLitValue => IsLit;
 
-    public bool HasCookingPot => HasPot;
+    public bool HasOutput(int slot) => slot >= 0 && slot < SlotCount && OutputAmounts.Get(slot) > 0;
+    public int GetOutputCount(int slot) => slot >= 0 && slot < SlotCount ? OutputAmounts.Get(slot) : 0;
+    public int GetOutputType(int slot) => slot >= 0 && slot < SlotCount ? OutputTypes.Get(slot) : -1;
+
+    public float GetSlotTimer(int slot) => slot >= 0 && slot < SlotCount ? CookTimers.Get(slot) : -1f;
+    public int GetSlotInputType(int slot) => slot >= 0 && slot < SlotCount ? InputTypes.Get(slot) : -1;
+    public int GetSlotQuantity(int slot) => slot >= 0 && slot < SlotCount ? InputAmounts.Get(slot) : 0;
+
+    public void ToggleLit()
+    {
+        if (HasStateAuthority) ToggleLitInternal();
+        else RPC_ToggleLit();
+    }
+
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    private void RPC_ToggleLit()
+    {
+        ToggleLitInternal();
+    }
+
+    private void ToggleLitInternal()
+    {
+        if (!IsLit && BurnTimer <= 0f && FuelAmount <= 0) return;
+        IsLit = !IsLit;
+    }
 
     public override void Spawned()
     {
-        foodPairs = new (GameObject raw, GameObject cooked)[]
-        {
-            (drumstickRawPrefab, drumstickCookedPrefab),
-            (steakRawPrefab, steakCookedPrefab),
-            (fishFilletRawPrefab, fishFilletCookedPrefab),
-            (wholeBirdRawPrefab, wholeBirdCookedPrefab)
-        };
+        if (!HasStateAuthority) return;
 
-        for (int i = 0; i < PotSlotCount; i++)
-        {
-            lastVisualFoodIndex[i] = -1;
-            lastVisualIsCooked[i] = false;
-        }
+        BurnTimer = 0f;
+        IsLit = false;
+        FuelAmount = 0;
 
-        if (HasStateAuthority)
+        for (int i = 0; i < SlotCount; i++)
         {
-            for (int i = 0; i < PotSlotCount; i++)
-            {
-                SlotTimers.Set(i, -1f);
-                SlotFoodIndices.Set(i, -1);
-            }
+            InputTypes.Set(i, -1);
+            InputAmounts.Set(i, 0);
+            CookTimers.Set(i, 0f);
+            OutputTypes.Set(i, -1);
+            OutputAmounts.Set(i, 0);
         }
     }
 
     public override void FixedUpdateNetwork()
     {
-        if (!HasStateAuthority)
+        if (!HasStateAuthority || !IsLit) return;
+
+        if (BurnTimer <= 0f)
         {
-            return;
+            if (FuelAmount <= 0)
+            {
+                IsLit = false;
+                return;
+            }
+
+            FuelAmount -= 1;
+            BurnTimer = FuelBurnTimePerWood;
+            if (FuelAmount <= 0) FuelAmount = 0;
+
+            int ashSlot = FindOutputSlot((int)ItemType.Ash);
+            if (ashSlot >= 0) AddOutput(ashSlot, (int)ItemType.Ash, 1);
         }
 
         float delta = Runner.DeltaTime;
-        for (int i = 0; i < CurrentSlotCount; i++)
+        BurnTimer = Mathf.Max(0f, BurnTimer - delta);
+
+        for (int i = 0; i < SlotCount; i++)
         {
-            float timer = SlotTimers.Get(i);
-            if (timer > 0f)
+            int inputType = InputTypes.Get(i);
+            int inputAmount = InputAmounts.Get(i);
+            if (inputType < 0 || inputAmount <= 0) continue;
+
+            int outputType = GetOutputTypeForInput(inputType);
+            int outputSlot = FindOutputSlot(outputType);
+            if (outputSlot < 0) continue;
+
+            float progress = CookTimers.Get(i) + delta;
+            if (progress > CookTimeSeconds * 2f) progress = 0f;
+            if (progress >= CookTimeSeconds)
             {
-                timer = Mathf.Max(0f, timer - delta);
-                SlotTimers.Set(i, timer);
+                progress = 0f;
+                InputAmounts.Set(i, inputAmount - 1);
+                AddOutput(outputSlot, outputType, 1);
+
+                if (inputAmount - 1 <= 0)
+                {
+                    InputTypes.Set(i, -1);
+                    CookTimers.Set(i, 0f);
+                    InputAmounts.Set(i, 0);
+                }
+                else
+                {
+                    CookTimers.Set(i, progress);
+                }
+            }
+            else
+            {
+                CookTimers.Set(i, progress);
             }
         }
     }
 
     public override void Render()
     {
-        for (int i = 0; i < CurrentSlotCount; i++)
+        for (int i = 0; i < SlotCount; i++)
         {
-            float timer = SlotTimers.Get(i);
-            int foodIndex = SlotFoodIndices.Get(i);
+            bool hasInput = InputAmounts.Get(i) > 0;
+            bool hasOutput = OutputAmounts.Get(i) > 0;
+            bool shouldShow = hasInput || hasOutput;
 
-            if (foodIndex < 0 || foodIndex >= foodPairs.Length)
+            if (shouldShow && slotVisuals[i] == null)
             {
-                if (lastVisualFoodIndex[i] >= 0)
-                {
-                    ClearSlotVisual(i);
-                    lastVisualFoodIndex[i] = -1;
-                    lastVisualIsCooked[i] = false;
-                }
-                continue;
+                slotVisuals[i] = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                slotVisuals[i].name = hasOutput ? "CampfireOutputVisual" : "CampfireInputVisual";
+                slotVisuals[i].transform.SetParent(transform, false);
+                slotVisuals[i].transform.localPosition = slotPositions[i];
+                slotVisuals[i].transform.localScale = hasOutput
+                    ? new Vector3(0.15f, 0.06f, 0.25f)
+                    : new Vector3(0.2f, 0.2f, 0.2f);
             }
-
-            bool isCooked = timer <= 0f;
-
-            if (foodIndex != lastVisualFoodIndex[i] || isCooked != lastVisualIsCooked[i])
+            else if (!shouldShow && slotVisuals[i] != null)
             {
-                ClearSlotVisual(i);
-
-                GameObject prefab = isCooked
-                    ? foodPairs[foodIndex].cooked
-                    : foodPairs[foodIndex].raw;
-
-                if (prefab != null)
-                {
-                    slotVisuals[i] = Instantiate(prefab, transform);
-                    slotVisuals[i].transform.localPosition = GetSlotPosition(i);
-                    slotVisuals[i].transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
-                }
-
-                lastVisualFoodIndex[i] = foodIndex;
-                lastVisualIsCooked[i] = isCooked;
+                Destroy(slotVisuals[i]);
+                slotVisuals[i] = null;
             }
-        }
-
-        for (int i = CurrentSlotCount; i < PotSlotCount; i++)
-        {
-            if (lastVisualFoodIndex[i] >= 0)
-            {
-                ClearSlotVisual(i);
-                lastVisualFoodIndex[i] = -1;
-                lastVisualIsCooked[i] = false;
-            }
-        }
-
-        if (HasPot != lastPotState)
-        {
-            lastPotState = HasPot;
-            if (HasPot) SpawnPotVisual();
-            else DestroyPotVisual();
         }
     }
 
-    public bool TryPlaceRawMeat(PlayerInventory inventory, ItemType rawType)
+    public bool TryAddFuel(PlayerInventory inventory)
     {
-        if (!HasStateAuthority || inventory == null)
-        {
-            return false;
-        }
+        if (inventory == null || !inventory.HasItem(ItemType.Wood, 1)) return false;
+        NetworkObject inventoryObject = inventory.GetComponentInParent<NetworkObject>();
+        if (inventoryObject == null) return false;
 
-        if (rawType != ItemType.RawChicken && rawType != ItemType.RawFish)
-        {
-            return false;
-        }
+        if (HasStateAuthority) AddFuelInternal(inventory, -1, 0);
+        else RPC_AddFuel(inventoryObject, -1);
+        return true;
+    }
 
-        if (!inventory.HasItem(rawType, 1))
-        {
-            return false;
-        }
+    public bool TryAddToCampfireFromSlot(PlayerInventory inventory, int playerSlot, bool isFuel, int campfireSlot, int amount = 0)
+    {
+        if (inventory == null) return false;
+        NetworkObject inventoryObject = inventory.GetComponentInParent<NetworkObject>();
+        if (inventoryObject == null) return false;
 
-        int freeSlot = FindFreeSlot();
-        if (freeSlot < 0)
+        if (isFuel)
         {
-            if (PickupUIManager.instance != null)
-            {
-                PickupUIManager.instance.ShowInfo("Campfire Full");
-            }
-            return false;
-        }
-
-        if (!inventory.RemoveItem(rawType, 1))
-        {
-            return false;
-        }
-
-        int foodIndex;
-        if (rawType == ItemType.RawFish)
-        {
-            foodIndex = 2;
+            if (playerSlot >= 0 && inventory.GetSlotItemType(playerSlot) != ItemType.Wood) return false;
+            if (playerSlot >= 0 && inventory.GetSlotAmount(playerSlot) <= 0) return false;
         }
         else
         {
-            int[] chickenIndices = new int[] { 0, 1, 3 };
-            foodIndex = chickenIndices[Random.Range(0, chickenIndices.Length)];
+            ItemType? itemType = inventory.GetSlotItemType(playerSlot);
+            if (!IsValidInput(itemType)) return false;
         }
 
-        SlotTimers.Set(freeSlot, CurrentCookTime);
-        SlotFoodIndices.Set(freeSlot, foodIndex);
+        if (HasStateAuthority) AddToCampfireInternal(inventory, playerSlot, isFuel, campfireSlot, amount);
+        else RPC_AddToCampfire(inventoryObject, playerSlot, isFuel, campfireSlot, amount);
         return true;
     }
 
-    public bool TryPickupCooked(PlayerInventory inventory, int slot)
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    private void RPC_AddFuel(NetworkObject inventoryObject, int playerSlot)
     {
-        if (!HasStateAuthority || inventory == null)
-        {
-            return false;
-        }
-
-        if (slot < 0 || slot >= CurrentSlotCount)
-        {
-            return false;
-        }
-
-        if (!HasCookedFood(slot))
-        {
-            return false;
-        }
-
-        ItemType cookedType = GetCookedItemType(slot);
-        inventory.AddItem(cookedType, 1);
-        ClearSlot(slot);
-        return true;
+        PlayerInventory inventory = inventoryObject != null ? inventoryObject.GetComponentInChildren<PlayerInventory>() : null;
+        if (inventory == null) return;
+        AddFuelInternal(inventory, playerSlot, 0);
     }
 
-    private ItemType GetCookedItemType(int slot)
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    private void RPC_AddToCampfire(NetworkObject inventoryObject, int playerSlot, bool isFuel, int campfireSlot, int amount)
     {
-        int foodIndex = SlotFoodIndices.Get(slot);
-        return foodIndex == 2 ? ItemType.CookedFish : ItemType.CookedChicken;
+        PlayerInventory inventory = inventoryObject != null ? inventoryObject.GetComponentInChildren<PlayerInventory>() : null;
+        if (inventory == null) return;
+        AddToCampfireInternal(inventory, playerSlot, isFuel, campfireSlot, amount);
     }
 
-    public bool HasCookedFood(int slot)
+    private void AddToCampfireInternal(PlayerInventory inventory, int playerSlot, bool isFuel, int campfireSlot, int amount)
     {
-        if (slot < 0 || slot >= CurrentSlotCount)
+        if (isFuel)
         {
-            return false;
+            AddFuelInternal(inventory, playerSlot, amount);
+            return;
         }
 
-        float timer = SlotTimers.Get(slot);
-        int foodIndex = SlotFoodIndices.Get(slot);
-        return timer <= 0f && foodIndex >= 0;
+        ItemType? itemType = inventory.GetSlotItemType(playerSlot);
+        if (!IsValidInput(itemType)) return;
+
+        int inputType = (int)itemType.Value;
+        int targetSlot = campfireSlot >= 0 ? campfireSlot : FindInputSlot(inputType);
+        if (targetSlot < 0) return;
+
+        int currentType = InputTypes.Get(targetSlot);
+        int currentAmount = InputAmounts.Get(targetSlot);
+        if (currentType >= 0 && currentType != inputType) return;
+
+        int freeSpace = MaxStack - currentAmount;
+        if (freeSpace <= 0) return;
+
+        int available = inventory.GetSlotAmount(playerSlot);
+        int requested = amount > 0 ? amount : available;
+        int transferAmount = Mathf.Min(Mathf.Min(available, requested), freeSpace);
+        if (transferAmount <= 0) return;
+        if (!inventory.RemoveItemFromSlot(playerSlot, transferAmount, out ItemType removedType)) return;
+        if (removedType != itemType.Value)
+        {
+            inventory.AddItemToSlot(removedType, transferAmount, playerSlot);
+            return;
+        }
+
+        InputTypes.Set(targetSlot, inputType);
+        InputAmounts.Set(targetSlot, currentAmount + transferAmount);
     }
 
-    private int FindFreeSlot()
+    private void AddFuelInternal(PlayerInventory inventory, int playerSlot, int amount)
     {
-        for (int i = 0; i < CurrentSlotCount; i++)
+        int availableAmount = playerSlot >= 0 ? inventory.GetSlotAmount(playerSlot) : 1;
+        if (availableAmount <= 0) return;
+
+        int freeSpace = MaxStack - FuelAmount;
+        if (freeSpace <= 0) return;
+
+        int requested = amount > 0 ? amount : availableAmount;
+        int transferAmount = Mathf.Min(Mathf.Min(availableAmount, requested), freeSpace);
+        if (playerSlot >= 0)
         {
-            if (SlotTimers.Get(i) < 0f && SlotFoodIndices.Get(i) < 0)
+            if (!inventory.RemoveItemFromSlot(playerSlot, transferAmount, out ItemType removedType)) return;
+            if (removedType != ItemType.Wood)
             {
-                return i;
+                inventory.AddItemToSlot(removedType, transferAmount, playerSlot);
+                return;
             }
         }
+        else if (!inventory.RemoveItem(ItemType.Wood, transferAmount))
+        {
+            return;
+        }
 
+        FuelAmount += transferAmount;
+    }
+
+    public bool TryPickupOutput(PlayerInventory inventory, int slot)
+    {
+        if (inventory == null) return false;
+        NetworkObject inventoryObject = inventory.GetComponentInParent<NetworkObject>();
+        if (inventoryObject == null) return false;
+
+        if (HasStateAuthority) PickupOutputInternal(inventory, slot);
+        else RPC_PickupOutput(inventoryObject, slot);
+        return true;
+    }
+
+    public bool TryPickupInput(PlayerInventory inventory, int slot)
+    {
+        if (inventory == null) return false;
+        NetworkObject inventoryObject = inventory.GetComponentInParent<NetworkObject>();
+        if (inventoryObject == null) return false;
+
+        if (HasStateAuthority) PickupInputInternal(inventory, slot);
+        else RPC_PickupInput(inventoryObject, slot);
+        return true;
+    }
+
+    public bool TryPickupFuel(PlayerInventory inventory)
+    {
+        if (inventory == null) return false;
+        NetworkObject inventoryObject = inventory.GetComponentInParent<NetworkObject>();
+        if (inventoryObject == null) return false;
+
+        if (HasStateAuthority) PickupFuelInternal(inventory);
+        else RPC_PickupFuel(inventoryObject);
+        return true;
+    }
+
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    private void RPC_PickupOutput(NetworkObject inventoryObject, int slot)
+    {
+        PlayerInventory inventory = inventoryObject != null ? inventoryObject.GetComponentInChildren<PlayerInventory>() : null;
+        if (inventory == null) return;
+        PickupOutputInternal(inventory, slot);
+    }
+
+    private void PickupOutputInternal(PlayerInventory inventory, int slot)
+    {
+        if (slot < 0 || slot >= SlotCount) return;
+        int outputType = OutputTypes.Get(slot);
+        int outputAmount = OutputAmounts.Get(slot);
+        if (outputType < 0 || outputAmount <= 0) return;
+
+        int accepted = inventory.AddItem((ItemType)outputType, outputAmount);
+        int remaining = outputAmount - accepted;
+        OutputAmounts.Set(slot, Mathf.Max(0, remaining));
+        if (remaining <= 0) OutputTypes.Set(slot, -1);
+    }
+
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    private void RPC_PickupInput(NetworkObject inventoryObject, int slot)
+    {
+        PlayerInventory inventory = inventoryObject != null ? inventoryObject.GetComponentInChildren<PlayerInventory>() : null;
+        if (inventory == null) return;
+        PickupInputInternal(inventory, slot);
+    }
+
+    private void PickupInputInternal(PlayerInventory inventory, int slot)
+    {
+        if (slot < 0 || slot >= SlotCount) return;
+        int inputType = InputTypes.Get(slot);
+        int inputAmount = InputAmounts.Get(slot);
+        if (inputType < 0 || inputAmount <= 0) return;
+
+        int accepted = inventory.AddItem((ItemType)inputType, inputAmount);
+        int remaining = inputAmount - accepted;
+        InputAmounts.Set(slot, Mathf.Max(0, remaining));
+        if (remaining <= 0)
+        {
+            InputTypes.Set(slot, -1);
+            CookTimers.Set(slot, 0f);
+        }
+        else
+        {
+            CookTimers.Set(slot, 0f);
+        }
+    }
+
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    private void RPC_PickupFuel(NetworkObject inventoryObject)
+    {
+        PlayerInventory inventory = inventoryObject != null ? inventoryObject.GetComponentInChildren<PlayerInventory>() : null;
+        if (inventory == null) return;
+        PickupFuelInternal(inventory);
+    }
+
+    private void PickupFuelInternal(PlayerInventory inventory)
+    {
+        if (FuelAmount <= 0) return;
+
+        int accepted = inventory.AddItem(ItemType.Wood, FuelAmount);
+        int remaining = FuelAmount - accepted;
+        FuelAmount = Mathf.Max(0, remaining);
+    }
+
+    private void AddOutput(int slot, int outputType, int amount)
+    {
+        if (OutputTypes.Get(slot) == -1) OutputTypes.Set(slot, outputType);
+        OutputAmounts.Set(slot, Mathf.Min(MaxStack, OutputAmounts.Get(slot) + amount));
+    }
+
+    private int FindInputSlot(int inputType)
+    {
+        for (int i = 0; i < SlotCount; i++)
+        {
+            if (InputTypes.Get(i) == inputType && InputAmounts.Get(i) < MaxStack)
+                return i;
+        }
+        for (int i = 0; i < SlotCount; i++)
+        {
+            if (InputTypes.Get(i) < 0 && InputAmounts.Get(i) <= 0)
+                return i;
+        }
         return -1;
     }
 
-    public bool TryPlaceCookingPot(PlayerInventory inventory)
+    private int FindOutputSlot(int outputType)
     {
-        if (!HasStateAuthority || inventory == null)
+        for (int i = 0; i < SlotCount; i++)
         {
-            return false;
+            if (OutputTypes.Get(i) == outputType && OutputAmounts.Get(i) < MaxStack)
+                return i;
         }
-
-        if (HasPot)
+        for (int i = 0; i < SlotCount; i++)
         {
-            return false;
+            if (OutputTypes.Get(i) < 0 && OutputAmounts.Get(i) <= 0)
+                return i;
         }
-
-        if (!inventory.HasItem(ItemType.CookingPot, 1))
-        {
-            return false;
-        }
-
-        if (!inventory.RemoveItem(ItemType.CookingPot, 1))
-        {
-            return false;
-        }
-
-        HasPot = true;
-        return true;
+        return -1;
     }
 
-    public bool TryRemoveCookingPot(PlayerInventory inventory)
+    private static bool IsValidInput(ItemType? itemType)
     {
-        if (!HasStateAuthority || inventory == null)
-        {
-            return false;
-        }
-
-        if (!HasPot)
-        {
-            return false;
-        }
-
-        for (int i = 0; i < CurrentSlotCount; i++)
-        {
-            if (SlotTimers.Get(i) >= 0f)
-            {
-                return false;
-            }
-        }
-
-        HasPot = false;
-        inventory.AddItem(ItemType.CookingPot, 1);
-        return true;
+        return itemType == ItemType.RawChicken || itemType == ItemType.RawFish;
     }
 
-    private void SpawnPotVisual()
+    private static int GetOutputTypeForInput(int inputType)
     {
-        if (potVisual != null) Destroy(potVisual);
-        potVisual = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-        potVisual.name = "CookingPotVisual";
-        potVisual.transform.SetParent(transform, false);
-        potVisual.transform.localPosition = new Vector3(0f, 0.75f, 0f);
-        potVisual.transform.localScale = new Vector3(0.4f, 0.2f, 0.4f);
-    }
-
-    private void DestroyPotVisual()
-    {
-        if (potVisual != null)
-        {
-            Destroy(potVisual);
-            potVisual = null;
-        }
-    }
-
-    private Vector3 GetSlotPosition(int slot)
-    {
-        if (HasPot && slot < potSlotPositions.Length)
-        {
-            return potSlotPositions[slot];
-        }
-
-        if (slot < baseSlotPositions.Length)
-        {
-            return baseSlotPositions[slot];
-        }
-
-        return Vector3.up * 0.55f;
-    }
-
-    private void ClearSlot(int slot)
-    {
-        SlotTimers.Set(slot, -1f);
-        SlotFoodIndices.Set(slot, -1);
-    }
-
-    private void ClearSlotVisual(int slot)
-    {
-        if (slotVisuals[slot] != null)
-        {
-            Destroy(slotVisuals[slot]);
-            slotVisuals[slot] = null;
-        }
+        ItemType itemType = (ItemType)inputType;
+        if (itemType == ItemType.RawChicken) return (int)ItemType.CookedChicken;
+        if (itemType == ItemType.RawFish) return (int)ItemType.CookedFish;
+        return -1;
     }
 }
