@@ -230,7 +230,7 @@ public class TestingResourceVendingMachine : MonoBehaviour
 
     private static GameObject CreateScrollView(Transform parent, Vector2 anchoredPosition, Vector2 size)
     {
-        GameObject scrollGo = new GameObject("ScrollView", typeof(RectTransform), typeof(Image), typeof(ScrollRect), typeof(Mask));
+        GameObject scrollGo = new GameObject("ScrollView", typeof(RectTransform), typeof(ScrollRect));
         MarkDontSave(scrollGo);
         scrollGo.transform.SetParent(parent, false);
 
@@ -240,9 +240,6 @@ public class TestingResourceVendingMachine : MonoBehaviour
         scrollRect.pivot = new Vector2(0.5f, 0.5f);
         scrollRect.sizeDelta = size;
         scrollRect.anchoredPosition = anchoredPosition;
-
-        scrollGo.GetComponent<Image>().color = new Color(0.12f, 0.12f, 0.12f, 0.4f);
-        scrollGo.GetComponent<Mask>().showMaskGraphic = false;
 
         GameObject viewportGo = new GameObject("Viewport", typeof(RectTransform), typeof(Image), typeof(Mask));
         MarkDontSave(viewportGo);
@@ -254,7 +251,9 @@ public class TestingResourceVendingMachine : MonoBehaviour
         viewportRect.pivot = new Vector2(0f, 1f);
         viewportRect.sizeDelta = Vector2.zero;
         viewportRect.anchoredPosition = Vector2.zero;
-        viewportGo.GetComponent<Image>().color = new Color(0.12f, 0.12f, 0.12f, 0f);
+
+        viewportGo.GetComponent<Image>().color = Color.white;
+        viewportGo.GetComponent<Mask>().showMaskGraphic = false;
 
         GameObject contentGo = new GameObject("Content", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
         MarkDontSave(contentGo);
