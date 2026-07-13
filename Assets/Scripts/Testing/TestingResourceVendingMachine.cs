@@ -7,7 +7,7 @@ public class TestingResourceVendingMachine : MonoBehaviour
     private const int DispenseAmount = 5;
 
     [SerializeField] private string panelTitle = "Testing Resources";
-    [SerializeField] private Vector2 panelSize = new Vector2(360f, 780f);
+    [SerializeField] private Vector2 panelSize = new Vector2(360f, 560f);
 
     private PlayerInventory currentInventory;
     private Canvas vendingCanvas;
@@ -202,20 +202,89 @@ public class TestingResourceVendingMachine : MonoBehaviour
         Image panelImage = panelObject.GetComponent<Image>();
         panelImage.color = new Color(0.08f, 0.08f, 0.08f, 0.92f);
 
-        CreateText(panelObject.transform, panelTitle, new Vector2(0f, 160f), 30, TextAnchor.MiddleCenter);
-        CreateButton(panelObject.transform, "WOOD x5", new Vector2(0f, 90f), DispenseWood);
-        CreateButton(panelObject.transform, "FIBER x5", new Vector2(0f, 30f), DispenseFiber);
-        CreateButton(panelObject.transform, "STONE x5", new Vector2(0f, -30f), DispenseStone);
-        CreateButton(panelObject.transform, "CLOTH x5", new Vector2(0f, -90f), DispenseCloth);
-        CreateButton(panelObject.transform, "RAW CHICKEN x5", new Vector2(0f, -150f), DispenseRawMeat);
-        CreateButton(panelObject.transform, "RAW FISH x5", new Vector2(0f, -210f), DispenseRawFish);
-        CreateButton(panelObject.transform, "IRON x5", new Vector2(0f, -270f), DispenseIron);
-        CreateButton(panelObject.transform, "COOKING POT x1", new Vector2(0f, -330f), DispenseCookingPot);
-        CreateButton(panelObject.transform, "FURNACE x1", new Vector2(0f, -390f), DispenseFurnace);
-        CreateButton(panelObject.transform, "CAMPFIRE x1", new Vector2(0f, -450f), DispenseCampfire);
-        CreateButton(panelObject.transform, "CLOSE", new Vector2(0f, -510f), Close);
+        CreateText(panelObject.transform, panelTitle, new Vector2(0f, panelSize.y * 0.5f - 40f), 28, TextAnchor.MiddleCenter);
+
+        float titleBottom = panelSize.y * 0.5f - 75f;
+        float closeTop = -panelSize.y * 0.5f + 60f;
+        float scrollHeight = Mathf.Abs(titleBottom - closeTop) - 20f;
+        float scrollY = titleBottom - scrollHeight * 0.5f - 5f;
+
+        GameObject scrollView = CreateScrollView(panelObject.transform, new Vector2(0f, scrollY), new Vector2(panelSize.x - 20f, scrollHeight));
+        RectTransform contentRect = scrollView.transform.Find("Viewport/Content").GetComponent<RectTransform>();
+
+        CreateButton(contentRect, "WOOD x5", Vector2.zero, DispenseWood);
+        CreateButton(contentRect, "FIBER x5", Vector2.zero, DispenseFiber);
+        CreateButton(contentRect, "STONE x5", Vector2.zero, DispenseStone);
+        CreateButton(contentRect, "CLOTH x5", Vector2.zero, DispenseCloth);
+        CreateButton(contentRect, "RAW CHICKEN x5", Vector2.zero, DispenseRawMeat);
+        CreateButton(contentRect, "RAW FISH x5", Vector2.zero, DispenseRawFish);
+        CreateButton(contentRect, "IRON x5", Vector2.zero, DispenseIron);
+        CreateButton(contentRect, "COOKING POT x1", Vector2.zero, DispenseCookingPot);
+        CreateButton(contentRect, "FURNACE x1", Vector2.zero, DispenseFurnace);
+        CreateButton(contentRect, "CAMPFIRE x1", Vector2.zero, DispenseCampfire);
+
+        CreateButton(panelObject.transform, "CLOSE", new Vector2(0f, closeTop), Close);
 
         panelObject.SetActive(false);
+    }
+
+    private static GameObject CreateScrollView(Transform parent, Vector2 anchoredPosition, Vector2 size)
+    {
+        GameObject scrollGo = new GameObject("ScrollView", typeof(RectTransform), typeof(Image), typeof(ScrollRect), typeof(Mask));
+        MarkDontSave(scrollGo);
+        scrollGo.transform.SetParent(parent, false);
+
+        RectTransform scrollRect = scrollGo.GetComponent<RectTransform>();
+        scrollRect.anchorMin = new Vector2(0.5f, 0.5f);
+        scrollRect.anchorMax = new Vector2(0.5f, 0.5f);
+        scrollRect.pivot = new Vector2(0.5f, 0.5f);
+        scrollRect.sizeDelta = size;
+        scrollRect.anchoredPosition = anchoredPosition;
+
+        scrollGo.GetComponent<Image>().color = new Color(0.12f, 0.12f, 0.12f, 0.4f);
+        scrollGo.GetComponent<Mask>().showMaskGraphic = false;
+
+        GameObject viewportGo = new GameObject("Viewport", typeof(RectTransform), typeof(Image), typeof(Mask));
+        MarkDontSave(viewportGo);
+        viewportGo.transform.SetParent(scrollGo.transform, false);
+
+        RectTransform viewportRect = viewportGo.GetComponent<RectTransform>();
+        viewportRect.anchorMin = Vector2.zero;
+        viewportRect.anchorMax = Vector2.one;
+        viewportRect.pivot = new Vector2(0f, 1f);
+        viewportRect.sizeDelta = Vector2.zero;
+        viewportRect.anchoredPosition = Vector2.zero;
+        viewportGo.GetComponent<Image>().color = new Color(0.12f, 0.12f, 0.12f, 0f);
+
+        GameObject contentGo = new GameObject("Content", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
+        MarkDontSave(contentGo);
+        contentGo.transform.SetParent(viewportGo.transform, false);
+
+        RectTransform contentRect = contentGo.GetComponent<RectTransform>();
+        contentRect.anchorMin = new Vector2(0f, 1f);
+        contentRect.anchorMax = new Vector2(1f, 1f);
+        contentRect.pivot = new Vector2(0.5f, 1f);
+        contentRect.sizeDelta = new Vector2(0f, 0f);
+        contentRect.anchoredPosition = Vector2.zero;
+
+        VerticalLayoutGroup layoutGroup = contentGo.GetComponent<VerticalLayoutGroup>();
+        layoutGroup.childAlignment = TextAnchor.UpperCenter;
+        layoutGroup.childForceExpandWidth = true;
+        layoutGroup.childForceExpandHeight = false;
+        layoutGroup.spacing = 4f;
+        layoutGroup.padding = new RectOffset(5, 5, 5, 5);
+
+        ContentSizeFitter fitter = contentGo.GetComponent<ContentSizeFitter>();
+        fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+        ScrollRect scroll = scrollGo.GetComponent<ScrollRect>();
+        scroll.viewport = viewportRect;
+        scroll.content = contentRect;
+        scroll.horizontal = false;
+        scroll.vertical = true;
+        scroll.movementType = ScrollRect.MovementType.Clamped;
+
+        return scrollGo;
     }
 
     private static void CreateButton(Transform parent, string label, Vector2 anchoredPosition, UnityEngine.Events.UnityAction action)
@@ -225,11 +294,24 @@ public class TestingResourceVendingMachine : MonoBehaviour
         buttonObject.transform.SetParent(parent, false);
 
         RectTransform rect = buttonObject.GetComponent<RectTransform>();
-        rect.anchorMin = new Vector2(0.5f, 0.5f);
-        rect.anchorMax = new Vector2(0.5f, 0.5f);
-        rect.pivot = new Vector2(0.5f, 0.5f);
-        rect.sizeDelta = new Vector2(260f, 48f);
-        rect.anchoredPosition = anchoredPosition;
+        bool inLayout = parent.GetComponent<VerticalLayoutGroup>() != null;
+
+        if (inLayout)
+        {
+            rect.anchorMin = new Vector2(0f, 1f);
+            rect.anchorMax = new Vector2(1f, 1f);
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.sizeDelta = new Vector2(0f, 48f);
+            rect.anchoredPosition = Vector2.zero;
+        }
+        else
+        {
+            rect.anchorMin = new Vector2(0.5f, 0.5f);
+            rect.anchorMax = new Vector2(0.5f, 0.5f);
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.sizeDelta = new Vector2(260f, 48f);
+            rect.anchoredPosition = anchoredPosition;
+        }
 
         Image image = buttonObject.GetComponent<Image>();
         image.color = new Color(0.22f, 0.24f, 0.26f, 0.96f);
