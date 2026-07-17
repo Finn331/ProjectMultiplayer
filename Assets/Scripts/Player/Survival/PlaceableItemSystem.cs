@@ -5,6 +5,8 @@ using UnityEngine.UI;
 [DisallowMultipleComponent]
 public class PlaceableItemSystem : MonoBehaviour
 {
+    private const float PlacementContactSkin = 0.04f;
+
     [System.Serializable]
     private class GhostPrefabBinding
     {
@@ -134,6 +136,23 @@ public class PlaceableItemSystem : MonoBehaviour
         return new Vector3(snappedX, snappedY, snappedZ);
     }
 
+    private static Vector3 GetBuildingPreviewBounds(ItemType itemType)
+    {
+        return itemType switch
+        {
+            ItemType.WallItem => new Vector3(1f, 2f, 0.2f),
+            ItemType.FloorItem => new Vector3(1f, 0.1f, 1f),
+            ItemType.RoofItem => new Vector3(1f, 0.1f, 1.5f),
+            ItemType.DoorItem => new Vector3(0.8f, 2f, 0.1f),
+            _ => Vector3.one
+        };
+    }
+
+    private static Vector3 GetPlacementCheckBounds(Vector3 bounds)
+    {
+        return Vector3.Max(bounds - Vector3.one * PlacementContactSkin, Vector3.one * 0.05f);
+    }
+
     public void TogglePlacementMode()
     {
         if (!CanPlaceSelectedItem())
@@ -234,7 +253,8 @@ public class PlaceableItemSystem : MonoBehaviour
 
     private bool IsPlacementBlocked(Vector3 groundPosition, Quaternion rotation, Collider groundCollider)
     {
-        Vector3 halfExtents = Vector3.Max(currentPreviewBounds, Vector3.one * 0.1f) * 0.5f;
+        Vector3 checkBounds = GetPlacementCheckBounds(Vector3.Max(currentPreviewBounds, Vector3.one * 0.1f));
+        Vector3 halfExtents = checkBounds * 0.5f;
         Vector3 center = groundPosition + Vector3.up * (halfExtents.y + Mathf.Max(0.01f, groundOffset));
         Collider[] hits = Physics.OverlapBox(center, halfExtents, rotation, placementBlockedMask, QueryTriggerInteraction.Ignore);
         for (int i = 0; i < hits.Length; i++)
@@ -274,8 +294,8 @@ public class PlaceableItemSystem : MonoBehaviour
         {
             previewObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
             previewObject.name = selectedItemType + " Placement Preview";
-            previewObject.transform.localScale = previewBounds;
-            currentPreviewBounds = previewBounds;
+            currentPreviewBounds = IsBuildingItem(selectedItemType) ? GetBuildingPreviewBounds(selectedItemType) : previewBounds;
+            previewObject.transform.localScale = currentPreviewBounds;
         }
 
         Collider[] previewColliders = previewObject.GetComponentsInChildren<Collider>(true);
