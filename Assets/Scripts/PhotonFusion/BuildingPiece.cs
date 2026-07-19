@@ -141,6 +141,9 @@ public class BuildingPiece : MonoBehaviour
         }
         if (model != null)
         {
+            Collider defaultCollider = model.GetComponent<Collider>();
+            if (defaultCollider != null)
+                DestroyImmediate(defaultCollider);
             model.transform.SetParent(transform, false);
             model.transform.localPosition = Vector3.zero;
             if (pieceType != BuildingPieceType.Floor)

@@ -5,7 +5,7 @@ using UnityEngine.UI;
 [DisallowMultipleComponent]
 public class PlaceableItemSystem : MonoBehaviour
 {
-    private const float PlacementContactSkin = 0.04f;
+    private const float PlacementContactSkin = 0.06f;
 
     [System.Serializable]
     private class GhostPrefabBinding
@@ -31,6 +31,8 @@ public class PlaceableItemSystem : MonoBehaviour
     [SerializeField] private float groundOffset = 0.02f;
     [SerializeField] private LayerMask placementSurfaceMask = ~0;
     [SerializeField] private LayerMask placementBlockedMask = 0;
+    [SerializeField] private float buildingSnapDistance = 1.2f;
+    [SerializeField] private bool buildingRotationSnap = true;
     [SerializeField] private Vector3 previewBounds = Vector3.one;
     [SerializeField] private GhostPrefabBinding[] ghostPrefabs;
     [SerializeField] private Material validPreviewMaterial;
@@ -48,6 +50,9 @@ public class PlaceableItemSystem : MonoBehaviour
     private float previewYawOffset;
     private PlacementRotateHold rotateHold;
     private Vector3 currentPreviewBounds;
+    private Collider snappedToCollider;
+    private Quaternion? snappedToRotation;
+    private BuildingPiece snappedToPiece;
 
     private void Awake()
     {
@@ -136,6 +141,55 @@ public class PlaceableItemSystem : MonoBehaviour
         return new Vector3(snappedX, snappedY, snappedZ);
     }
 
+    private Vector3 GetSnapPosition(Vector3 rawPosition)
+    {
+        Vector3 gridSnap = SnapToGrid(rawPosition);
+        float gridDistSqr = (rawPosition - gridSnap).sqrMagnitude;
+        Vector3 bestSnap = gridSnap;
+        float bestDistSqr = gridDistSqr;
+
+        snappedToPiece = null;
+
+        BuildingPiece[] pieces = FindObjectsOfType<BuildingPiece>(true);
+        if (pieces != null)
+        {
+            for (int i = 0; i < pieces.Length; i++)
+            {
+                BuildingPiece piece = pieces[i];
+                if (piece == null || !piece.gameObject.activeInHierarchy)
+                    continue;
+
+                Vector3 piecePos = piece.transform.position;
+                Vector3[] offsets = { Vector3.right, Vector3.left, Vector3.forward, Vector3.back };
+                for (int o = 0; o < offsets.Length; o++)
+                {
+                    Vector3 candidate = piecePos + offsets[o];
+                    candidate.y = gridSnap.y;
+                    float distSqr = (rawPosition - candidate).sqrMagnitude;
+                    if (distSqr <= bestDistSqr)
+                    {
+                        bestDistSqr = distSqr;
+                        bestSnap = candidate;
+                        snappedToPiece = piece;
+                    }
+                }
+            }
+        }
+
+        if (snappedToPiece != null)
+        {
+            snappedToCollider = snappedToPiece.gameObject.GetComponent<Collider>();
+            snappedToRotation = snappedToPiece.transform.rotation;
+        }
+        else
+        {
+            snappedToCollider = null;
+            snappedToRotation = null;
+        }
+
+        return bestSnap;
+    }
+
     private static Vector3 GetBuildingPreviewBounds(ItemType itemType)
     {
         return itemType switch
@@ -215,6 +269,9 @@ public class PlaceableItemSystem : MonoBehaviour
         placementMode = false;
         currentPlacementValid = false;
         previewYawOffset = 0f;
+        snappedToCollider = null;
+        snappedToRotation = null;
+        snappedToPiece = null;
         HideRotateCancelButtons();
         if (previewObject != null)
         {
@@ -241,10 +298,22 @@ public class PlaceableItemSystem : MonoBehaviour
 
         if (IsBuildingItem(selectedItemType))
         {
-            targetPosition = SnapToGrid(targetPosition);
+            targetPosition = GetSnapPosition(targetPosition);
         }
 
         Quaternion targetRotation = Quaternion.Euler(0f, transform.eulerAngles.y + previewYawOffset, 0f);
+        if (buildingRotationSnap && IsBuildingItem(selectedItemType))
+        {
+            if (snappedToRotation.HasValue)
+            {
+                targetRotation = snappedToRotation.Value;
+            }
+            else
+            {
+                float yaw = Mathf.Round(targetRotation.eulerAngles.y / 90f) * 90f;
+                targetRotation = Quaternion.Euler(0f, yaw, 0f);
+            }
+        }
         previewObject.transform.SetPositionAndRotation(targetPosition, targetRotation);
 
         currentPlacementValid = hasGround && !IsPlacementBlocked(targetPosition, targetRotation, hit.collider);
@@ -260,7 +329,7 @@ public class PlaceableItemSystem : MonoBehaviour
         for (int i = 0; i < hits.Length; i++)
         {
             Collider hit = hits[i];
-            if (hit != null && hit != groundCollider)
+            if (hit != null && hit != groundCollider && hit != snappedToCollider)
             {
                 return true;
             }
@@ -564,7 +633,8 @@ public class PlaceableItemSystem : MonoBehaviour
 
     public void RotatePreview()
     {
-        previewYawOffset = (previewYawOffset + 45f) % 360f;
+        float step = buildingRotationSnap && IsBuildingItem(selectedItemType) ? 90f : 45f;
+        previewYawOffset = (previewYawOffset + step) % 360f;
     }
 
     public void CancelPlacement()
