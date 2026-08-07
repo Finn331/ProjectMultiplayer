@@ -8,26 +8,40 @@ public class BuildingPiece : NetworkBehaviour
     private const float MaxRequestedDamage = DefaultMaxHealth;
 
     private float offlineHealth = DefaultMaxHealth;
+    private int offlinePieceTypeValue;
+    private Vector3Int offlineGridPosition;
+    private int offlineRotationIndex;
+    private PlayerRef offlinePlacer;
     private bool offlineInitialized;
 
-    [Networked] public float Health { get; private set; }
-    [Networked] public int PieceTypeValue { get; private set; }
-    [Networked] public int GridX { get; private set; }
-    [Networked] public int GridY { get; private set; }
-    [Networked] public int GridZ { get; private set; }
-    [Networked] public int RotationIndex { get; private set; }
-    [Networked] public PlayerRef Placer { get; private set; }
-    [Networked] private NetworkBool IsInitialized { get; set; }
+    [Networked] private float NetworkHealth { get; set; }
+    [Networked] private int NetworkPieceTypeValue { get; set; }
+    [Networked] private int NetworkGridX { get; set; }
+    [Networked] private int NetworkGridY { get; set; }
+    [Networked] private int NetworkGridZ { get; set; }
+    [Networked] private int NetworkRotationIndex { get; set; }
+    [Networked] private PlayerRef NetworkPlacer { get; set; }
+    [Networked] private NetworkBool NetworkInitialized { get; set; }
 
-    public BuildingPieceType PieceType => (BuildingPieceType)PieceTypeValue;
-    public Vector3Int GridPosition => new Vector3Int(GridX, GridY, GridZ);
-    public float HealthValue => IsNetworkedRuntime ? Health : offlineHealth;
+    public float Health => IsNetworkedRuntime ? NetworkHealth : offlineHealth;
+    public int PieceTypeValue => CurrentPieceTypeValue;
+    public int GridX => CurrentGridPosition.x;
+    public int GridY => CurrentGridPosition.y;
+    public int GridZ => CurrentGridPosition.z;
+    public int RotationIndex => CurrentRotationIndex;
+    public PlayerRef Placer => IsNetworkedRuntime ? NetworkPlacer : offlinePlacer;
+    public BuildingPieceType PieceType => (BuildingPieceType)CurrentPieceTypeValue;
+    public Vector3Int GridPosition => CurrentGridPosition;
+    public float HealthValue => Health;
     public float MaxHealthValue => DefaultMaxHealth;
     public float HealthRatio => Mathf.Clamp01(HealthValue / DefaultMaxHealth);
     public bool IsDestroyed => HealthValue <= 0f;
 
     private bool IsNetworkedRuntime => Object != null && Object.IsValid;
-    private bool IsInitializedForVisuals => IsNetworkedRuntime ? IsInitialized : offlineInitialized;
+    private bool IsInitializedForVisuals => IsNetworkedRuntime ? NetworkInitialized : offlineInitialized;
+    private int CurrentPieceTypeValue => IsNetworkedRuntime ? NetworkPieceTypeValue : offlinePieceTypeValue;
+    private Vector3Int CurrentGridPosition => IsNetworkedRuntime ? new Vector3Int(NetworkGridX, NetworkGridY, NetworkGridZ) : offlineGridPosition;
+    private int CurrentRotationIndex => IsNetworkedRuntime ? NetworkRotationIndex : offlineRotationIndex;
 
     private MeshRenderer meshRenderer;
     private MaterialPropertyBlock materialPropertyBlock;
@@ -69,19 +83,20 @@ public class BuildingPiece : NetworkBehaviour
             return;
         }
 
-        if (!System.Enum.IsDefined(typeof(BuildingPieceType), PieceTypeValue))
+        int pieceTypeValue = CurrentPieceTypeValue;
+        if (!System.Enum.IsDefined(typeof(BuildingPieceType), pieceTypeValue))
         {
             return;
         }
 
-        if (generatedModel != null && builtPieceTypeValue == PieceTypeValue && rootCollider != null)
+        if (generatedModel != null && builtPieceTypeValue == pieceTypeValue && rootCollider != null)
         {
             return;
         }
 
         ClearGeneratedModel();
-        CreateModel(PieceType);
-        builtPieceTypeValue = PieceTypeValue;
+        CreateModel((BuildingPieceType)pieceTypeValue);
+        builtPieceTypeValue = pieceTypeValue;
         meshRenderer = GetComponentInChildren<MeshRenderer>();
     }
 
@@ -132,25 +147,30 @@ public class BuildingPiece : NetworkBehaviour
             return false;
         }
 
-        PieceTypeValue = (int)pieceType;
-        GridX = gridPos.x;
-        GridY = gridPos.y;
-        GridZ = gridPos.z;
-        RotationIndex = Mathf.Clamp(rotIndex, 0, 3);
-        Placer = placer;
+        int clampedRotationIndex = Mathf.Clamp(rotIndex, 0, 3);
 
         if (IsNetworkedRuntime)
         {
-            Health = DefaultMaxHealth;
-            IsInitialized = true;
+            NetworkPieceTypeValue = (int)pieceType;
+            NetworkGridX = gridPos.x;
+            NetworkGridY = gridPos.y;
+            NetworkGridZ = gridPos.z;
+            NetworkRotationIndex = clampedRotationIndex;
+            NetworkPlacer = placer;
+            NetworkHealth = DefaultMaxHealth;
+            NetworkInitialized = true;
         }
         else
         {
+            offlinePieceTypeValue = (int)pieceType;
+            offlineGridPosition = gridPos;
+            offlineRotationIndex = clampedRotationIndex;
+            offlinePlacer = placer;
             offlineHealth = DefaultMaxHealth;
             offlineInitialized = true;
         }
 
-        transform.rotation = Quaternion.Euler(0f, RotationIndex * 90f, 0f);
+        transform.rotation = Quaternion.Euler(0f, CurrentRotationIndex * 90f, 0f);
         EnsureVisualBuilt();
         return true;
     }
@@ -263,8 +283,8 @@ public class BuildingPiece : NetworkBehaviour
             return;
         }
 
-        Health = Mathf.Max(0f, Health - clampedAmount);
-        if (Health <= 0f)
+        NetworkHealth = Mathf.Max(0f, NetworkHealth - clampedAmount);
+        if (NetworkHealth <= 0f)
         {
             DropDemolishResources();
             Runner.Despawn(Object);

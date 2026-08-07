@@ -46,7 +46,29 @@ public static class BuildingPlacementRulesSelfTest
         Expect(BuildingPlacementRules.GetRotationIndex(Quaternion.Euler(0f, 270f, 0f)) == 3, "270 degrees index");
         Expect(BuildingPlacementRules.GetRotationIndex(Quaternion.Euler(0f, 360f, 0f)) == 0, "360 degrees index");
 
+        RunOfflineBuildingPieceInitializationTest();
+
         Debug.Log("BuildingPlacementRulesSelfTest passed.");
+    }
+
+    private static void RunOfflineBuildingPieceInitializationTest()
+    {
+        GameObject go = new GameObject("OfflineBuildingPieceSelfTest");
+        try
+        {
+            BuildingPiece piece = go.AddComponent<BuildingPiece>();
+            piece.Initialize(BuildingPieceType.Wall, Vector3Int.zero, 0);
+
+            Expect(piece.PieceType == BuildingPieceType.Wall, "Offline piece type should be Wall.");
+            Expect(piece.GridPosition == Vector3Int.zero, "Offline grid position should be zero.");
+            Expect(go.transform.childCount > 0, "Offline building piece should create a visual child.");
+            Expect(go.GetComponent<BoxCollider>() != null, "Offline building piece should create a root BoxCollider.");
+            Expect(Mathf.Abs(piece.HealthRatio - 1f) <= 0.0001f, "Offline building piece should start at full health.");
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(go);
+        }
     }
 
     private static void Expect(bool condition, string message)
