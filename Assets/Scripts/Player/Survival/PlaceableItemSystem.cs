@@ -29,8 +29,6 @@ public class PlaceableItemSystem : MonoBehaviour
     [SerializeField] private float groundOffset = 0.02f;
     [SerializeField] private LayerMask placementSurfaceMask = ~0;
     [SerializeField] private LayerMask placementBlockedMask = 0;
-    [SerializeField] private float buildingSnapDistance = 1.2f;
-    [SerializeField] private bool buildingRotationSnap = true;
     [SerializeField] private Vector3 previewBounds = Vector3.one;
     [SerializeField] private GhostPrefabBinding[] ghostPrefabs;
     [SerializeField] private Material validPreviewMaterial;
@@ -286,7 +284,7 @@ public class PlaceableItemSystem : MonoBehaviour
         }
 
         Quaternion targetRotation = Quaternion.Euler(0f, transform.eulerAngles.y + previewYawOffset, 0f);
-        if (buildingRotationSnap && IsBuildingItem(selectedItemType))
+        if (IsBuildingItem(selectedItemType))
         {
             if (snappedToRotation.HasValue)
             {
@@ -613,7 +611,7 @@ public class PlaceableItemSystem : MonoBehaviour
 
     public void RotatePreview()
     {
-        float step = buildingRotationSnap && IsBuildingItem(selectedItemType) ? 90f : 45f;
+        float step = IsBuildingItem(selectedItemType) ? 90f : 45f;
         previewYawOffset = (previewYawOffset + step) % 360f;
     }
 
