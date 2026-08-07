@@ -242,15 +242,8 @@ public class PlayerInteractionSystem : MonoBehaviour
 
         nextInteractTime = Time.unscaledTime + Mathf.Max(0.01f, interactDebounceSeconds);
 
-        if (!this.HasLocalInteractAuthority() || currentTarget == null)
+        if (!this.HasLocalInteractAuthority())
         {
-            return;
-        }
-
-        PickableItem item = currentTarget.GetComponent<PickableItem>();
-        if (item != null)
-        {
-            this.TryPickupItem(item);
             return;
         }
 
@@ -265,6 +258,18 @@ public class PlayerInteractionSystem : MonoBehaviour
                 currentBuildingTarget = null;
                 HideHpBar();
             }
+            return;
+        }
+
+        if (currentTarget == null)
+        {
+            return;
+        }
+
+        PickableItem item = currentTarget.GetComponent<PickableItem>();
+        if (item != null)
+        {
+            this.TryPickupItem(item);
             return;
         }
 
@@ -472,7 +477,7 @@ public class PlayerInteractionSystem : MonoBehaviour
         var fusionObject = GetComponent<Fusion.NetworkObject>();
         if (fusionObject != null && fusionObject.IsValid)
         {
-            return fusionObject.HasStateAuthority;
+            return fusionObject.HasInputAuthority || fusionObject.HasStateAuthority;
         }
 
         Unity.Netcode.NetworkObject networkObject = GetComponent<Unity.Netcode.NetworkObject>();
