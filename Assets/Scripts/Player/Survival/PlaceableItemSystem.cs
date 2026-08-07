@@ -168,7 +168,7 @@ public class PlaceableItemSystem : MonoBehaviour
         if (snappedToPiece != null)
         {
             snappedToCollider = snappedToPiece.gameObject.GetComponent<Collider>();
-            snappedToRotation = snappedToPiece.transform.rotation;
+            snappedToRotation = BuildingPlacementRules.NormalizeBuildingRotation(snappedToPiece.transform.rotation);
         }
         else
         {
