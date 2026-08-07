@@ -859,7 +859,12 @@ public class FusionPlayerInventory : NetworkBehaviour
         FusionPlaceableObject placeableObject = placedObject.GetComponent<FusionPlaceableObject>();
         if (placeableObject != null)
         {
-            placeableObject.Initialize(itemType, info.Source);
+            if (!placeableObject.Initialize(itemType, info.Source))
+            {
+                Runner.Despawn(placedObject);
+                inventory.AddItemToSlot(itemType, 1, slotIndex);
+                return;
+            }
         }
     }
 
@@ -891,7 +896,7 @@ public class FusionPlayerInventory : NetworkBehaviour
             return;
         }
 
-        if (IsPlacementBlocked(snappedPosition, snappedRotation, bounds, groundCollider))
+        if (IsPlacementBlocked(snappedPosition, snappedRotation, bounds, groundCollider, true))
         {
             return;
         }
@@ -1054,9 +1059,11 @@ public class FusionPlayerInventory : NetworkBehaviour
         return true;
     }
 
-    private bool IsPlacementBlocked(Vector3 groundPosition, Quaternion rotation, Vector3 bounds, Collider groundCollider)
+    private bool IsPlacementBlocked(Vector3 groundPosition, Quaternion rotation, Vector3 bounds, Collider groundCollider, bool useContactSkin = false)
     {
-        Vector3 checkBounds = BuildingPlacementRules.GetPlacementCheckBounds(Vector3.Max(bounds, Vector3.one * 0.1f));
+        Vector3 checkBounds = useContactSkin
+            ? BuildingPlacementRules.GetPlacementCheckBounds(Vector3.Max(bounds, Vector3.one * 0.1f))
+            : Vector3.Max(bounds, Vector3.one * 0.1f);
         Vector3 halfExtents = checkBounds * 0.5f;
         Vector3 center = groundPosition + Vector3.up * (halfExtents.y + Mathf.Max(0.01f, placementGroundOffset));
         Collider[] hits = Physics.OverlapBox(center, halfExtents, rotation, placementBlockedMask, QueryTriggerInteraction.Ignore);
