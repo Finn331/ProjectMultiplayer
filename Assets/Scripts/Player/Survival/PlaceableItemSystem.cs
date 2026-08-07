@@ -5,8 +5,6 @@ using UnityEngine.UI;
 [DisallowMultipleComponent]
 public class PlaceableItemSystem : MonoBehaviour
 {
-    private const float PlacementContactSkin = 0.06f;
-
     [System.Serializable]
     private class GhostPrefabBinding
     {
@@ -126,19 +124,12 @@ public class PlaceableItemSystem : MonoBehaviour
 
     private static bool IsBuildingItem(ItemType itemType)
     {
-        return itemType == ItemType.WallItem
-            || itemType == ItemType.FloorItem
-            || itemType == ItemType.RoofItem
-            || itemType == ItemType.DoorItem;
+        return BuildingPlacementRules.IsBuildingItem(itemType);
     }
 
     private static Vector3 SnapToGrid(Vector3 worldPosition)
     {
-        const float gridSize = 1f;
-        float snappedX = Mathf.Round(worldPosition.x / gridSize) * gridSize;
-        float snappedY = Mathf.Round(worldPosition.y / gridSize) * gridSize;
-        float snappedZ = Mathf.Round(worldPosition.z / gridSize) * gridSize;
-        return new Vector3(snappedX, snappedY, snappedZ);
+        return BuildingPlacementRules.SnapToGrid(worldPosition);
     }
 
     private Vector3 GetSnapPosition(Vector3 rawPosition)
@@ -192,19 +183,12 @@ public class PlaceableItemSystem : MonoBehaviour
 
     private static Vector3 GetBuildingPreviewBounds(ItemType itemType)
     {
-        return itemType switch
-        {
-            ItemType.WallItem => new Vector3(1f, 2f, 0.2f),
-            ItemType.FloorItem => new Vector3(1f, 0.1f, 1f),
-            ItemType.RoofItem => new Vector3(1f, 0.1f, 1.5f),
-            ItemType.DoorItem => new Vector3(0.8f, 2f, 0.1f),
-            _ => Vector3.one
-        };
+        return BuildingPlacementRules.GetBounds(itemType);
     }
 
     private static Vector3 GetPlacementCheckBounds(Vector3 bounds)
     {
-        return Vector3.Max(bounds - Vector3.one * PlacementContactSkin, Vector3.one * 0.05f);
+        return BuildingPlacementRules.GetPlacementCheckBounds(bounds);
     }
 
     public void TogglePlacementMode()
@@ -310,8 +294,7 @@ public class PlaceableItemSystem : MonoBehaviour
             }
             else
             {
-                float yaw = Mathf.Round(targetRotation.eulerAngles.y / 90f) * 90f;
-                targetRotation = Quaternion.Euler(0f, yaw, 0f);
+                targetRotation = BuildingPlacementRules.NormalizeBuildingRotation(targetRotation);
             }
         }
         previewObject.transform.SetPositionAndRotation(targetPosition, targetRotation);
@@ -425,18 +408,15 @@ public class PlaceableItemSystem : MonoBehaviour
 
         if (IsBuildingItem(itemType))
         {
-            BuildingPieceType pieceType = itemType switch
+            if (!BuildingPlacementRules.TryGetPieceType(itemType, out BuildingPieceType pieceType))
             {
-                ItemType.WallItem => BuildingPieceType.Wall,
-                ItemType.FloorItem => BuildingPieceType.Floor,
-                ItemType.RoofItem => BuildingPieceType.Roof,
-                ItemType.DoorItem => BuildingPieceType.Door,
-                _ => BuildingPieceType.Wall
-            };
+                return false;
+            }
+
             GameObject placed = new GameObject("Building_" + pieceType);
-            placed.transform.SetPositionAndRotation(position, rotation);
+            placed.transform.SetPositionAndRotation(position, BuildingPlacementRules.NormalizeBuildingRotation(rotation));
             BuildingPiece piece = placed.AddComponent<BuildingPiece>();
-            piece.Initialize(pieceType, Vector3Int.RoundToInt(position), 0);
+            piece.Initialize(pieceType, Vector3Int.RoundToInt(BuildingPlacementRules.SnapToGrid(position)), BuildingPlacementRules.GetRotationIndex(rotation));
             return true;
         }
 
