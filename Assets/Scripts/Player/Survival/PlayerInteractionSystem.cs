@@ -1,7 +1,7 @@
 using System.Collections.Generic;
+using Fusion;
 using UnityEngine;
 using UnityEngine.UI;
-using Unity.Netcode;
 
 public class PlayerInteractionSystem : MonoBehaviour
 {
@@ -259,9 +259,11 @@ public class PlayerInteractionSystem : MonoBehaviour
             demolishHoldTimer += Time.unscaledDeltaTime;
             if (demolishHoldTimer >= demolishHoldTime)
             {
-                currentBuildingTarget.Demolish();
+                NetworkObject playerObject = GetComponent<NetworkObject>();
+                currentBuildingTarget.RequestDemolish(playerObject);
                 demolishHoldTimer = 0f;
                 currentBuildingTarget = null;
+                HideHpBar();
             }
             return;
         }
@@ -473,8 +475,8 @@ public class PlayerInteractionSystem : MonoBehaviour
             return fusionObject.HasStateAuthority;
         }
 
-        NetworkObject networkObject = GetComponent<NetworkObject>();
-        if (networkObject != null && NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+        Unity.Netcode.NetworkObject networkObject = GetComponent<Unity.Netcode.NetworkObject>();
+        if (networkObject != null && Unity.Netcode.NetworkManager.Singleton != null && Unity.Netcode.NetworkManager.Singleton.IsListening)
         {
             if (!networkObject.IsSpawned)
             {
