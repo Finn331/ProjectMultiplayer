@@ -33,6 +33,7 @@ public class BuildingPiece : NetworkBehaviour
     private MaterialPropertyBlock materialPropertyBlock;
     private GameObject generatedModel;
     private BoxCollider rootCollider;
+    private bool rootColliderCreatedByBuildingPiece;
     private int builtPieceTypeValue = int.MinValue;
     private static readonly int ColorPropertyId = Shader.PropertyToID("_Color");
 
@@ -91,13 +92,14 @@ public class BuildingPiece : NetworkBehaviour
             DestroyOwnedObject(generatedModel);
         }
 
-        if (rootCollider != null)
+        if (rootCollider != null && rootColliderCreatedByBuildingPiece)
         {
             DestroyOwnedObject(rootCollider);
         }
 
         generatedModel = null;
         rootCollider = null;
+        rootColliderCreatedByBuildingPiece = false;
         meshRenderer = null;
         builtPieceTypeValue = int.MinValue;
     }
@@ -476,7 +478,13 @@ public class BuildingPiece : NetworkBehaviour
                 model.transform.localPosition += Vector3.up * GetModelYOffset(pieceType);
         }
 
-        rootCollider = gameObject.AddComponent<BoxCollider>();
+        rootCollider = GetComponent<BoxCollider>();
+        if (rootCollider == null)
+        {
+            rootCollider = gameObject.AddComponent<BoxCollider>();
+            rootColliderCreatedByBuildingPiece = true;
+        }
+
         BoxCollider collider = rootCollider;
         switch (pieceType)
         {

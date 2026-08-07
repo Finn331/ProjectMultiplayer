@@ -949,6 +949,10 @@ MonoBehaviour:
   woodDropModelPrefab: {fileID: 1612604254436862065, guid: db1b6110189fe3b4e84e6e4b77f1b4ae,
     type: 3}
   stoneDropModelPrefab: {fileID: 0}
+  buildingPiecePrefab:
+    RawGuidValue: 00000000000000000000000000000000
+  buildingPiecePrefabObject: {fileID: 5573617665942076829, guid: d8621aa9b7bf1d8489ef553bbb844d91,
+    type: 3}
   placeablePrefabs:
   - itemType: 10
     prefab:
