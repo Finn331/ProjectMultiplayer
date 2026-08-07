@@ -1,36 +1,119 @@
+using Fusion;
 using UnityEngine;
 
-public class BuildingPiece : MonoBehaviour
+public class BuildingPiece : NetworkBehaviour
 {
     public const float DefaultMaxHealth = 100f;
+    private const float InteractDistance = 3f;
 
-    private float health = DefaultMaxHealth;
-    private int pieceTypeValue;
-    private Vector3Int gridPosition;
-    private int rotationIndex;
+    private float offlineHealth = DefaultMaxHealth;
 
-    public BuildingPieceType PieceType => (BuildingPieceType)pieceTypeValue;
-    public float HealthValue => health;
+    [Networked] public float Health { get; private set; }
+    [Networked] public int PieceTypeValue { get; private set; }
+    [Networked] public int GridX { get; private set; }
+    [Networked] public int GridY { get; private set; }
+    [Networked] public int GridZ { get; private set; }
+    [Networked] public int RotationIndex { get; private set; }
+    [Networked] public PlayerRef Placer { get; private set; }
+
+    public BuildingPieceType PieceType => (BuildingPieceType)PieceTypeValue;
+    public Vector3Int GridPosition => new Vector3Int(GridX, GridY, GridZ);
+    public float HealthValue => IsNetworkedRuntime ? Health : offlineHealth;
     public float MaxHealthValue => DefaultMaxHealth;
-    public float HealthRatio => health / DefaultMaxHealth;
-    public bool IsDestroyed => health <= 0f;
+    public float HealthRatio => Mathf.Clamp01(HealthValue / DefaultMaxHealth);
+    public bool IsDestroyed => HealthValue <= 0f;
+
+    private bool IsNetworkedRuntime => Object != null && Object.IsValid;
 
     private MeshRenderer meshRenderer;
     private Material instanceMaterial;
+    private GameObject generatedModel;
+    private BoxCollider rootCollider;
+    private int builtPieceTypeValue = int.MinValue;
     private static readonly int ColorPropertyId = Shader.PropertyToID("_Color");
 
     private void Start()
     {
-        meshRenderer = GetComponentInChildren<MeshRenderer>();
-        if (meshRenderer != null)
-        {
-            instanceMaterial = meshRenderer.material;
-        }
+        EnsureVisualBuilt();
+    }
+
+    public override void Spawned()
+    {
+        EnsureVisualBuilt();
+    }
+
+    public override void Render()
+    {
+        EnsureVisualBuilt();
+        UpdateDamageTint();
     }
 
     private void Update()
     {
+        if (!IsNetworkedRuntime)
+        {
+            EnsureVisualBuilt();
+            UpdateDamageTint();
+        }
+    }
+
+    private void EnsureVisualBuilt()
+    {
+        if (!System.Enum.IsDefined(typeof(BuildingPieceType), PieceTypeValue))
+        {
+            return;
+        }
+
+        if (generatedModel != null && builtPieceTypeValue == PieceTypeValue && rootCollider != null)
+        {
+            return;
+        }
+
+        ClearGeneratedModel();
+        CreateModel(PieceType);
+        builtPieceTypeValue = PieceTypeValue;
+        meshRenderer = GetComponentInChildren<MeshRenderer>();
+        instanceMaterial = meshRenderer != null ? meshRenderer.material : null;
+    }
+
+    private void ClearGeneratedModel()
+    {
+        for (int i = transform.childCount - 1; i >= 0; i--)
+        {
+            Transform child = transform.GetChild(i);
+            if (Application.isPlaying)
+            {
+                Destroy(child.gameObject);
+            }
+            else
+            {
+                DestroyImmediate(child.gameObject);
+            }
+        }
+
+        BoxCollider[] colliders = GetComponents<BoxCollider>();
+        for (int i = colliders.Length - 1; i >= 0; i--)
+        {
+            if (Application.isPlaying)
+            {
+                Destroy(colliders[i]);
+            }
+            else
+            {
+                DestroyImmediate(colliders[i]);
+            }
+        }
+
+        generatedModel = null;
+        rootCollider = null;
+        meshRenderer = null;
+        instanceMaterial = null;
+    }
+
+    private void UpdateDamageTint()
+    {
         if (instanceMaterial == null) return;
+
         float ratio = HealthRatio;
         Color color;
         if (ratio > 0.66f) color = Color.Lerp(Color.yellow, Color.green, (ratio - 0.66f) / 0.34f);
@@ -41,31 +124,169 @@ public class BuildingPiece : MonoBehaviour
 
     public void Initialize(BuildingPieceType pieceType, Vector3Int gridPos, int rotIndex)
     {
-        pieceTypeValue = (int)pieceType;
-        gridPosition = gridPos;
-        rotationIndex = rotIndex;
-        health = DefaultMaxHealth;
-        CreateModel(pieceType);
+        Initialize(pieceType, gridPos, rotIndex, PlayerRef.None);
+    }
+
+    public bool Initialize(BuildingPieceType pieceType, Vector3Int gridPos, int rotIndex, PlayerRef placer)
+    {
+        if (IsNetworkedRuntime && !HasStateAuthority)
+        {
+            return false;
+        }
+
+        PieceTypeValue = (int)pieceType;
+        GridX = gridPos.x;
+        GridY = gridPos.y;
+        GridZ = gridPos.z;
+        RotationIndex = Mathf.Clamp(rotIndex, 0, 3);
+        Placer = placer;
+
+        if (IsNetworkedRuntime)
+        {
+            Health = DefaultMaxHealth;
+        }
+        else
+        {
+            offlineHealth = DefaultMaxHealth;
+        }
+
+        transform.rotation = Quaternion.Euler(0f, RotationIndex * 90f, 0f);
+        EnsureVisualBuilt();
+        return true;
     }
 
     public void TakeDamage(float amount)
     {
-        health = Mathf.Max(0f, health - amount);
-        if (health <= 0f)
+        RequestDamage(null, amount);
+    }
+
+    public void RequestDamage(NetworkObject requester, float amount)
+    {
+        if (amount <= 0f)
+        {
+            return;
+        }
+
+        if (!IsNetworkedRuntime)
+        {
+            ApplyOfflineDamage(amount);
+            return;
+        }
+
+        if (HasStateAuthority)
+        {
+            ApplyNetworkDamage(requester, amount);
+            return;
+        }
+
+        RPC_RequestDamage(requester, amount);
+    }
+
+    public void Demolish()
+    {
+        RequestDemolish(null);
+    }
+
+    public void RequestDemolish(NetworkObject requester)
+    {
+        if (!IsNetworkedRuntime)
+        {
+            DropDemolishResources();
+            Destroy(gameObject);
+            return;
+        }
+
+        if (HasStateAuthority)
+        {
+            ApplyNetworkDemolish(requester);
+            return;
+        }
+
+        RPC_RequestDemolish(requester);
+    }
+
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    private void RPC_RequestDamage(NetworkObject requester, float amount, RpcInfo info = default)
+    {
+        if (!IsAuthorizedRequester(requester, info))
+        {
+            return;
+        }
+
+        ApplyNetworkDamage(requester, amount);
+    }
+
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    private void RPC_RequestDemolish(NetworkObject requester, RpcInfo info = default)
+    {
+        if (!IsAuthorizedRequester(requester, info))
+        {
+            return;
+        }
+
+        ApplyNetworkDemolish(requester);
+    }
+
+    private void ApplyOfflineDamage(float amount)
+    {
+        offlineHealth = Mathf.Max(0f, offlineHealth - amount);
+        if (offlineHealth <= 0f)
         {
             DropDemolishResources();
             Destroy(gameObject);
         }
     }
 
-    public void Demolish()
+    private void ApplyNetworkDamage(NetworkObject requester, float amount)
     {
+        if (!HasStateAuthority || amount <= 0f || !IsRequesterInRange(requester))
+        {
+            return;
+        }
+
+        Health = Mathf.Max(0f, Health - amount);
+        if (Health <= 0f)
+        {
+            DropDemolishResources();
+            Runner.Despawn(Object);
+        }
+    }
+
+    private void ApplyNetworkDemolish(NetworkObject requester)
+    {
+        if (!HasStateAuthority || !IsRequesterInRange(requester))
+        {
+            return;
+        }
+
         DropDemolishResources();
-        Destroy(gameObject);
+        Runner.Despawn(Object);
+    }
+
+    private bool IsAuthorizedRequester(NetworkObject requester, RpcInfo info)
+    {
+        if (requester == null)
+        {
+            return info.Source.IsNone;
+        }
+
+        if (requester.InputAuthority == info.Source)
+        {
+            return true;
+        }
+
+        return requester.HasStateAuthority && info.Source.IsNone;
+    }
+
+    private bool IsRequesterInRange(NetworkObject requester)
+    {
+        return requester == null || Vector3.Distance(requester.transform.position, transform.position) <= InteractDistance;
     }
 
     private void DropDemolishResources()
     {
+        if (IsNetworkedRuntime && !HasStateAuthority) return;
+
         var recipe = GetCraftRecipe(PieceType);
         if (recipe == null) return;
 
@@ -80,19 +301,29 @@ public class BuildingPiece : MonoBehaviour
 
     private void SpawnResourceDrop(ItemType itemType, int amount, Vector3 position)
     {
-        var handler = FindObjectOfType<FusionPlayerInventory>();
-        if (handler == null)
+        FusionPlayerInventory[] handlers = FindObjectsOfType<FusionPlayerInventory>();
+        for (int i = 0; i < handlers.Length; i++)
         {
-            GameObject drop = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            drop.transform.position = position;
-            drop.transform.localScale = new Vector3(0.25f, 0.15f, 0.25f);
-            PickableItem pi = drop.AddComponent<PickableItem>();
-            pi.itemType = itemType;
-            pi.amount = amount;
-            pi.itemName = itemType.ToString();
+            FusionPlayerInventory handler = handlers[i];
+            if (handler != null && handler.SpawnTreeDropsFromData(position, position, Vector3.forward, itemType, 1, amount, 0.2f))
+            {
+                return;
+            }
+        }
+
+        if (IsNetworkedRuntime)
+        {
+            Debug.LogWarning($"Building refund drop failed for {itemType} x{amount}; no local authoritative FusionPlayerInventory could spawn it.", this);
             return;
         }
-        handler.SpawnTreeDropsFromData(position, position, Vector3.forward, itemType, 1, amount, 0.2f);
+
+        GameObject drop = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        drop.transform.position = position;
+        drop.transform.localScale = new Vector3(0.25f, 0.15f, 0.25f);
+        PickableItem pickableItem = drop.AddComponent<PickableItem>();
+        pickableItem.itemType = itemType;
+        pickableItem.amount = amount;
+        pickableItem.itemName = itemType.ToString();
     }
 
     private CraftingRecipe GetCraftRecipe(BuildingPieceType pieceType)
@@ -141,6 +372,7 @@ public class BuildingPiece : MonoBehaviour
         }
         if (model != null)
         {
+            generatedModel = model;
             Collider defaultCollider = model.GetComponent<Collider>();
             if (defaultCollider != null)
                 DestroyImmediate(defaultCollider);
@@ -150,23 +382,24 @@ public class BuildingPiece : MonoBehaviour
                 model.transform.localPosition += Vector3.up * GetModelYOffset(pieceType);
         }
 
-        BoxCollider collider = gameObject.AddComponent<BoxCollider>();
+        rootCollider = gameObject.AddComponent<BoxCollider>();
+        BoxCollider collider = rootCollider;
         switch (pieceType)
         {
             case BuildingPieceType.Wall:
-                collider.size = new Vector3(1f, 2f, 0.2f);
+                collider.size = BuildingPlacementRules.GetBounds(pieceType);
                 collider.center = new Vector3(0f, 1f, 0f);
                 break;
             case BuildingPieceType.Floor:
-                collider.size = new Vector3(1f, 0.1f, 1f);
+                collider.size = BuildingPlacementRules.GetBounds(pieceType);
                 collider.center = Vector3.zero;
                 break;
             case BuildingPieceType.Roof:
-                collider.size = new Vector3(1f, 0.1f, 1.5f);
+                collider.size = BuildingPlacementRules.GetBounds(pieceType);
                 collider.center = new Vector3(0f, 0.05f, 0f);
                 break;
             case BuildingPieceType.Door:
-                collider.size = new Vector3(0.8f, 2f, 0.1f);
+                collider.size = BuildingPlacementRules.GetBounds(pieceType);
                 collider.center = new Vector3(0f, 1f, 0f);
                 break;
         }
