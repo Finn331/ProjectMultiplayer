@@ -5,8 +5,10 @@ public class BuildingPiece : NetworkBehaviour
 {
     public const float DefaultMaxHealth = 100f;
     private const float InteractDistance = 3f;
+    private const float MaxRequestedDamage = DefaultMaxHealth;
 
     private float offlineHealth = DefaultMaxHealth;
+    private bool offlineInitialized;
 
     [Networked] public float Health { get; private set; }
     [Networked] public int PieceTypeValue { get; private set; }
@@ -15,6 +17,7 @@ public class BuildingPiece : NetworkBehaviour
     [Networked] public int GridZ { get; private set; }
     [Networked] public int RotationIndex { get; private set; }
     [Networked] public PlayerRef Placer { get; private set; }
+    [Networked] private NetworkBool IsInitialized { get; set; }
 
     public BuildingPieceType PieceType => (BuildingPieceType)PieceTypeValue;
     public Vector3Int GridPosition => new Vector3Int(GridX, GridY, GridZ);
@@ -24,9 +27,10 @@ public class BuildingPiece : NetworkBehaviour
     public bool IsDestroyed => HealthValue <= 0f;
 
     private bool IsNetworkedRuntime => Object != null && Object.IsValid;
+    private bool IsInitializedForVisuals => IsNetworkedRuntime ? IsInitialized : offlineInitialized;
 
     private MeshRenderer meshRenderer;
-    private Material instanceMaterial;
+    private MaterialPropertyBlock materialPropertyBlock;
     private GameObject generatedModel;
     private BoxCollider rootCollider;
     private int builtPieceTypeValue = int.MinValue;
@@ -59,6 +63,11 @@ public class BuildingPiece : NetworkBehaviour
 
     private void EnsureVisualBuilt()
     {
+        if (!IsInitializedForVisuals)
+        {
+            return;
+        }
+
         if (!System.Enum.IsDefined(typeof(BuildingPieceType), PieceTypeValue))
         {
             return;
@@ -73,53 +82,40 @@ public class BuildingPiece : NetworkBehaviour
         CreateModel(PieceType);
         builtPieceTypeValue = PieceTypeValue;
         meshRenderer = GetComponentInChildren<MeshRenderer>();
-        instanceMaterial = meshRenderer != null ? meshRenderer.material : null;
     }
 
     private void ClearGeneratedModel()
     {
-        for (int i = transform.childCount - 1; i >= 0; i--)
+        if (generatedModel != null)
         {
-            Transform child = transform.GetChild(i);
-            if (Application.isPlaying)
-            {
-                Destroy(child.gameObject);
-            }
-            else
-            {
-                DestroyImmediate(child.gameObject);
-            }
+            DestroyOwnedObject(generatedModel);
         }
 
-        BoxCollider[] colliders = GetComponents<BoxCollider>();
-        for (int i = colliders.Length - 1; i >= 0; i--)
+        if (rootCollider != null)
         {
-            if (Application.isPlaying)
-            {
-                Destroy(colliders[i]);
-            }
-            else
-            {
-                DestroyImmediate(colliders[i]);
-            }
+            DestroyOwnedObject(rootCollider);
         }
 
         generatedModel = null;
         rootCollider = null;
         meshRenderer = null;
-        instanceMaterial = null;
+        builtPieceTypeValue = int.MinValue;
     }
 
     private void UpdateDamageTint()
     {
-        if (instanceMaterial == null) return;
+        if (meshRenderer == null) return;
 
         float ratio = HealthRatio;
         Color color;
         if (ratio > 0.66f) color = Color.Lerp(Color.yellow, Color.green, (ratio - 0.66f) / 0.34f);
         else if (ratio > 0.33f) color = Color.Lerp(Color.red, Color.yellow, (ratio - 0.33f) / 0.33f);
         else color = Color.red;
-        instanceMaterial.SetColor(ColorPropertyId, color);
+
+        materialPropertyBlock ??= new MaterialPropertyBlock();
+        meshRenderer.GetPropertyBlock(materialPropertyBlock);
+        materialPropertyBlock.SetColor(ColorPropertyId, color);
+        meshRenderer.SetPropertyBlock(materialPropertyBlock);
     }
 
     public void Initialize(BuildingPieceType pieceType, Vector3Int gridPos, int rotIndex)
@@ -144,10 +140,12 @@ public class BuildingPiece : NetworkBehaviour
         if (IsNetworkedRuntime)
         {
             Health = DefaultMaxHealth;
+            IsInitialized = true;
         }
         else
         {
             offlineHealth = DefaultMaxHealth;
+            offlineInitialized = true;
         }
 
         transform.rotation = Quaternion.Euler(0f, RotationIndex * 90f, 0f);
@@ -162,7 +160,8 @@ public class BuildingPiece : NetworkBehaviour
 
     public void RequestDamage(NetworkObject requester, float amount)
     {
-        if (amount <= 0f)
+        float clampedAmount = Mathf.Clamp(amount, 0f, MaxRequestedDamage);
+        if (clampedAmount <= 0f)
         {
             return;
         }
@@ -173,13 +172,19 @@ public class BuildingPiece : NetworkBehaviour
             return;
         }
 
-        if (HasStateAuthority)
+        NetworkObject resolvedRequester = ResolveLocalRequester(requester);
+        if (!IsAuthorizedLocalRequester(resolvedRequester) || !IsValidRequesterForAction(resolvedRequester))
         {
-            ApplyNetworkDamage(requester, amount);
             return;
         }
 
-        RPC_RequestDamage(requester, amount);
+        if (HasStateAuthority)
+        {
+            ApplyNetworkDamage(resolvedRequester, clampedAmount);
+            return;
+        }
+
+        RPC_RequestDamage(resolvedRequester, clampedAmount);
     }
 
     public void Demolish()
@@ -196,35 +201,43 @@ public class BuildingPiece : NetworkBehaviour
             return;
         }
 
-        if (HasStateAuthority)
+        NetworkObject resolvedRequester = ResolveLocalRequester(requester);
+        if (!IsAuthorizedLocalRequester(resolvedRequester) || !IsValidRequesterForAction(resolvedRequester))
         {
-            ApplyNetworkDemolish(requester);
             return;
         }
 
-        RPC_RequestDemolish(requester);
+        if (HasStateAuthority)
+        {
+            ApplyNetworkDemolish(resolvedRequester);
+            return;
+        }
+
+        RPC_RequestDemolish(resolvedRequester);
     }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
     private void RPC_RequestDamage(NetworkObject requester, float amount, RpcInfo info = default)
     {
-        if (!IsAuthorizedRequester(requester, info))
+        NetworkObject resolvedRequester = ResolveRpcRequester(requester, info.Source);
+        if (!IsAuthorizedRequester(resolvedRequester, info))
         {
             return;
         }
 
-        ApplyNetworkDamage(requester, amount);
+        ApplyNetworkDamage(resolvedRequester, Mathf.Clamp(amount, 0f, MaxRequestedDamage));
     }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
     private void RPC_RequestDemolish(NetworkObject requester, RpcInfo info = default)
     {
-        if (!IsAuthorizedRequester(requester, info))
+        NetworkObject resolvedRequester = ResolveRpcRequester(requester, info.Source);
+        if (!IsAuthorizedRequester(resolvedRequester, info))
         {
             return;
         }
 
-        ApplyNetworkDemolish(requester);
+        ApplyNetworkDemolish(resolvedRequester);
     }
 
     private void ApplyOfflineDamage(float amount)
@@ -239,12 +252,13 @@ public class BuildingPiece : NetworkBehaviour
 
     private void ApplyNetworkDamage(NetworkObject requester, float amount)
     {
-        if (!HasStateAuthority || amount <= 0f || !IsRequesterInRange(requester))
+        float clampedAmount = Mathf.Clamp(amount, 0f, MaxRequestedDamage);
+        if (!HasStateAuthority || clampedAmount <= 0f || !IsValidRequesterForAction(requester))
         {
             return;
         }
 
-        Health = Mathf.Max(0f, Health - amount);
+        Health = Mathf.Max(0f, Health - clampedAmount);
         if (Health <= 0f)
         {
             DropDemolishResources();
@@ -254,7 +268,7 @@ public class BuildingPiece : NetworkBehaviour
 
     private void ApplyNetworkDemolish(NetworkObject requester)
     {
-        if (!HasStateAuthority || !IsRequesterInRange(requester))
+        if (!HasStateAuthority || !IsValidRequesterForAction(requester))
         {
             return;
         }
@@ -265,9 +279,9 @@ public class BuildingPiece : NetworkBehaviour
 
     private bool IsAuthorizedRequester(NetworkObject requester, RpcInfo info)
     {
-        if (requester == null)
+        if (requester == null || !requester.IsValid)
         {
-            return info.Source.IsNone;
+            return false;
         }
 
         if (requester.InputAuthority == info.Source)
@@ -278,9 +292,74 @@ public class BuildingPiece : NetworkBehaviour
         return requester.HasStateAuthority && info.Source.IsNone;
     }
 
+    private bool IsAuthorizedLocalRequester(NetworkObject requester)
+    {
+        if (requester == null || !requester.IsValid || Runner == null)
+        {
+            return false;
+        }
+
+        if (requester.InputAuthority == Runner.LocalPlayer)
+        {
+            return true;
+        }
+
+        return requester.HasStateAuthority && Runner.LocalPlayer.IsNone;
+    }
+
+    private NetworkObject ResolveLocalRequester(NetworkObject requester)
+    {
+        if (requester != null)
+        {
+            return requester;
+        }
+
+        if (Runner == null || Runner.LocalPlayer.IsNone)
+        {
+            return null;
+        }
+
+        return Runner.GetPlayerObject(Runner.LocalPlayer);
+    }
+
+    private NetworkObject ResolveRpcRequester(NetworkObject requester, PlayerRef source)
+    {
+        if (requester != null)
+        {
+            return requester;
+        }
+
+        if (Runner == null || source.IsNone)
+        {
+            return null;
+        }
+
+        return Runner.GetPlayerObject(source);
+    }
+
+    private bool IsValidRequesterForAction(NetworkObject requester)
+    {
+        return requester != null
+            && requester.IsValid
+            && IsRequesterInRange(requester)
+            && !IsRequesterDeadOrDowned(requester);
+    }
+
     private bool IsRequesterInRange(NetworkObject requester)
     {
-        return requester == null || Vector3.Distance(requester.transform.position, transform.position) <= InteractDistance;
+        return requester != null && Vector3.Distance(requester.transform.position, transform.position) <= InteractDistance;
+    }
+
+    private static bool IsRequesterDeadOrDowned(NetworkObject requester)
+    {
+        PlayerSurvivalSystem survival = requester.GetComponent<PlayerSurvivalSystem>();
+        if (survival != null && survival.IsDead)
+        {
+            return true;
+        }
+
+        FusionPlayerSurvival fusionSurvival = requester.GetComponent<FusionPlayerSurvival>();
+        return fusionSurvival != null && fusionSurvival.IsDowned;
     }
 
     private void DropDemolishResources()
@@ -375,7 +454,7 @@ public class BuildingPiece : NetworkBehaviour
             generatedModel = model;
             Collider defaultCollider = model.GetComponent<Collider>();
             if (defaultCollider != null)
-                DestroyImmediate(defaultCollider);
+                DestroyOwnedObject(defaultCollider);
             model.transform.SetParent(transform, false);
             model.transform.localPosition = Vector3.zero;
             if (pieceType != BuildingPieceType.Floor)
@@ -403,6 +482,27 @@ public class BuildingPiece : NetworkBehaviour
                 collider.center = new Vector3(0f, 1f, 0f);
                 break;
         }
+    }
+
+    private static void DestroyOwnedObject(UnityEngine.Object target)
+    {
+        if (target == null)
+        {
+            return;
+        }
+
+        if (Application.isPlaying)
+        {
+            if (target is Collider collider)
+            {
+                collider.enabled = false;
+            }
+
+            Destroy(target);
+            return;
+        }
+
+        DestroyImmediate(target);
     }
 
     private static float GetModelYOffset(BuildingPieceType pieceType)
