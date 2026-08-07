@@ -26,6 +26,7 @@ public class PlaceableItemSystem : MonoBehaviour
     [Header("Placement")]
     [SerializeField] private float placementDistance = 2.5f;
     [SerializeField] private float groundRaycastDistance = 4f;
+    [SerializeField] private float groundTolerance = 0.15f;
     [SerializeField] private float groundOffset = 0.02f;
     [SerializeField] private LayerMask placementSurfaceMask = ~0;
     [SerializeField] private LayerMask placementBlockedMask = 0;
@@ -273,6 +274,7 @@ public class PlaceableItemSystem : MonoBehaviour
 
         Vector3 targetPosition = transform.position + transform.forward * placementDistance;
         bool hasGround = TryGetPlacementGround(out RaycastHit hit);
+        Collider placementGroundCollider = hasGround ? hit.collider : null;
         if (hasGround)
         {
             targetPosition = hit.point + hit.normal * groundOffset;
@@ -281,6 +283,7 @@ public class PlaceableItemSystem : MonoBehaviour
         if (IsBuildingItem(selectedItemType))
         {
             targetPosition = GetSnapPosition(targetPosition);
+            hasGround = TryGetValidPlacementGround(targetPosition, out placementGroundCollider);
         }
 
         Quaternion targetRotation = Quaternion.Euler(0f, transform.eulerAngles.y + previewYawOffset, 0f);
@@ -297,7 +300,7 @@ public class PlaceableItemSystem : MonoBehaviour
         }
         previewObject.transform.SetPositionAndRotation(targetPosition, targetRotation);
 
-        currentPlacementValid = hasGround && !IsPlacementBlocked(targetPosition, targetRotation, hit.collider);
+        currentPlacementValid = hasGround && !IsPlacementBlocked(targetPosition, targetRotation, placementGroundCollider);
         ApplyPreviewMaterial(currentPlacementValid ? validPreviewMaterial : invalidPreviewMaterial);
     }
 
@@ -324,6 +327,25 @@ public class PlaceableItemSystem : MonoBehaviour
         Vector3 origin = transform.position + Vector3.up * 0.5f + transform.forward * placementDistance;
         float distance = Mathf.Max(0.5f, groundRaycastDistance);
         return Physics.Raycast(origin, Vector3.down, out hit, distance, placementSurfaceMask, QueryTriggerInteraction.Ignore);
+    }
+
+    private bool TryGetValidPlacementGround(Vector3 position, out Collider groundCollider)
+    {
+        groundCollider = null;
+        float rayDistance = Mathf.Max(0.5f, groundRaycastDistance);
+        Vector3 origin = position + Vector3.up * Mathf.Min(1f, rayDistance * 0.5f);
+        if (!Physics.Raycast(origin, Vector3.down, out RaycastHit hit, rayDistance, placementSurfaceMask, QueryTriggerInteraction.Ignore))
+        {
+            return false;
+        }
+
+        if (Mathf.Abs(hit.point.y - position.y) > Mathf.Max(0.01f, groundTolerance))
+        {
+            return false;
+        }
+
+        groundCollider = hit.collider;
+        return true;
     }
 
     private void EnsurePreviewObject()
