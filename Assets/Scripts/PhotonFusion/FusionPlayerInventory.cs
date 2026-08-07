@@ -43,6 +43,8 @@ public class FusionPlayerInventory : NetworkBehaviour
     [SerializeField] private GameObject stoneDropModelPrefab;
 
     [Header("Placeables")]
+    [SerializeField] private NetworkPrefabRef buildingPiecePrefab;
+    [SerializeField] private GameObject buildingPiecePrefabObject;
     [SerializeField] private PlaceablePrefabBinding[] placeablePrefabs;
     [SerializeField] private float maxPlacementDistance = 4f;
     [SerializeField] private LayerMask placementSurfaceMask = ~0;
@@ -807,13 +809,14 @@ public class FusionPlayerInventory : NetworkBehaviour
             return;
         }
 
+        if (BuildingPlacementRules.IsBuildingItem(itemType))
+        {
+            TryPlaceBuildingPiece(slotIndex, itemType, position, rotation, info.Source);
+            return;
+        }
+
         if (!TryGetPlaceablePrefab(itemType, out NetworkPrefabRef placeablePrefab, out GameObject placeablePrefabObject, out Vector3 bounds))
         {
-            if (IsBuildingItem(itemType))
-            {
-                PlaceBuildingPiece(itemType, position, rotation);
-                return;
-            }
             return;
         }
 
@@ -857,6 +860,67 @@ public class FusionPlayerInventory : NetworkBehaviour
         if (placeableObject != null)
         {
             placeableObject.Initialize(itemType, info.Source);
+        }
+    }
+
+    private void TryPlaceBuildingPiece(int slotIndex, ItemType itemType, Vector3 requestedPosition, Quaternion requestedRotation, PlayerRef placer)
+    {
+        if (!BuildingPlacementRules.TryGetPieceType(itemType, out BuildingPieceType pieceType))
+        {
+            return;
+        }
+
+        if (!TryGetBuildingPrefab(out NetworkPrefabRef prefab, out GameObject prefabObject))
+        {
+            Debug.LogWarning("Cannot place building piece because NetworkBuildingPiece prefab is not assigned.", this);
+            return;
+        }
+
+        Vector3 snappedPosition = BuildingPlacementRules.SnapToGrid(requestedPosition);
+        Quaternion snappedRotation = BuildingPlacementRules.NormalizeBuildingRotation(requestedRotation);
+        Vector3 bounds = BuildingPlacementRules.GetBounds(itemType);
+
+        float maxDistance = Mathf.Max(0.5f, maxPlacementDistance);
+        if ((snappedPosition - transform.position).sqrMagnitude > maxDistance * maxDistance)
+        {
+            return;
+        }
+
+        if (!TryGetValidPlacementGround(snappedPosition, out Collider groundCollider))
+        {
+            return;
+        }
+
+        if (IsPlacementBlocked(snappedPosition, snappedRotation, bounds, groundCollider))
+        {
+            return;
+        }
+
+        if (!inventory.RemoveItemFromSlot(slotIndex, 1, out ItemType removedItemType))
+        {
+            return;
+        }
+
+        if (removedItemType != itemType)
+        {
+            inventory.AddItemToSlot(removedItemType, 1, slotIndex);
+            return;
+        }
+
+        NetworkObject placedObject = prefabObject != null
+            ? Runner.Spawn(prefabObject, snappedPosition, snappedRotation, placer)
+            : Runner.Spawn(prefab, snappedPosition, snappedRotation, placer);
+        if (placedObject == null)
+        {
+            inventory.AddItemToSlot(itemType, 1, slotIndex);
+            return;
+        }
+
+        BuildingPiece buildingPiece = placedObject.GetComponent<BuildingPiece>();
+        if (buildingPiece == null || !buildingPiece.Initialize(pieceType, Vector3Int.RoundToInt(snappedPosition), BuildingPlacementRules.GetRotationIndex(snappedRotation), placer))
+        {
+            Runner.Despawn(placedObject);
+            inventory.AddItemToSlot(itemType, 1, slotIndex);
         }
     }
 
@@ -951,6 +1015,26 @@ public class FusionPlayerInventory : NetworkBehaviour
         return false;
     }
 
+    private bool TryGetBuildingPrefab(out NetworkPrefabRef prefab, out GameObject prefabObject)
+    {
+        prefabObject = null;
+        if (buildingPiecePrefabObject != null && buildingPiecePrefabObject.GetComponent<NetworkObject>() != null)
+        {
+            prefabObject = buildingPiecePrefabObject;
+            prefab = default;
+            return true;
+        }
+
+        if (buildingPiecePrefab.IsValid)
+        {
+            prefab = buildingPiecePrefab;
+            return true;
+        }
+
+        prefab = default;
+        return false;
+    }
+
     private bool TryGetValidPlacementGround(Vector3 position, out Collider groundCollider)
     {
         groundCollider = null;
@@ -972,7 +1056,8 @@ public class FusionPlayerInventory : NetworkBehaviour
 
     private bool IsPlacementBlocked(Vector3 groundPosition, Quaternion rotation, Vector3 bounds, Collider groundCollider)
     {
-        Vector3 halfExtents = Vector3.Max(bounds, Vector3.one * 0.1f) * 0.5f;
+        Vector3 checkBounds = BuildingPlacementRules.GetPlacementCheckBounds(Vector3.Max(bounds, Vector3.one * 0.1f));
+        Vector3 halfExtents = checkBounds * 0.5f;
         Vector3 center = groundPosition + Vector3.up * (halfExtents.y + Mathf.Max(0.01f, placementGroundOffset));
         Collider[] hits = Physics.OverlapBox(center, halfExtents, rotation, placementBlockedMask, QueryTriggerInteraction.Ignore);
         for (int i = 0; i < hits.Length; i++)
@@ -1005,29 +1090,5 @@ public class FusionPlayerInventory : NetworkBehaviour
     private bool HasFusionLocalAuthority()
     {
         return Object != null && (Object.HasInputAuthority || Object.HasStateAuthority);
-    }
-
-    private static bool IsBuildingItem(ItemType itemType)
-    {
-        return itemType == ItemType.WallItem
-            || itemType == ItemType.FloorItem
-            || itemType == ItemType.RoofItem
-            || itemType == ItemType.DoorItem;
-    }
-
-    private void PlaceBuildingPiece(ItemType itemType, Vector3 position, Quaternion rotation)
-    {
-        BuildingPieceType pieceType = itemType switch
-        {
-            ItemType.WallItem => BuildingPieceType.Wall,
-            ItemType.FloorItem => BuildingPieceType.Floor,
-            ItemType.RoofItem => BuildingPieceType.Roof,
-            ItemType.DoorItem => BuildingPieceType.Door,
-            _ => BuildingPieceType.Wall
-        };
-        GameObject placed = new GameObject("Building_" + pieceType);
-        placed.transform.SetPositionAndRotation(position, rotation);
-        BuildingPiece piece = placed.AddComponent<BuildingPiece>();
-        piece.Initialize(pieceType, Vector3Int.RoundToInt(position), 0);
     }
 }
