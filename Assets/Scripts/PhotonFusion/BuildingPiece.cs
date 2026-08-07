@@ -160,15 +160,14 @@ public class BuildingPiece : NetworkBehaviour
 
     public void RequestDamage(NetworkObject requester, float amount)
     {
-        float clampedAmount = Mathf.Clamp(amount, 0f, MaxRequestedDamage);
-        if (clampedAmount <= 0f)
+        if (!TryGetClampedDamage(amount, out float clampedAmount))
         {
             return;
         }
 
         if (!IsNetworkedRuntime)
         {
-            ApplyOfflineDamage(amount);
+            ApplyOfflineDamage(clampedAmount);
             return;
         }
 
@@ -219,13 +218,18 @@ public class BuildingPiece : NetworkBehaviour
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
     private void RPC_RequestDamage(NetworkObject requester, float amount, RpcInfo info = default)
     {
+        if (!TryGetClampedDamage(amount, out float clampedAmount))
+        {
+            return;
+        }
+
         NetworkObject resolvedRequester = ResolveRpcRequester(requester, info.Source);
         if (!IsAuthorizedRequester(resolvedRequester, info))
         {
             return;
         }
 
-        ApplyNetworkDamage(resolvedRequester, Mathf.Clamp(amount, 0f, MaxRequestedDamage));
+        ApplyNetworkDamage(resolvedRequester, clampedAmount);
     }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
@@ -252,8 +256,7 @@ public class BuildingPiece : NetworkBehaviour
 
     private void ApplyNetworkDamage(NetworkObject requester, float amount)
     {
-        float clampedAmount = Mathf.Clamp(amount, 0f, MaxRequestedDamage);
-        if (!HasStateAuthority || clampedAmount <= 0f || !IsValidRequesterForAction(requester))
+        if (!TryGetClampedDamage(amount, out float clampedAmount) || !HasStateAuthority || !IsValidRequesterForAction(requester))
         {
             return;
         }
@@ -264,6 +267,18 @@ public class BuildingPiece : NetworkBehaviour
             DropDemolishResources();
             Runner.Despawn(Object);
         }
+    }
+
+    private static bool TryGetClampedDamage(float amount, out float clampedAmount)
+    {
+        clampedAmount = 0f;
+        if (float.IsNaN(amount) || float.IsInfinity(amount))
+        {
+            return false;
+        }
+
+        clampedAmount = Mathf.Clamp(amount, 0f, MaxRequestedDamage);
+        return clampedAmount > 0f;
     }
 
     private void ApplyNetworkDemolish(NetworkObject requester)
