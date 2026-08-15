@@ -25,4 +25,17 @@ public static class ForestDoorSelfTest
         UnityEngine.Object.DestroyImmediate(host);
         Debug.Log("ForestDoorSelfTest passed.");
     }
+
+    [MenuItem("Project Multiplayer/Run Forest Door Interaction Routing Self Test")]
+    public static void RunRoutingTest()
+    {
+        const string playerInteractionSystemPath = "Assets/Scripts/Player/Survival/PlayerInteractionSystem.cs";
+        string contents = System.IO.File.ReadAllText(playerInteractionSystemPath);
+        if (!contents.Contains("GetComponent<ForestDoor>()"))
+        {
+            throw new System.InvalidOperationException("PlayerInteractionSystem.TryInteract does not route to ForestDoor.");
+        }
+
+        Debug.Log("ForestDoorInteractionRoutingSelfTest passed.");
+    }
 }

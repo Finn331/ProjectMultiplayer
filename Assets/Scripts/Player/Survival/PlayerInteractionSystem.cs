@@ -313,6 +313,17 @@ public class PlayerInteractionSystem : MonoBehaviour
             return;
         }
 
+        ForestDoor forestDoor = currentTarget.GetComponent<ForestDoor>();
+        if (forestDoor != null)
+        {
+            if (forestDoor.TryInteract() && pickButton != null)
+            {
+                pickButton.SetActive(false);
+            }
+
+            return;
+        }
+
         currentTarget.Interact();
         if (pickButton != null)
         {
