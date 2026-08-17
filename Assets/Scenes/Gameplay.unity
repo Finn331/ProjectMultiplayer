@@ -1440,6 +1440,7 @@ GameObject:
   - component: {fileID: 176889772}
   - component: {fileID: 176889771}
   - component: {fileID: 176889770}
+  - component: {fileID: 176889773}
   m_Layer: 0
   m_Name: ====EventSystem====
   m_TagString: Untagged
@@ -1497,6 +1498,18 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &176889773
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 176889769}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 229724adec88b4b48a2d3946fa46d82e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &181256577
 GameObject:
   m_ObjectHideFlags: 0
@@ -2334,6 +2347,18 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 240}
   m_SizeDelta: {x: 320, y: 44}
   m_Pivot: {x: 0.5, y: 1}
+--- !u!134 &279846717
+PhysicMaterial:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: 
+  dynamicFriction: 0.6
+  staticFriction: 0.6
+  bounciness: 0
+  frictionCombine: 0
+  bounceCombine: 0
 --- !u!1 &283632784 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 1164328234615206, guid: e048a401410aa9f4791cdd97e15735ca,
@@ -7307,7 +7332,7 @@ BoxCollider:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 868795609}
-  m_Material: {fileID: 0}
+  m_Material: {fileID: 279846717}
   m_IncludeLayers:
     serializedVersion: 2
     m_Bits: 0
@@ -7338,7 +7363,7 @@ Transform:
   m_GameObject: {fileID: 868795609}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -8, y: 1.5, z: 2}
+  m_LocalPosition: {x: -12, y: 1.5, z: 2}
   m_LocalScale: {x: 1.5, y: 2.5, z: 0.3}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -13417,6 +13442,7 @@ GameObject:
   - component: {fileID: 1473871842}
   - component: {fileID: 1473871843}
   - component: {fileID: 1473871844}
+  - component: {fileID: 1473871845}
   m_Layer: 5
   m_Name: ====Canvas====
   m_TagString: Untagged
@@ -13576,6 +13602,18 @@ MonoBehaviour:
   progressSlider: {fileID: 0}
   reviveButtonObject: {fileID: 0}
   reviveHoldButton: {fileID: 0}
+--- !u!114 &1473871845
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1473871837}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 883145b9e6ec17d4297de894105fd7e0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &1474512502
 GameObject:
   m_ObjectHideFlags: 0

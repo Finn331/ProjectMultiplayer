@@ -6,6 +6,8 @@ public class FusionPlayerSpawner : MonoBehaviour
 {
     [SerializeField] private NetworkPrefabRef playerPrefab;
 
+    private const float SpawnClearance = 1.2f;
+
     private void Start()
     {
         var runner = FindObjectOfType<NetworkRunner>();
@@ -13,6 +15,16 @@ public class FusionPlayerSpawner : MonoBehaviour
         {
             SpawnLocalPlayer(runner);
         }
+    }
+
+    public void TrySpawnLocalPlayer(NetworkRunner runner)
+    {
+        if (runner == null || !runner.IsRunning || !playerPrefab.IsValid)
+        {
+            return;
+        }
+
+        SpawnLocalPlayer(runner);
     }
 
     private async void SpawnLocalPlayer(NetworkRunner runner)
@@ -39,14 +51,76 @@ public class FusionPlayerSpawner : MonoBehaviour
         Vector3 position = spawnPoint != null ? spawnPoint.position : new Vector3(0f, 1.2f, -8f);
         Quaternion rotation = spawnPoint != null ? spawnPoint.rotation : Quaternion.identity;
 
+        position = SnapToGround(position);
+
         // Di Shared Mode, setiap client men-spawn karakternya sendiri
         NetworkObject playerObject = await runner.SpawnAsync(playerPrefab, position, rotation, localPlayer);
-        
+
         if (playerObject != null)
         {
+            ApplySpawnTransform(playerObject, position, rotation);
             // Daftarkan sebagai Player Object
             runner.SetPlayerObject(localPlayer, playerObject);
+            RestorePersistedPlayerState(runner, playerObject);
         }
+    }
+
+    private static void RestorePersistedPlayerState(NetworkRunner runner, NetworkObject playerObject)
+    {
+        string roomCode = PhotonFusionSessionState.HasSession
+            ? PhotonFusionSessionState.Active.RoomCode
+            : string.Empty;
+
+        PlayerInventory inventory = playerObject.GetComponent<PlayerInventory>();
+        PlayerSurvivalSystem survival = playerObject.GetComponent<PlayerSurvivalSystem>();
+        FusionPlayerPersistence.TryRestore(roomCode, runner.GetInstanceID(), inventory, survival);
+    }
+
+    private static void ApplySpawnTransform(NetworkObject playerObject, Vector3 position, Quaternion rotation)
+    {
+        Transform target = playerObject.transform;
+        CharacterController controller = target.GetComponent<CharacterController>();
+        if (controller != null && controller.enabled)
+        {
+            controller.enabled = false;
+            target.SetPositionAndRotation(position, rotation);
+            controller.enabled = true;
+        }
+        else
+        {
+            target.SetPositionAndRotation(position, rotation);
+        }
+    }
+
+    private static Vector3 SnapToGround(Vector3 position)
+    {
+        Terrain[] terrains = UnityEngine.Object.FindObjectsOfType<Terrain>();
+        if (terrains == null || terrains.Length == 0)
+        {
+            return position;
+        }
+
+        for (int i = 0; i < terrains.Length; i++)
+        {
+            Terrain terrain = terrains[i];
+            if (terrain == null || terrain.terrainData == null)
+            {
+                continue;
+            }
+
+            Vector3 local = position - terrain.transform.position;
+            Vector3 size = terrain.terrainData.size;
+            if (local.x < 0f || local.z < 0f || local.x > size.x || local.z > size.z)
+            {
+                continue;
+            }
+
+            float surfaceY = terrain.SampleHeight(position);
+            float groundedY = surfaceY + SpawnClearance;
+            return new Vector3(position.x, Mathf.Max(position.y, groundedY), position.z);
+        }
+
+        return position;
     }
 
     private static Transform GetSpawnPoint(PlayerRef player)
