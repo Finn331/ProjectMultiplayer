@@ -17,6 +17,7 @@ public class FusionPlayerOwnerSetup : NetworkBehaviour
     private Camera[] runtimeOwnerOnlyCameras;
     private AudioListener[] runtimeOwnerOnlyAudioListeners;
     private GameObject[] runtimeOwnerOnlyObjects;
+    private readonly List<Camera> disabledExternalCameras = new List<Camera>();
     private readonly List<AudioListener> disabledExternalAudioListeners = new List<AudioListener>();
 
     private bool hasAppliedOwnerState;
@@ -187,10 +188,12 @@ public class FusionPlayerOwnerSetup : NetworkBehaviour
         if (isOwner)
         {
             WarnIfMissingOwnerCamera();
+            EnsureSingleActiveCamera();
             EnsureSingleActiveAudioListener();
         }
         else
         {
+            RestoreExternalCameras();
             RestoreExternalAudioListeners();
         }
     }
@@ -316,6 +319,62 @@ public class FusionPlayerOwnerSetup : NetworkBehaviour
         }
     }
 
+    private void EnsureSingleActiveCamera()
+    {
+        Camera primaryCamera = null;
+        if (runtimeOwnerOnlyCameras != null)
+        {
+            for (int i = 0; i < runtimeOwnerOnlyCameras.Length; i++)
+            {
+                Camera candidate = runtimeOwnerOnlyCameras[i];
+                if (candidate != null && candidate.enabled && candidate.gameObject.activeInHierarchy)
+                {
+                    primaryCamera = candidate;
+                    break;
+                }
+            }
+        }
+
+        if (primaryCamera == null)
+        {
+            return;
+        }
+
+        Camera[] cameras = FindObjectsOfType<Camera>(true);
+        for (int i = 0; i < cameras.Length; i++)
+        {
+            Camera camera = cameras[i];
+            if (camera == null || camera == primaryCamera || !camera.enabled)
+            {
+                continue;
+            }
+
+            camera.enabled = false;
+            if (!IsOwnerOnlyCamera(camera) && !disabledExternalCameras.Contains(camera))
+            {
+                disabledExternalCameras.Add(camera);
+            }
+        }
+    }
+
+    private bool IsOwnerOnlyCamera(Camera camera)
+    {
+        if (runtimeOwnerOnlyCameras == null)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < runtimeOwnerOnlyCameras.Length; i++)
+        {
+            if (runtimeOwnerOnlyCameras[i] == camera)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private bool IsOwnerOnlyAudioListener(AudioListener listener)
     {
         if (runtimeOwnerOnlyAudioListeners == null)
@@ -351,6 +410,25 @@ public class FusionPlayerOwnerSetup : NetworkBehaviour
         }
 
         disabledExternalAudioListeners.Clear();
+    }
+
+    private void RestoreExternalCameras()
+    {
+        if (disabledExternalCameras.Count == 0)
+        {
+            return;
+        }
+
+        for (int i = 0; i < disabledExternalCameras.Count; i++)
+        {
+            Camera camera = disabledExternalCameras[i];
+            if (camera != null)
+            {
+                camera.enabled = true;
+            }
+        }
+
+        disabledExternalCameras.Clear();
     }
 
     private static string GetHierarchyPath(Transform target)
