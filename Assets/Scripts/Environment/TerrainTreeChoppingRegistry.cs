@@ -46,6 +46,11 @@ public class TerrainTreeChoppingRegistry : MonoBehaviour
 
     public int TreeCount => records.Count;
 
+    public bool HasUniqueTreeIds()
+    {
+        return records.Count == recordsById.Count;
+    }
+
     private void Awake()
     {
         Rebuild(Terrain.activeTerrains);
@@ -288,10 +293,7 @@ public class TerrainTreeChoppingRegistry : MonoBehaviour
     {
         unchecked
         {
-            int hash = 17;
-            hash = hash * 31 + terrainOrdinal;
-            hash = hash * 31 + treeIndex;
-            return hash == 0 ? 1 : hash;
+            return (terrainOrdinal * 1_000_000) + treeIndex + 1;
         }
     }
 

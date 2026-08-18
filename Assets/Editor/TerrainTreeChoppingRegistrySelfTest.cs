@@ -59,6 +59,7 @@ public static class TerrainTreeChoppingRegistrySelfTest
             Expect(registry.TryFindBestTreeForChop(new Vector3(10f, 1f, 5f), Vector3.forward, 20f, 0.2f, out TerrainTreeChoppingRegistry.TreeHit hit),
                 "Registry should find a tree in front of the player.");
             Expect(hit.TreeId != 0, "Tree id should be stable and non-zero.");
+            Expect(registry.HasUniqueTreeIds(), "Tree ids should be unique (no collisions).");
 
             int beforeRemovalCount = terrain.terrainData.treeInstanceCount;
             Expect(registry.TryApplyDamageForTests(hit.TreeId, 3f, out bool depleted), "First damage application should be accepted.");
