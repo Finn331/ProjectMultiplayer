@@ -62,6 +62,7 @@ public static class TerrainTreeChoppingRegistrySelfTest
             Expect(terrain.terrainData.treeInstanceCount == beforeRemovalCount - 1, "Runtime Terrain tree instance array should hide one depleted tree.");
             Expect(!registry.TryApplyDamageForTests(hit.TreeId, 3f, out _), "Repeated damage against the same depleted id should be ignored.");
             Expect(terrain.terrainData.treeInstanceCount == beforeRemovalCount - 1, "Repeated depletion should not remove another tree.");
+            Expect(!registry.TryPlayFallingProxy(123456789, Vector3.forward), "Missing tree id should not spawn a proxy.");
 
             Debug.Log("TerrainTreeChoppingRegistrySelfTest passed.");
         }

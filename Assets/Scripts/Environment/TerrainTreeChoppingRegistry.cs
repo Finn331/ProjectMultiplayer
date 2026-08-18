@@ -10,6 +10,7 @@ public class TerrainTreeChoppingRegistry : MonoBehaviour
         public Vector3 WorldPosition;
         public Vector3 HitPoint;
         public GameObject PrototypePrefab;
+        public Vector3 InstanceScale;
     }
 
     private sealed class TerrainSnapshot
@@ -26,12 +27,18 @@ public class TerrainTreeChoppingRegistry : MonoBehaviour
         public TerrainSnapshot Snapshot;
         public Vector3 WorldPosition;
         public GameObject PrototypePrefab;
+        public Vector3 InstanceScale;
         public float Health;
         public bool Depleted;
     }
 
     [SerializeField] private float defaultTreeHealth = 3f;
     [SerializeField] private float approximateChopRadius = 1.1f;
+
+    [Header("Falling Proxy")]
+    [SerializeField] private float fallDurationSeconds = 1.1f;
+    [SerializeField] private float fallenProxyLifetimeSeconds = 6f;
+    [SerializeField] private LeanTweenType fallEase = LeanTweenType.easeInBack;
 
     private readonly List<TerrainSnapshot> snapshots = new List<TerrainSnapshot>();
     private readonly List<TreeRecord> records = new List<TreeRecord>();
@@ -107,6 +114,7 @@ public class TerrainTreeChoppingRegistry : MonoBehaviour
                     Snapshot = snapshot,
                     WorldPosition = terrainPosition + Vector3.Scale(instance.position, terrainSize),
                     PrototypePrefab = prototype,
+                    InstanceScale = new Vector3(instance.widthScale, instance.heightScale, instance.widthScale),
                     Health = Mathf.Max(1f, defaultTreeHealth)
                 };
                 records.Add(record);
@@ -208,6 +216,39 @@ public class TerrainTreeChoppingRegistry : MonoBehaviour
         return true;
     }
 
+    public bool TryPlayFallingProxy(int treeId, Vector3 fallDirection)
+    {
+        if (!recordsById.TryGetValue(treeId, out TreeRecord record) || record.PrototypePrefab == null)
+        {
+            return false;
+        }
+
+        Vector3 direction = fallDirection.sqrMagnitude > 0.0001f
+            ? fallDirection.normalized
+            : DeterministicFallDirection(treeId);
+
+        GameObject pivot = new GameObject("FallingTerrainTree_" + treeId);
+        pivot.transform.position = record.WorldPosition;
+
+        GameObject visual = Instantiate(record.PrototypePrefab, record.WorldPosition, Quaternion.identity, pivot.transform);
+        visual.transform.localScale = Vector3.Scale(visual.transform.localScale, record.InstanceScale);
+        DisableProxyColliders(visual);
+
+        Vector3 fallAxis = Vector3.Cross(Vector3.up, direction);
+        if (fallAxis.sqrMagnitude <= 0.0001f)
+        {
+            fallAxis = Vector3.right;
+        }
+
+        fallAxis.Normalize();
+        Quaternion targetRotation = Quaternion.AngleAxis(88f, fallAxis) * pivot.transform.rotation;
+        LeanTween.rotate(pivot, targetRotation.eulerAngles, Mathf.Max(0.1f, fallDurationSeconds))
+            .setEase(fallEase)
+            .setOnComplete(() => Destroy(pivot, Mathf.Max(0.1f, fallenProxyLifetimeSeconds)));
+
+        return true;
+    }
+
     private static TreeHit CreateHit(TreeRecord record)
     {
         return new TreeHit
@@ -215,8 +256,32 @@ public class TerrainTreeChoppingRegistry : MonoBehaviour
             TreeId = record.TreeId,
             WorldPosition = record.WorldPosition,
             HitPoint = record.WorldPosition + Vector3.up * 0.75f,
-            PrototypePrefab = record.PrototypePrefab
+            PrototypePrefab = record.PrototypePrefab,
+            InstanceScale = record.InstanceScale
         };
+    }
+
+    private static Vector3 DeterministicFallDirection(int treeId)
+    {
+        float angle = Mathf.Abs(treeId % 360) * Mathf.Deg2Rad;
+        return new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)).normalized;
+    }
+
+    private static void DisableProxyColliders(GameObject proxy)
+    {
+        if (proxy == null)
+        {
+            return;
+        }
+
+        Collider[] colliders = proxy.GetComponentsInChildren<Collider>(true);
+        for (int i = 0; i < colliders.Length; i++)
+        {
+            if (colliders[i] != null)
+            {
+                colliders[i].enabled = false;
+            }
+        }
     }
 
     private static int ComputeTreeId(int terrainOrdinal, int treeIndex)
