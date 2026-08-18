@@ -1,8 +1,12 @@
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public static class TerrainTreeChoppingRegistrySelfTest
 {
+    private const string EnvironmentScenePath = "Assets/Scenes/Environment.unity";
+
     [MenuItem("Project Multiplayer/Run Terrain Tree Chopping Registry Self Test")]
     public static void Run()
     {
@@ -82,5 +86,37 @@ public static class TerrainTreeChoppingRegistrySelfTest
         {
             throw new System.InvalidOperationException(message);
         }
+    }
+
+    [MenuItem("Project Multiplayer/Run Terrain Tree Chopping Environment Self Test")]
+    public static void RunEnvironmentSceneValidation()
+    {
+        Scene activeScene = SceneManager.GetActiveScene();
+        if (!string.Equals(activeScene.path, EnvironmentScenePath, System.StringComparison.OrdinalIgnoreCase))
+        {
+            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
+            {
+                throw new System.InvalidOperationException("Environment scene test cancelled because the active scene has unsaved changes.");
+            }
+
+            EditorSceneManager.OpenScene(EnvironmentScenePath, OpenSceneMode.Single);
+        }
+
+        Terrain[] terrains = Object.FindObjectsOfType<Terrain>(true);
+        Expect(terrains.Length > 0, "Environment scene should contain Terrain objects.");
+
+        int treeCount = 0;
+        for (int i = 0; i < terrains.Length; i++)
+        {
+            if (terrains[i] != null && terrains[i].terrainData != null)
+            {
+                treeCount += terrains[i].terrainData.treeInstanceCount;
+            }
+        }
+        Expect(treeCount > 0, "Environment scene should contain Terrain tree instances.");
+
+        TerrainTreeChoppingRegistry[] registries = Object.FindObjectsOfType<TerrainTreeChoppingRegistry>(true);
+        Expect(registries.Length == 1, "Environment scene should contain exactly one TerrainTreeChoppingRegistry, got " + registries.Length + ".");
+        Debug.Log("TerrainTreeChoppingRegistry environment validation passed.");
     }
 }
