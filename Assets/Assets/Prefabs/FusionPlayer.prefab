@@ -376,8 +376,8 @@ MonoBehaviour:
   startHealth: 100
   startHunger: 100
   startThirst: 100
-  hungerDrainPerSecond: 0.35
-  thirstDrainPerSecond: 0.6
+  hungerDrainPerSecond: 0.06
+  thirstDrainPerSecond: 0.1
   healthLossWhenStarvingPerSecond: 3
   healthLossWhenDehydratedPerSecond: 5
   enablePassiveRegen: 0

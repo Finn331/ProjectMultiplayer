@@ -14,8 +14,8 @@ public class PlayerSurvivalSystem : MonoBehaviour
     [SerializeField] private float startThirst = 100f;
 
     [Header("Need Drain Per Second")]
-    [SerializeField] private float hungerDrainPerSecond = 0.35f;
-    [SerializeField] private float thirstDrainPerSecond = 0.6f;
+    [SerializeField] private float hungerDrainPerSecond = 0.06f;
+    [SerializeField] private float thirstDrainPerSecond = 0.1f;
 
     [Header("Health Impact")]
     [SerializeField] private float healthLossWhenStarvingPerSecond = 3f;
