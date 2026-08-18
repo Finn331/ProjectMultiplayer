@@ -68,6 +68,17 @@ public class FusionPlayerCombat : NetworkBehaviour
         return true;
     }
 
+    public bool RequestTerrainTreeHit(int treeId, Vector3 treePosition, Vector3 chopperPosition, float damage)
+    {
+        if (IsDowned() || !IsNetworkReady() || !HasFusionInputAuthority() || treeId == 0 || damage <= 0f)
+        {
+            return false;
+        }
+
+        RPC_TerrainTreeHit(treeId, treePosition, chopperPosition, damage);
+        return true;
+    }
+
     public bool RequestPlayerDamage(Vector3 targetPosition, float damage)
     {
         if (IsDowned() || !IsNetworkReady() || !HasFusionInputAuthority() || damage <= 0f)
@@ -131,6 +142,38 @@ public class FusionPlayerCombat : NetworkBehaviour
             if (fusionInventory != null && hasDropPrefab)
             {
                 fusionInventory.SpawnTreeDropsFromData(treePos, dropBase, dropForward, dropItemType, dropCount, amountPerDrop, scatter);
+            }
+        }
+    }
+
+    [Rpc(RpcSources.InputAuthority, RpcTargets.All)]
+    private void RPC_TerrainTreeHit(int treeId, Vector3 treePosition, Vector3 chopperPosition, float damage, RpcInfo info = default)
+    {
+        TerrainTreeChoppingRegistry registry = FindObjectOfType<TerrainTreeChoppingRegistry>();
+        if (registry == null)
+        {
+            return;
+        }
+
+        if (!registry.TryApplyDamage(treeId, damage, out bool depleted, out TerrainTreeChoppingRegistry.TreeHit hit))
+        {
+            return;
+        }
+
+        if (!depleted)
+        {
+            return;
+        }
+
+        Vector3 fallDirection = hit.WorldPosition - chopperPosition;
+        registry.TryPlayFallingProxy(treeId, fallDirection);
+
+        if (Object != null && Object.HasStateAuthority)
+        {
+            FusionPlayerInventory fusionInventory = GetComponent<FusionPlayerInventory>();
+            if (fusionInventory != null)
+            {
+                fusionInventory.SpawnTreeDropsFromData(hit.WorldPosition, hit.WorldPosition, fallDirection, ItemType.Wood, 1, 3, 0.75f);
             }
         }
     }
