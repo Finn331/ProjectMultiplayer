@@ -194,7 +194,7 @@ public class FusionPlayerCombat : NetworkBehaviour
             return;
         }
 
-        targetSurvival.ApplyDamageForStateAuthority(damage);
+        targetSurvival.ApplyDamageForStateAuthority(damage, info.Source);
     }
 
     private static bool TryFindTreeByPosition(Vector3 treePosition, out TreeChoppable tree)

@@ -14,6 +14,8 @@ public class FusionPlayerSurvival : NetworkBehaviour
     [Networked] public NetworkBool Injured { get; private set; }
     [Networked] public NetworkBool IsDowned { get; private set; }
     [Networked] public NetworkBool IsInitialized { get; private set; }
+    [Networked] public PlayerRef LastDamagerRef { get; set; }
+    [Networked] public NetworkString<_16> DisplayName { get; private set; }
 
     private float pendingHealth;
     private float pendingHunger;
@@ -31,6 +33,14 @@ public class FusionPlayerSurvival : NetworkBehaviour
 
     public override void Spawned()
     {
+        if (HasFusionStateAuthority())
+        {
+            string name = PhotonFusionSessionState.HasSession
+                ? PhotonFusionSessionState.Active.PlayerName
+                : "Player";
+            DisplayName = name.Length > 16 ? name.Substring(0, 16) : name;
+        }
+
         ResolveReferences();
         SubscribeDeathEvent();
 
@@ -91,11 +101,16 @@ public class FusionPlayerSurvival : NetworkBehaviour
         }
     }
 
-    public void ApplyDamageForStateAuthority(float damage)
+    public void ApplyDamageForStateAuthority(float damage, PlayerRef attacker)
     {
         if (!HasFusionStateAuthority() || survivalSystem == null || damage <= 0f)
         {
             return;
+        }
+
+        if (attacker.IsNone == false)
+        {
+            LastDamagerRef = attacker;
         }
 
         survivalSystem.ApplyDamage(damage);
