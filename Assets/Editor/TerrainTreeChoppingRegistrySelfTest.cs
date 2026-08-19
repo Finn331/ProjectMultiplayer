@@ -77,6 +77,9 @@ public static class TerrainTreeChoppingRegistrySelfTest
             registry.ApplyNetworkedDepletion(new[] { liveHit.TreeId });
             Expect(terrain.terrainData.treeInstanceCount == beforeApplyCount - 1,
                 "ApplyNetworkedDepletion should be idempotent (re-applying an already-depleted id must not hide twice).");
+            registry.ApplyNetworkedDepletion(null);
+            Expect(terrain.terrainData.treeInstanceCount == beforeApplyCount - 1,
+                "ApplyNetworkedDepletion(null) should be a safe no-op.");
 
             Debug.Log("TerrainTreeChoppingRegistrySelfTest passed.");
         }

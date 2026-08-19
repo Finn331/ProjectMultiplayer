@@ -221,7 +221,7 @@ public class TerrainTreeChoppingRegistry : MonoBehaviour
         return true;
     }
 
-    public void ApplyNetworkedDepletion(System.Collections.Generic.IEnumerable<int> treeIds)
+    public void ApplyNetworkedDepletion(IEnumerable<int> treeIds)
     {
         if (treeIds == null)
         {
