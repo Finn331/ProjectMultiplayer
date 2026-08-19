@@ -986,6 +986,89 @@ public class FusionPlayerInventory : NetworkBehaviour
         return false;
     }
 
+    public static int DropAllItemsForDeathForTest(PlayerInventory inventory, Vector3 worldPosition, int maxPickables)
+    {
+        var stacks = EnumerateDeathDropStacksForTest(inventory, maxPickables);
+        for (int i = 0; i < stacks.Count; i++)
+        {
+            inventory.RemoveItem(stacks[i].ItemType, stacks[i].Amount);
+        }
+        return stacks.Count;
+    }
+
+    public static System.Collections.Generic.List<ItemStack> EnumerateDeathDropStacksForTest(PlayerInventory inventory, int maxPickables)
+    {
+        var result = new System.Collections.Generic.List<ItemStack>();
+        if (inventory == null)
+        {
+            return result;
+        }
+
+        var entries = inventory.Entries;
+        for (int i = 0; i < entries.Count && result.Count < maxPickables; i++)
+        {
+            var entry = entries[i];
+            if (entry == null || entry.amount <= 0)
+            {
+                continue;
+            }
+            result.Add(new ItemStack { ItemType = entry.itemType, Amount = Mathf.Max(1, entry.amount) });
+        }
+        return result;
+    }
+
+    public struct ItemStack
+    {
+        public ItemType ItemType;
+        public int Amount;
+    }
+
+    public uint DropAllItemsForDeath(Vector3 worldPosition)
+    {
+        if (Runner == null || !Runner.IsRunning)
+        {
+            return 0;
+        }
+
+        PlayerInventory localInventory = inventory != null ? inventory : GetComponent<PlayerInventory>();
+        if (localInventory == null)
+        {
+            return 0;
+        }
+
+        var stacks = EnumerateDeathDropStacksForTest(localInventory, 20);
+        uint spawned = 0;
+        for (int i = 0; i < stacks.Count; i++)
+        {
+            if (!TryGetDropPrefab(stacks[i].ItemType, out NetworkPrefabRef dropPrefab, out GameObject dropPrefabObject))
+            {
+                localInventory.RemoveItem(stacks[i].ItemType, stacks[i].Amount);
+                continue;
+            }
+
+            Vector3 pos = worldPosition + new Vector3(0f, 0.5f, 0f);
+            NetworkObject obj = dropPrefab.IsValid
+                ? Runner.Spawn(dropPrefab, pos, Quaternion.identity, Object.InputAuthority)
+                : Runner.Spawn(dropPrefabObject, pos, Quaternion.identity, Object.InputAuthority);
+
+            if (obj == null)
+            {
+                continue;
+            }
+
+            FusionPickableItem pickable = obj.GetComponent<FusionPickableItem>();
+            if (pickable == null || !pickable.Initialize(stacks[i].ItemType, stacks[i].Amount))
+            {
+                Runner.Despawn(obj);
+                continue;
+            }
+
+            localInventory.RemoveItem(stacks[i].ItemType, stacks[i].Amount);
+            spawned++;
+        }
+        return spawned;
+    }
+
     private bool TryGetPlaceablePrefab(ItemType itemType, out NetworkPrefabRef prefab, out GameObject prefabObject, out Vector3 bounds)
     {
         prefabObject = null;

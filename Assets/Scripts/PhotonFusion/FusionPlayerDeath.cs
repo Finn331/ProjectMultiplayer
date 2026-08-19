@@ -13,8 +13,6 @@ public class FusionPlayerDeath : NetworkBehaviour
     [SerializeField] private FusionPlayerInventory inventory;
     [SerializeField] private FusionPlayerSpawner spawner;
 
-    private static bool warnedDropped;
-
     private bool lastDowned;
     private float respawnTimer;
     private bool respawnTimerArmed;
@@ -212,10 +210,9 @@ public class FusionPlayerDeath : NetworkBehaviour
 
     private void TryDropInventory()
     {
-        if (inventory != null && !warnedDropped)
+        if (inventory != null)
         {
-            warnedDropped = true;
-            Debug.LogWarning("[FusionPlayerDeath] Inventory drop not implemented yet (Task 4).");
+            inventory.DropAllItemsForDeath(transform.position);
         }
     }
 
