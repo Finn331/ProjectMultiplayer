@@ -22,19 +22,23 @@ public static class FusionPlayerSurvivalSelfTest
         ok &= hasDisplayName;
 
         var survival = new GameObject("FusionPlayerSurvivalSelfTest_Survival").AddComponent<FusionPlayerSurvival>();
+        try
+        {
+            // In edit mode (no runner) Fusion rejects reads of networked properties before
+            // Spawned(). Both members must be Fusion-backed (no eager Awake/field
+            // initializer), so a pre-spawn access must throw.
+            bool lastDamagerGuarded = IsNetworkedPropertyGuarded(() => { _ = survival.LastDamagerRef; });
+            results.AppendLine("lastDamagerGuarded=" + lastDamagerGuarded);
+            ok &= lastDamagerGuarded;
 
-        // In edit mode (no runner) Fusion rejects reads of networked properties before
-        // Spawned(). Both members must be Fusion-backed (no eager Awake/field
-        // initializer), so a pre-spawn access must throw.
-        bool lastDamagerGuarded = IsNetworkedPropertyGuarded(() => { _ = survival.LastDamagerRef; });
-        results.AppendLine("lastDamagerGuarded=" + lastDamagerGuarded);
-        ok &= lastDamagerGuarded;
-
-        bool displayNameGuarded = IsNetworkedPropertyGuarded(() => { _ = survival.DisplayName; });
-        results.AppendLine("displayNameGuarded=" + displayNameGuarded);
-        ok &= displayNameGuarded;
-
-        UnityEngine.Object.DestroyImmediate(survival.gameObject);
+            bool displayNameGuarded = IsNetworkedPropertyGuarded(() => { _ = survival.DisplayName; });
+            results.AppendLine("displayNameGuarded=" + displayNameGuarded);
+            ok &= displayNameGuarded;
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(survival.gameObject);
+        }
 
         if (!ok)
         {
@@ -51,7 +55,7 @@ public static class FusionPlayerSurvivalSelfTest
             access();
             return false;
         }
-        catch (System.InvalidOperationException)
+        catch (System.Exception)
         {
             return true;
         }

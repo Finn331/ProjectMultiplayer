@@ -38,6 +38,10 @@ public class FusionPlayerSurvival : NetworkBehaviour
             string name = PhotonFusionSessionState.HasSession
                 ? PhotonFusionSessionState.Active.PlayerName
                 : "Player";
+            if (string.IsNullOrEmpty(name))
+            {
+                name = "Player";
+            }
             DisplayName = name.Length > 16 ? name.Substring(0, 16) : name;
         }
 
@@ -108,7 +112,7 @@ public class FusionPlayerSurvival : NetworkBehaviour
             return;
         }
 
-        if (attacker.IsNone == false)
+        if (attacker.IsNone == false && attacker != Object.InputAuthority)
         {
             LastDamagerRef = attacker;
         }
