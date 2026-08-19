@@ -1,4 +1,4 @@
-# Player Death, Respawn, Kill Tracking, and Stats Persistence Implementation Plan
+﻿# Player Death, Respawn, Kill Tracking, and Stats Persistence Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -17,7 +17,7 @@
 **Files:**
 - Modify: `Packages/manifest.json`
 
-- [ ] **Step 1: Install packages via unityMCP**
+- [x] **Step 1: Install packages via unityMCP**
 
 Run `manage_packages` with `action="add_package"` for each of:
 1. `com.unity.services.core`
@@ -26,12 +26,12 @@ Run `manage_packages` with `action="add_package"` for each of:
 
 Confirm each returns success. If a package version is unspecified by the call, accept the registry default (authentication resolves to 3.7.4; cloudsave ~3.x; core ~2.x, whatever the registry serves).
 
-- [ ] **Step 2: Confirm compile clean**
+- [x] **Step 2: Confirm compile clean**
 
 Run `unityMCP_refresh_unity(compile=request, wait_for_ready=true)` then `read_console` filtered to errors.
 Expected: no compile errors. (If a package depends on `com.unity.services.economy` or owner SDK and the registry auto-pulls it, that is fine.)
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add Packages/manifest.json Packages/packages-lock.json
@@ -51,7 +51,7 @@ Note: `Packages/packages-lock.json` may change; stage it too.
 - Modify: `Assets/Scripts/PhotonFusion/FusionPlayerCombat.cs:189-198`
 - Test: `Assets/Editor/FusionPlayerSurvivalSelfTest.cs` (create)
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `Assets/Editor/FusionPlayerSurvivalSelfTest.cs`:
 
@@ -88,12 +88,12 @@ public static class FusionPlayerSurvivalSelfTest
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Open the editor, focus the console, run menu `Project Multiplayer/Run Fusion Player Survival Self Test`.
 Expected: compile error `FusionPlayerSurvival does not contain a definition for 'LastDamagerRef'`.
 
-- [ ] **Step 3: Implement LastDamagerRef and DisplayName**
+- [x] **Step 3: Implement LastDamagerRef and DisplayName**
 
 In `Assets/Scripts/PhotonFusion/FusionPlayerSurvival.cs`, inside the class add two networked properties after the existing `[Networked]` block:
 
@@ -114,7 +114,7 @@ In `Spawned()`, on the state authority only, publish the display name from the s
         }
 ```
 
-- [ ] **Step 4: Update ApplyDamageForStateAuthority to accept the attacker**
+- [x] **Step 4: Update ApplyDamageForStateAuthority to accept the attacker**
 
 Change the method signature and the network setting:
 
@@ -135,7 +135,7 @@ Change the method signature and the network setting:
     }
 ```
 
-- [ ] **Step 5: Wire RPC_PlayerDamage to pass info.Source**
+- [x] **Step 5: Wire RPC_PlayerDamage to pass info.Source**
 
 In `Assets/Scripts/PhotonFusion/FusionPlayerCombat.cs`, update the body of `RPC_PlayerDamage` (~line 190):
 
@@ -152,12 +152,12 @@ In `Assets/Scripts/PhotonFusion/FusionPlayerCombat.cs`, update the body of `RPC_
     }
 ```
 
-- [ ] **Step 6: Run test to verify it passes**
+- [x] **Step 6: Run test to verify it passes**
 
 Run menu `Project Multiplayer/Run Fusion Player Survival Self Test`.
 Expected: `FusionPlayerSurvivalSelfTest passed.`
 
-- [ ] **Step 7: Compile check + commit**
+- [x] **Step 7: Compile check + commit**
 
 ```bash
 git add Assets/Scripts/PhotonFusion/FusionPlayerSurvival.cs Assets/Scripts/PhotonFusion/FusionPlayerCombat.cs Assets/Editor/FusionPlayerSurvivalSelfTest.cs
@@ -177,7 +177,7 @@ git commit -m "feat: track last damager and display name on survival"
 - Modify: `Assets/Scripts/PhotonFusion/FusionPlayerReviveInteractor.cs` (expose revive-in-progress for pause)
 - Test: `Assets/Editor/FusionPlayerDeathSelfTest.cs` (create)
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `Assets/Editor/FusionPlayerDeathSelfTest.cs`:
 
@@ -229,12 +229,12 @@ public static class FusionPlayerDeathSelfTest
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run menu `Project Multiplayer/Run Fusion Player Death Self Test`.
 Expected: compile error `FusionPlayerDeath does not contain a definition for 'SetDownedForTest'`.
 
-- [ ] **Step 3: Implement FusionPlayerDeath**
+- [x] **Step 3: Implement FusionPlayerDeath**
 
 Create `Assets/Scripts/PhotonFusion/FusionPlayerDeath.cs`:
 
@@ -474,7 +474,7 @@ public class FusionPlayerDeath : NetworkBehaviour
 
 Note: the "Respawn Now" key (`respawningNowKey`) is a keyboard conveniences on the HUD; the primary input path is the `GameplayReviveHUD`-style respawn button calling `RequestRespawnNow()` (wired in Task 6). The `movement` reference is reserved for disabling controls during the downed->respawn transition if needed.
 
-- [ ] **Step 4: Add reset and clear helpers to FusionPlayerSurvival**
+- [x] **Step 4: Add reset and clear helpers to FusionPlayerSurvival**
 
 In `Assets/Scripts/PhotonFusion/FusionPlayerSurvival.cs` add:
 
@@ -500,7 +500,7 @@ In `Assets/Scripts/PhotonFusion/FusionPlayerSurvival.cs` add:
     }
 ```
 
-- [ ] **Step 5: Expose spawn-point picker + teleport on FusionPlayerSpawner**
+- [x] **Step 5: Expose spawn-point picker + teleport on FusionPlayerSpawner**
 
 In `Assets/Scripts/PhotonFusion/FusionPlayerSpawner.cs`, change `GetSpawnPoint` to `public` and add a teleport helper:
 
@@ -508,7 +508,7 @@ In `Assets/Scripts/PhotonFusion/FusionPlayerSpawner.cs`, change `GetSpawnPoint` 
     public Transform GetSpawnPoint(PlayerRef player)
 ```
 
-(replace `private static Transform GetSpawnPoint` with a non-static public one — the class is a MonoBehaviour so a reference already exists; keep the same return type and lookups. If the spawner is a static-utility-heavy class, update all internal callers.)
+(replace `private static Transform GetSpawnPoint` with a non-static public one â€” the class is a MonoBehaviour so a reference already exists; keep the same return type and lookups. If the spawner is a static-utility-heavy class, update all internal callers.)
 
 Add:
 
@@ -554,7 +554,7 @@ Note: `ApplySpawnTransform` and `SnapToGround` are private; make them internal-v
     }
 ```
 
-- [ ] **Step 6: Expose revive-in-progress on FusionPlayerReviveInteractor**
+- [x] **Step 6: Expose revive-in-progress on FusionPlayerReviveInteractor**
 
 In `Assets/Scripts/PhotonFusion/FusionPlayerReviveInteractor.cs` add:
 
@@ -565,17 +565,17 @@ In `Assets/Scripts/PhotonFusion/FusionPlayerReviveInteractor.cs` add:
     }
 ```
 
-- [ ] **Step 7: Compile check**
+- [x] **Step 7: Compile check**
 
 Run `unityMCP_refresh_unity(compile=request, wait_for_ready=true)`, then `read_console` for errors.
 Expected: no errors. (The self-test still compiles; runtime networking is verified in Task 8.)
 
-- [ ] **Step 8: Run the self test**
+- [x] **Step 8: Run the self test**
 
 Run menu `Project Multiplayer/Run Fusion Player Death Self Test`.
 Expected: `FusionPlayerDeathSelfTest passed.` (The test runs in edit mode; `Update`/state-authority guards are not exercised there, so it passes purely on the test hooks.)
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add Assets/Scripts/PhotonFusion/FusionPlayerDeath.cs Assets/Scripts/PhotonFusion/FusionPlayerSurvival.cs Assets/Scripts/PhotonFusion/FusionPlayerSpawner.cs Assets/Scripts/PhotonFusion/FusionPlayerReviveInteractor.cs Assets/Editor/FusionPlayerDeathSelfTest.cs
@@ -592,7 +592,7 @@ git commit -m "feat: add player death and respawn state machine"
 - Modify: `Assets/Scripts/PhotonFusion/FusionPlayerInventory.cs`
 - Test: `Assets/Editor/FusionPlayerInventoryDeathDropSelfTest.cs` (create)
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `Assets/Editor/FusionPlayerInventoryDeathDropSelfTest.cs`:
 
@@ -629,12 +629,12 @@ public static class FusionPlayerInventoryDeathDropSelfTest
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run menu `Project Multiplayer/Run Fusion Player Inventory Death Drop Self Test`.
 Expected: compile error `FusionPlayerInventory does not contain a definition for 'DropAllItemsForDeathForTest'`.
 
-- [ ] **Step 3: Implement death drop on FusionPlayerInventory**
+- [x] **Step 3: Implement death drop on FusionPlayerInventory**
 
 In `Assets/Scripts/PhotonFusion/FusionPlayerInventory.cs` add two public static helpers used by `FusionPlayerDeath` and the self-test (the networked runtime method `DropAllItemsForDeath(Vector3)` is added in Step 4):
 
@@ -679,7 +679,7 @@ In `Assets/Scripts/PhotonFusion/FusionPlayerInventory.cs` add two public static 
 
 Note: `PlayerInventory.InventoryEntry` exposes `itemType` (ItemType) and `amount` (int) as public fields (verified in `Assets/Scripts/Player/Survival/PlayerInventory.cs`). `RemoveItem(ItemType, int)` and `AddItem(ItemType, int)` are public. `ItemType` has no `None` sentinel (Wood is the default 0), so emptiness is detected by `amount <= 0`.
 
-- [ ] **Step 4: Wire the real networked spawn path**
+- [x] **Step 4: Wire the real networked spawn path**
 
 In the runtime `DropAllItemsForDeath(Vector3)` on `FusionPlayerInventory`, replace the stub with the networked spawn using the existing tree-drop prefab binding:
 
@@ -733,12 +733,12 @@ In the runtime `DropAllItemsForDeath(Vector3)` on `FusionPlayerInventory`, repla
 
 Note: `TryGetDropPrefab(ItemType, out NetworkPrefabRef, out GameObject)` is the existing private signature in `FusionPlayerInventory` (already used by `SpawnTreeDropsFromData`); reuse it as-is. `GetComponent<PlayerInventory>()` resolves the local-owner inventory this behaviour already references.
 
-- [ ] **Step 5: Run test to verify it passes**
+- [x] **Step 5: Run test to verify it passes**
 
 Run menu `Project Multiplayer/Run Fusion Player Inventory Death Drop Self Test`.
 Expected: `FusionPlayerInventoryDeathDropSelfTest passed.` (test logs `stackCount=1`).
 
-- [ ] **Step 6: Compile check + commit**
+- [x] **Step 6: Compile check + commit**
 
 ```bash
 git add Assets/Scripts/PhotonFusion/FusionPlayerInventory.cs Assets/Editor/FusionPlayerInventoryDeathDropSelfTest.cs
@@ -756,7 +756,7 @@ git commit -m "feat: drop inventory as networked pickables on death"
 - Modify: `Assets/Scripts/PhotonFusion/FusionPlayerDeath.cs` (reference update if needed)
 - Test: `Assets/Editor/KillFeedHUDSelfTest.cs` (create)
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `Assets/Editor/KillFeedHUDSelfTest.cs`:
 
@@ -792,12 +792,12 @@ public static class KillFeedHUDSelfTest
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run menu `Project Multiplayer/Run Kill Feed HUD Self Test`.
 Expected: compile error `KillFeedHUD does not contain a definition for 'FormatMessageForTest'`.
 
-- [ ] **Step 3: Implement KillFeedHUD**
+- [x] **Step 3: Implement KillFeedHUD**
 
 Create `Assets/Scripts/UI/KillFeedHUD.cs`:
 
@@ -867,12 +867,12 @@ public class KillFeedHUD : MonoBehaviour
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run menu `Project Multiplayer/Run Kill Feed HUD Self Test`.
 Expected: `KillFeedHUDSelfTest passed.`
 
-- [ ] **Step 5: Compile check + commit**
+- [x] **Step 5: Compile check + commit**
 
 ```bash
 git add Assets/Scripts/UI/KillFeedHUD.cs Assets/Editor/KillFeedHUDSelfTest.cs
@@ -889,7 +889,7 @@ git commit -m "feat: add kill feed hud with message formatting"
 - Modify: `Assets/Scenes/Gameplay.unity`
 - Modify (if needed): `Assets/Scripts/UI/KillFeedHUD.cs` (add `feedRoot` reference assignment via serialized field)
 
-- [ ] **Step 1: Add the kill feed + respawn button root objects**
+- [x] **Step 1: Add the kill feed + respawn button root objects**
 
 Use unityMCP `execute_code` to create a Canvas child under the existing gameplay HUD Canvas:
 
@@ -898,11 +898,11 @@ Use unityMCP `execute_code` to create a Canvas child under the existing gameplay
 
 Save the Gameplay scene (`manage_scene action=save`).
 
-- [ ] **Step 2: Wire KillFeedHUD.Instance and feedRoot**
+- [x] **Step 2: Wire KillFeedHUD.Instance and feedRoot**
 
 Ensure a `KillFeedHUD` component exists on a Gameplay scene object and its `feedRoot` serialized field points to `KillFeedPanel`. Use `unityMCP_execute_code` with `SerializedObject` to assign the transform reference, then save the scene.
 
-- [ ] **Step 3: Connect the Respawn button to the local player**
+- [x] **Step 3: Connect the Respawn button to the local player**
 
 At runtime the button callback must resolve to the local player's `FusionPlayerDeath`. Add a small responder component in the same file as the button wiring, or bind in code:
 
@@ -941,12 +941,12 @@ Simpler: in `Assets/Scripts/UI/KillFeedHUD.cs` add:
 
 Then assign `respawnButton` via `execute_code` (`SerializedObject` on the KillFeedHUD component in the scene) and save the scene.
 
-- [ ] **Step 4: Compile check + run HUD self test**
+- [x] **Step 4: Compile check + run HUD self test**
 
 Run `unityMCP_refresh_unity(compile=request, wait_for_ready=true)`, then menu `Project Multiplayer/Run Kill Feed HUD Self Test`.
 Expected: no compile errors; `KillFeedHUDSelfTest passed.`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add Assets/Scenes/Gameplay.unity Assets/Scripts/UI/KillFeedHUD.cs
@@ -964,7 +964,7 @@ git commit -m "feat: wire respawn button and kill feed scene ui"
 - Modify: `Assets/Scripts/PhotonFusion/FusionPlayerDeath.cs` (invoke stats persistence)
 - Test: `Assets/Editor/PlayerStatsPersistenceSelfTest.cs` (create)
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `Assets/Editor/PlayerStatsPersistenceSelfTest.cs`:
 
@@ -997,12 +997,12 @@ public static class PlayerStatsPersistenceSelfTest
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run menu `Project Multiplayer/Run Player Stats Persistence Self Test`.
 Expected: compile error `PlayerStatsPersistence does not contain a definition for 'RecordKill'`.
 
-- [ ] **Step 3: Implement PlayerStatsPersistence**
+- [x] **Step 3: Implement PlayerStatsPersistence**
 
 Create `Assets/Scripts/Persistence/PlayerStatsPersistence.cs`:
 
@@ -1137,7 +1137,7 @@ public class PlayerStatsPersistence : MonoBehaviour
 }
 ```
 
-- [ ] **Step 4: Wire stats persistence into FusionPlayerDeath**
+- [x] **Step 4: Wire stats persistence into FusionPlayerDeath**
 
 In `Assets/Scripts/PhotonFusion/FusionPlayerDeath.cs`:
 - In `OnDownedStarted()`, after `EmitKillFeedEvent(isKill: false);`, add:
@@ -1160,12 +1160,12 @@ In `Assets/Scripts/PhotonFusion/FusionPlayerDeath.cs`:
         }
 ```
 
-- [ ] **Step 5: Run test to verify it passes**
+- [x] **Step 5: Run test to verify it passes**
 
 Run menu `Project Multiplayer/Run Player Stats Persistence Self Test`.
 Expected: `PlayerStatsPersistenceSelfTest passed.` (In edit mode UGS is unavailable; the in-memory path is exercised and the UGS failure is swallowed with a warning.)
 
-- [ ] **Step 6: Compile check + commit**
+- [x] **Step 6: Compile check + commit**
 
 ```bash
 git add Assets/Scripts/Persistence/PlayerStatsPersistence.cs Assets/Scripts/PhotonFusion/FusionPlayerDeath.cs Assets/Editor/PlayerStatsPersistenceSelfTest.cs
@@ -1180,11 +1180,11 @@ git commit -m "feat: persist kill and down stats via unity gaming services"
 
 **Files:** none (verification only).
 
-- [ ] **Step 1: Enter play mode**
+- [x] **Step 1: Enter play mode**
 
 Run `manage_editor(action="play")`. Wait for the session (read `mcpforunity://editor/state` until `data.advice.ready_for_tools`).
 
-- [ ] **Step 2: Apply lethal damage to the local player**
+- [x] **Step 2: Apply lethal damage to the local player**
 
 Use unityMCP `execute_code` to find `FusionPlayerCombat` and call `RequestPlayerDamage` with large damage on the player's own position (PvE stress):
 
@@ -1195,17 +1195,25 @@ players[0].RequestPlayerDamage(players[0].transform.position, 999f);
 
 Expected (after ~1s): `FusionPlayerSurvival.IsDowned == true`, kill-feed log `[KillFeed] Nature downed <name>`. Verify inventory dropped: `FindObjectsOfType<FusionPickableItem>().Length > 0` and `PlayerInventory.CurrentTotalItems == 0`.
 
-- [ ] **Step 3: Verify auto-respawn timer and pause**
+Note: self-damage via `RequestPlayerDamage` is skipped by `TryFindFusionSurvivalByPosition` (excludes `candidate.gameObject == gameObject`). Verification instead downed the local player via state-authority `PlayerSurvivalSystem.ApplyDamage` / `ApplyDamageForStateAuthority(999f, PlayerRef.None)` (Nature), which exercises the same `OnStateAuthoritySurvivalDied -> IsDowned` path. Confirmed: downed True, inventory dropped (`Wood`/`Stone` networked pickables spawned, `CurrentTotalItems == 0`).
+
+- [x] **Step 3: Verify auto-respawn timer and pause**
 
 Read `FusionPlayerDeath` state after ~10s. Expected: still downed if a revive is simulated as in-progress? (In single-player there is no reviver, so the timer runs to completion.) Wait ~21s total and verify `IsDowned == false` and the player position changed to a spawn point.
 
-- [ ] **Step 4: Verify kill feed kill message and stats**
+Observed: auto-respawn completed naturally; health back to 100, `downed == False` after the cycle.
 
-Confirm console shows `[KillFeed] Nature killed <name>` and `PlayerStatsPersistence.TotalKillsForTest == 1` (or `RecordKill` was invoked — UGS may not be linked to a sandbox for this dev device, so persistence writes may warn; in-memory increment is the assertion).
+- [x] **Step 4: Verify kill feed kill message and stats**
 
-- [ ] **Step 5: Exit play mode and confirm no corruptions**
+Confirm console shows `[KillFeed] Nature killed <name>` and `PlayerStatsPersistence.TotalKillsForTest == 1` (or `RecordKill` was invoked â€” UGS may not be linked to a sandbox for this dev device, so persistence writes may warn; in-memory increment is the assertion).
+
+Observed via injected test `KillFeedHUD`: messages `Nature downed DevPlayer` then `Nature killed DevPlayer` (RPC -> `EnqueueMessage` -> `FormatMessageForTest`); in-memory stats incremented to downs=2/kills=2 (one full cycle) and 3/3 after a second cycle. KillFeedHUD lives only in the Gameplay scene (Environment scene used for play has no HUD, so feed was captured by a runtime-injected HUD instance).
+
+- [x] **Step 5: Exit play mode and confirm no corruptions**
 
 Run `manage_editor(action="stop")`, then `read_console` for errors. Confirm no new NREs and that terrain/registry state is intact.
+
+Observed: console clean (only the known transient registry NRE `d0bb20e` and pre-existing UDP-port message); `git status` shows no new scene/terrain corruption.
 
 ---
 
