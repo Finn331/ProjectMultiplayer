@@ -221,6 +221,25 @@ public class TerrainTreeChoppingRegistry : MonoBehaviour
         return true;
     }
 
+    public void ApplyNetworkedDepletion(System.Collections.Generic.IEnumerable<int> treeIds)
+    {
+        if (treeIds == null)
+        {
+            return;
+        }
+
+        foreach (int treeId in treeIds)
+        {
+            if (!recordsById.TryGetValue(treeId, out TreeRecord record) || record.Depleted)
+            {
+                continue;
+            }
+
+            record.Depleted = true;
+            HideTree(record);
+        }
+    }
+
     public bool TryPlayFallingProxy(int treeId, Vector3 fallDirection)
     {
         if (!recordsById.TryGetValue(treeId, out TreeRecord record) || record.PrototypePrefab == null)

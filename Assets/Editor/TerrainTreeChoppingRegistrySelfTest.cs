@@ -68,6 +68,15 @@ public static class TerrainTreeChoppingRegistrySelfTest
             Expect(!registry.TryApplyDamageForTests(hit.TreeId, 3f, out _), "Repeated damage against the same depleted id should be ignored.");
             Expect(terrain.terrainData.treeInstanceCount == beforeRemovalCount - 1, "Repeated depletion should not remove another tree.");
             Expect(!registry.TryPlayFallingProxy(123456789, Vector3.forward), "Missing tree id should not spawn a proxy.");
+            Expect(registry.TryFindBestTreeForChop(new Vector3(15f, 1f, 5f), Vector3.forward, 20f, 0.2f, out TerrainTreeChoppingRegistry.TreeHit liveHit),
+                "Registry should still find the second (still-alive) tree.");
+            int beforeApplyCount = terrain.terrainData.treeInstanceCount;
+            registry.ApplyNetworkedDepletion(new[] { liveHit.TreeId, 999999999 });
+            Expect(terrain.terrainData.treeInstanceCount == beforeApplyCount - 1,
+                "ApplyNetworkedDepletion should hide matching trees and ignore unknown ids.");
+            registry.ApplyNetworkedDepletion(new[] { liveHit.TreeId });
+            Expect(terrain.terrainData.treeInstanceCount == beforeApplyCount - 1,
+                "ApplyNetworkedDepletion should be idempotent (re-applying an already-depleted id must not hide twice).");
 
             Debug.Log("TerrainTreeChoppingRegistrySelfTest passed.");
         }
