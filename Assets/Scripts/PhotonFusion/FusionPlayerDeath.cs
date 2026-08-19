@@ -9,9 +9,11 @@ public class FusionPlayerDeath : NetworkBehaviour
 
     [Header("References")]
     [SerializeField] private FusionPlayerSurvival survival;
-    [SerializeField] private FusionPlayerMovement movement;
+    [SerializeField] private FusionPlayerMovement movement; // Reserved: may disable controls while downed -> respawning if needed.
     [SerializeField] private FusionPlayerInventory inventory;
     [SerializeField] private FusionPlayerSpawner spawner;
+
+    private static bool warnedDropped;
 
     private bool lastDowned;
     private float respawnTimer;
@@ -72,7 +74,7 @@ public class FusionPlayerDeath : NetworkBehaviour
         }
 
         respawnTimer += Time.unscaledDeltaTime;
-        if (respawnTimer >= respawnDelaySeconds)
+        if (respawnTimer >= Mathf.Max(0.5f, respawnDelaySeconds))
         {
             Respawn();
         }
@@ -115,21 +117,7 @@ public class FusionPlayerDeath : NetworkBehaviour
 
     private bool IsReviveInProgress()
     {
-        if (survival == null)
-        {
-            return false;
-        }
-
-        FusionPlayerReviveInteractor[] interactors = FindObjectsOfType<FusionPlayerReviveInteractor>(true);
-        for (int i = 0; i < interactors.Length; i++)
-        {
-            if (interactors[i].IsRevivingTarget(survival))
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return survival != null && survival.IsRevivePending;
     }
 
     private void ResetSurvival()
@@ -196,8 +184,9 @@ public class FusionPlayerDeath : NetworkBehaviour
 
     private void TryDropInventory()
     {
-        if (inventory != null)
+        if (inventory != null && !warnedDropped)
         {
+            warnedDropped = true;
             Debug.LogWarning("[FusionPlayerDeath] Inventory drop not implemented yet (Task 4).");
         }
     }

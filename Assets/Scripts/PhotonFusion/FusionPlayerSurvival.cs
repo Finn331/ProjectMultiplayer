@@ -13,6 +13,7 @@ public class FusionPlayerSurvival : NetworkBehaviour
     [Networked] public float Thirst { get; private set; }
     [Networked] public NetworkBool Injured { get; private set; }
     [Networked] public NetworkBool IsDowned { get; private set; }
+    [Networked] public NetworkBool IsRevivePending { get; set; }
     [Networked] public NetworkBool IsInitialized { get; private set; }
     [Networked] public PlayerRef LastDamagerRef { get; set; }
     [Networked] public NetworkString<_16> DisplayName { get; private set; }
@@ -134,6 +135,27 @@ public class FusionPlayerSurvival : NetworkBehaviour
 
         RPC_RequestRevive(reviverPosition, reviveRange, reviveHealthPercent, requestId);
         return true;
+    }
+
+    public void NotifyReviveInProgress(bool inProgress)
+    {
+        if (Runner == null || Object == null || !Object.IsValid)
+        {
+            return;
+        }
+
+        RPC_NotifyReviveInProgress(inProgress);
+    }
+
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    private void RPC_NotifyReviveInProgress(bool inProgress, RpcInfo info = default)
+    {
+        if (inProgress == IsRevivePending)
+        {
+            return;
+        }
+
+        IsRevivePending = inProgress;
     }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
@@ -345,6 +367,7 @@ public class FusionPlayerSurvival : NetworkBehaviour
         survivalSystem.Revive(1f);
         survivalSystem.RestoreAllNeeds();
         IsDowned = false;
+        IsRevivePending = false;
         LastDamagerRef = default;
         QueueSnapshot(survivalSystem.CurrentHealth, survivalSystem.CurrentHunger, survivalSystem.CurrentThirst);
         TryFlushSnapshot(true);

@@ -210,6 +210,7 @@ GameObject:
   - component: {fileID: 5647860158614455506}
   - component: {fileID: 4694464254698259601}
   - component: {fileID: 8955619082866634284}
+  - component: {fileID: 1952420705053856019}
   m_Layer: 0
   m_Name: FusionPlayer
   m_TagString: Untagged
@@ -792,6 +793,9 @@ MonoBehaviour:
   treeMeleeAssistRadius: 1.9
   treeMeleeAssistForwardDot: -0.2
   logHitDebug: 0
+  enableTerrainTreeAssist: 1
+  terrainTreeAssistDistance: 2.25
+  terrainTreeAssistForwardDot: 0.15
   treeDamagePerHit: 1
   playerDamagePerHit: 10
   heavySwingStateName: Standing Melee Attack Downward
@@ -867,6 +871,7 @@ MonoBehaviour:
   - {fileID: 2812518113419283217}
   - {fileID: 4694464254698259601}
   - {fileID: 8955619082866634284}
+  - {fileID: 1952420705053856019}
   ForceRemoteRenderTimeframe: 0
 --- !u!114 &4243588901381709582
 MonoBehaviour:
@@ -1013,8 +1018,14 @@ MonoBehaviour:
     _value: 0
   _IsDowned:
     _value: 0
+  _IsRevivePending:
+    _value: 0
   _IsInitialized:
     _value: 0
+  _DisplayName:
+    _length: 0
+    _data:
+      Data: 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 --- !u!114 &3670379303215142028
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1269,6 +1280,24 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d6dcb07e94508174c98fbde113a798a8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!114 &1952420705053856019
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4472293491055181419}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4d503407faebc084bb2416bb88d19253, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  respawnDelaySeconds: 20
+  survival: {fileID: 0}
+  movement: {fileID: 0}
+  inventory: {fileID: 0}
+  spawner: {fileID: 0}
+  revivePauseCheckInterval: 0.2
 --- !u!1 &7516938604735521551
 GameObject:
   m_ObjectHideFlags: 0

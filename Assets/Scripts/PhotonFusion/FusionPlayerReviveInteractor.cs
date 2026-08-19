@@ -17,6 +17,7 @@ public class FusionPlayerReviveInteractor : NetworkBehaviour
     private bool hasPendingBandageConsume;
     private int nextReviveRequestId;
     private int pendingReviveRequestId;
+    private bool wasHolding;
 
     public override void Spawned()
     {
@@ -44,6 +45,7 @@ public class FusionPlayerReviveInteractor : NetworkBehaviour
             return;
         }
 
+        FusionPlayerSurvival previousTarget = currentTarget;
         FusionPlayerSurvival nextTarget = FindBestDownedTarget();
         if (nextTarget != currentTarget)
         {
@@ -53,6 +55,13 @@ public class FusionPlayerReviveInteractor : NetworkBehaviour
         currentTarget = nextTarget;
         if (currentTarget == null)
         {
+            if (wasHolding && previousTarget != null &&
+                (!hasPendingBandageConsume || pendingReviveTarget != previousTarget))
+            {
+                previousTarget.NotifyReviveInProgress(false);
+            }
+
+            wasHolding = false;
             ResetReviveUI();
             return;
         }
@@ -65,6 +74,26 @@ public class FusionPlayerReviveInteractor : NetworkBehaviour
         }
 
         bool holding = hasBandage && (Input.GetKey(keyboardReviveKey) || (hud != null && hud.IsMobileReviveHeld));
+        if (holding && !wasHolding)
+        {
+            currentTarget.NotifyReviveInProgress(true);
+        }
+        else if (!holding && wasHolding)
+        {
+            currentTarget.NotifyReviveInProgress(false);
+        }
+        else if (holding && currentTarget != previousTarget)
+        {
+            if (previousTarget != null)
+            {
+                previousTarget.NotifyReviveInProgress(false);
+            }
+
+            currentTarget.NotifyReviveInProgress(true);
+        }
+
+        wasHolding = holding;
+
         if (!holding)
         {
             reviveProgressSeconds = 0f;
@@ -159,6 +188,11 @@ public class FusionPlayerReviveInteractor : NetworkBehaviour
             return;
         }
 
+        if (resolvedTarget != null)
+        {
+            resolvedTarget.NotifyReviveInProgress(false);
+        }
+
         hasPendingBandageConsume = false;
         pendingReviveTarget = null;
         pendingReviveRequestId = 0;
@@ -227,6 +261,11 @@ public class FusionPlayerReviveInteractor : NetworkBehaviour
             }
         }
 
+        if (pendingReviveTarget != null)
+        {
+            pendingReviveTarget.NotifyReviveInProgress(false);
+        }
+
         hasPendingBandageConsume = false;
         pendingReviveTarget = null;
         pendingReviveRequestId = 0;
@@ -234,8 +273,27 @@ public class FusionPlayerReviveInteractor : NetworkBehaviour
 
     private void ResetReviveState()
     {
+        if (currentTarget != null && !hasPendingBandageConsume)
+        {
+            currentTarget.NotifyReviveInProgress(false);
+        }
+
         reviveProgressSeconds = 0f;
         currentTarget = null;
+        wasHolding = false;
+    }
+
+    private void OnDisable()
+    {
+        if (currentTarget != null)
+        {
+            currentTarget.NotifyReviveInProgress(false);
+        }
+
+        if (hasPendingBandageConsume && pendingReviveTarget != null)
+        {
+            pendingReviveTarget.NotifyReviveInProgress(false);
+        }
     }
 
     private void ResetReviveUI()
