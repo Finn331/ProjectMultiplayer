@@ -6,7 +6,7 @@ public static class FusionTerrainTreeDepletionStateSelfTest
     [MenuItem("Project Multiplayer/Run Fusion Terrain Tree Depletion State Self Test")]
     public static void Run()
     {
-        DepletionIdBuffer state = ScriptableObject.CreateInstance<DepletionIdBuffer>();
+        DepletionIdBuffer state = new DepletionIdBuffer();
 
         Expect(state.Count == 0, "Buffer should start empty.");
         Expect(state.Add(5), "First add should return true.");
@@ -27,7 +27,6 @@ public static class FusionTerrainTreeDepletionStateSelfTest
         Expect(loaded.Length == 3 && loaded[0] == 5 && loaded[1] == 7 && loaded[2] == 9,
             "Load should keep the exact set [5, 7, 9] and filter the 0 sentinel.");
 
-        ScriptableObject.DestroyImmediate(state);
         Debug.Log("FusionTerrainTreeDepletionStateSelfTest passed.");
     }
 

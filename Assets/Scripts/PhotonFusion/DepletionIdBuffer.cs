@@ -1,12 +1,10 @@
 using System.Collections.Generic;
-using UnityEngine;
 
-[CreateAssetMenu(fileName = "DepletionIdBuffer", menuName = "Multiplayer/DepletionIdBuffer")]
-public class DepletionIdBuffer : ScriptableObject
+public class DepletionIdBuffer
 {
     public const int SentinelId = 0;
 
-    [SerializeField] private List<int> ids = new List<int>();
+    private readonly List<int> ids = new List<int>();
     private readonly HashSet<int> set = new HashSet<int>();
 
     public int Count => ids.Count;
