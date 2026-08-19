@@ -10,32 +10,33 @@ public class FusionTerrainTreeDepletionState : NetworkBehaviour
     [Networked, Capacity(MaxDepletedTrees)]
     private NetworkArray<int> DepletedTreeIds { get; }
 
+    private ChangeDetector changeDetector;
     private DepletionIdBuffer buffer;
     private TerrainTreeChoppingRegistry registry;
-    private bool hasAppliedInitialState;
     private bool warnedMissingRegistry;
 
     public override void Spawned()
     {
+        changeDetector = GetChangeDetector(ChangeDetector.Source.SnapshotFrom);
         ResolveReferences();
         SyncToRegistry();
     }
 
     public override void Render()
     {
-        if (!hasAppliedInitialState)
-        {
-            hasAppliedInitialState = true;
-            SyncToRegistry();
-            return;
-        }
-
-        if (HasStateAuthority)
+        if (changeDetector == null || HasStateAuthority)
         {
             return;
         }
 
-        SyncToRegistry();
+        foreach (string changedProperty in changeDetector.DetectChanges(this))
+        {
+            if (changedProperty == nameof(DepletedTreeIds))
+            {
+                SyncToRegistry();
+                break;
+            }
+        }
     }
 
     public void AddDepletedTree(int treeId)
