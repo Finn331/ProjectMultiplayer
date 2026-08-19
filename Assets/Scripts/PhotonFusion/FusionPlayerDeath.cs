@@ -130,7 +130,7 @@ public class FusionPlayerDeath : NetworkBehaviour
         revivePendingSinceTime = 0f;
 
         EmitKillFeedEvent(isKill: false);
-        PlayerStatsPersistence stats = PlayerStatsPersistence.Instance;
+        PlayerStatsPersistence stats = ResolveStatsPersistence();
         if (stats != null)
         {
             stats.RecordDown();
@@ -145,7 +145,7 @@ public class FusionPlayerDeath : NetworkBehaviour
         revivePendingSinceTime = 0f;
 
         EmitKillFeedEvent(isKill: true);
-        PlayerStatsPersistence stats = PlayerStatsPersistence.Instance;
+        PlayerStatsPersistence stats = ResolveStatsPersistence();
         if (stats != null)
         {
             stats.RecordKill();
@@ -182,6 +182,16 @@ public class FusionPlayerDeath : NetworkBehaviour
         {
             survival.ClearLastDamager();
         }
+    }
+
+    private PlayerStatsPersistence ResolveStatsPersistence()
+    {
+        PlayerStatsPersistence local = GetComponent<PlayerStatsPersistence>();
+        if (local != null)
+        {
+            return local;
+        }
+        return PlayerStatsPersistence.Instance;
     }
 
     private void EmitKillFeedEvent(bool isKill)
