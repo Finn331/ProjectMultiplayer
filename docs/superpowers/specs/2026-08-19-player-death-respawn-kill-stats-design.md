@@ -85,6 +85,8 @@ Respawn point selection: use `FusionPlayerSpawner`'s existing spawn-point picker
 Add `[Networked] public PlayerRef LastDamagerRef { get; set; }` to `FusionPlayerSurvival`. `PlayerRef` implements `INetworkStruct`, so it is directly networkable as a networked property.
 
 - Set inside `ApplyDamageForStateAuthority(damage)` — the method needs an attacker `PlayerRef` parameter. Currently damage arrives via `RPC_PlayerDamage(targetPosition, damage)` which has `RpcInfo info`; `info.Source` is the attacker. Extend `ApplyDamageForStateAuthority(damage, PlayerRef attacker)` and have `RPC_PlayerDamage` pass `info.Source`.
+
+Also add `[Networked] public NetworkString<_16> DisplayName { get; private set; }` to the same behaviour, set once in `Spawned()` on the state authority from `PhotonFusionSessionState.Active.PlayerName` (clamped to 15 chars). This lets any client derive a player's name from their NetworkObject without a shared registry. (`using Fusion;` already imports `NetworkString`.)
 - If damage has no attacker (hunger/thirst/fall), pass `PlayerRef.None`; the kill feed falls back to a generic label (e.g. "Nature").
 - Cleared on respawn.
 
@@ -96,14 +98,15 @@ Events broadcast to every client with names + kind:
 
 ```csharp
 [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
-private void RPC_KillFeedMessage(int victimPlayerId, int killerPlayerId, bool isKill)
+private void RPC_KillFeedMessage(string victimName, string killerName, bool isKill)
 ```
 
-- `killerPlayerId`: player id of `LastDamagerRef`, `-1` for nature/no attacker.
+- Each player publishes a lightweight `[Networked] NetworkString<_16> DisplayName` (see LastDamagerRef section) set once at spawn from `PhotonFusionSessionState.Active.PlayerName`. The state authority can thus read the attacker's name directly from `LastDamagerRef`'s object and the victim's from its own display name — no name registry or request RPC needed.
+- `killerName` is empty `""` when `LastDamagerRef` is `PlayerRef.None`; the HUD substitutes the localizable string "Nature".
+- `victimName` is the downed/killed player's own display name.
 - `isKill=true` for the respawn-without-revive event, `false` for downed.
-- Player names come from `PhotonFusionSessionState` lookup by player id (names stored per room). Where a name lookup fails, fall back to `"Player {id}"`.
 
-Rendered by `KillFeedHUD` (UI layer). No game logic in the HUD.
+The RPC payload carries strings so every client renders identically without a name registry.
 
 ### KillFeedHUD (new UI component)
 
