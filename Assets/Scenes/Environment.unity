@@ -1605,6 +1605,8 @@ MonoBehaviour:
   fallDurationSeconds: 1.1
   fallenProxyLifetimeSeconds: 6
   fallEase: 26
+  depletionStatePrefab: {fileID: 896722531436432653, guid: 3c5adf564e78c98448723de09fa40fea,
+    type: 3}
 --- !u!4 &1587962890
 Transform:
   m_ObjectHideFlags: 0

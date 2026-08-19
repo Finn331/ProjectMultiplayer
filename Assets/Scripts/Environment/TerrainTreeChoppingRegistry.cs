@@ -40,6 +40,13 @@ public class TerrainTreeChoppingRegistry : MonoBehaviour
     [SerializeField] private float fallenProxyLifetimeSeconds = 6f;
     [SerializeField] private LeanTweenType fallEase = LeanTweenType.easeInBack;
 
+    [Header("Depletion Sync")]
+    [SerializeField] private GameObject depletionStatePrefab;
+
+    private FusionTerrainTreeDepletionState spawnedDepletionState;
+    private float nextSpawnRetryTime;
+    private const float SpawnRetryInterval = 0.5f;
+
     private readonly List<TerrainSnapshot> snapshots = new List<TerrainSnapshot>();
     private readonly List<TreeRecord> records = new List<TreeRecord>();
     private readonly Dictionary<int, TreeRecord> recordsById = new Dictionary<int, TreeRecord>();
@@ -359,6 +366,38 @@ public class TerrainTreeChoppingRegistry : MonoBehaviour
             snapshot.Terrain.Flush();
             snapshot.HiddenTreeIds.Clear();
         }
+    }
+
+    private void Update()
+    {
+        TrySpawnDepletionState();
+    }
+
+    private void TrySpawnDepletionState()
+    {
+        if (FusionTerrainTreeDepletionState.Instance != null || spawnedDepletionState != null)
+        {
+            return;
+        }
+
+        Fusion.NetworkRunner runner = FindObjectOfType<Fusion.NetworkRunner>();
+        if (runner == null || !runner.IsRunning || !runner.IsSharedModeMasterClient)
+        {
+            return;
+        }
+
+        if (Time.unscaledTime < nextSpawnRetryTime)
+        {
+            return;
+        }
+
+        nextSpawnRetryTime = Time.unscaledTime + SpawnRetryInterval;
+        if (depletionStatePrefab == null)
+        {
+            return;
+        }
+
+        spawnedDepletionState = runner.Spawn(depletionStatePrefab).GetComponent<FusionTerrainTreeDepletionState>();
     }
 
     private static int CompareTerrainsForStableIds(Terrain a, Terrain b)

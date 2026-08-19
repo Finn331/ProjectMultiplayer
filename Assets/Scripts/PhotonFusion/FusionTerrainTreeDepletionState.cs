@@ -7,6 +7,8 @@ public class FusionTerrainTreeDepletionState : NetworkBehaviour
 {
     private const int MaxDepletedTrees = 512;
 
+    public static FusionTerrainTreeDepletionState Instance { get; private set; }
+
     [Networked, Capacity(MaxDepletedTrees)]
     private NetworkArray<int> DepletedTreeIds { get; }
 
@@ -17,9 +19,18 @@ public class FusionTerrainTreeDepletionState : NetworkBehaviour
 
     public override void Spawned()
     {
+        Instance = this;
         changeDetector = GetChangeDetector(ChangeDetector.Source.SnapshotFrom);
         ResolveReferences();
         SyncToRegistry();
+    }
+
+    public override void Despawned(NetworkRunner runner, bool hasState)
+    {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
     }
 
     public override void Render()

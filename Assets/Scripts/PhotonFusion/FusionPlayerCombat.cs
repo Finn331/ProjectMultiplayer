@@ -176,7 +176,9 @@ public class FusionPlayerCombat : NetworkBehaviour
                 fusionInventory.SpawnTreeDropsFromData(hit.WorldPosition, hit.WorldPosition, fallDirection, ItemType.Wood, 1, 3, 0.75f);
             }
 
-            FusionTerrainTreeDepletionState depletionState = FindObjectOfType<FusionTerrainTreeDepletionState>();
+            FusionTerrainTreeDepletionState depletionState = FusionTerrainTreeDepletionState.Instance != null
+                ? FusionTerrainTreeDepletionState.Instance
+                : FindObjectOfType<FusionTerrainTreeDepletionState>();
             if (depletionState != null)
             {
                 depletionState.AddDepletedTree(treeId);
