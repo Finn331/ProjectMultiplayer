@@ -36,7 +36,7 @@ public class KillFeedHUD : MonoBehaviour
 
     public string FormatMessageForTest(string killerName, string victimName, bool isKill)
     {
-        string killer = string.IsNullOrEmpty(killerName) ? NatureName : killerName;
+        string killer = string.IsNullOrWhiteSpace(killerName) ? NatureName : killerName;
         string verb = isKill ? "killed" : "downed";
         return killer + " " + verb + " " + victimName;
     }

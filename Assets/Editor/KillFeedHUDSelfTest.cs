@@ -14,14 +14,16 @@ public static class KillFeedHUDSelfTest
             string downed = hud.FormatMessageForTest("", "Victim", false);
             string kill = hud.FormatMessageForTest("Killer", "Victim", true);
             string nature = hud.FormatMessageForTest("", "Victim", true);
+            string whitespace = hud.FormatMessageForTest("   ", "Victim", true);
 
             bool ok = downed == "Nature downed Victim"
                 && kill == "Killer killed Victim"
-                && nature == "Nature killed Victim";
+                && nature == "Nature killed Victim"
+                && whitespace == "Nature killed Victim";
 
             if (!ok)
             {
-                throw new System.Exception("KillFeedHUDSelfTest FAILED:\n" + downed + "\n" + kill + "\n" + nature);
+                throw new System.Exception("KillFeedHUDSelfTest FAILED:\n" + downed + "\n" + kill + "\n" + nature + "\n" + whitespace);
             }
 
             Debug.Log("KillFeedHUDSelfTest passed.");
