@@ -421,34 +421,184 @@ git commit -m "feat: replicate terrain tree depletion state for late join"
 
 ---
 
-### Task 5: Add Scene Object to Environment
+### Task 5: Create Depletion State Prefab and Register in Fusion Prefab Table
 
-**Objective:** Place `FusionTerrainTreeDepletionState` in the Environment scene as a NetworkObject so it is present from session start.
+**Objective:** Create a `FusionTerrainTreeDepletionState` prefab with `NetworkObject`, register it in `DefaultNetworkPrefabs.asset`, and remove the obsolete scene object from `Environment.unity`.
 
 **Files:**
-- Modify: `Assets/Scenes/Environment.unity`
+- Create: `Assets/Prefabs/FusionTerrainTreeDepletionState.prefab` (with `NetworkObject` + `FusionTerrainTreeDepletionState`)
+- Modify: `Assets/DefaultNetworkPrefabs.asset`
+- Modify: `Assets/Scenes/Environment.unity` (remove the scene object added earlier)
 
-- [ ] **Step 1: Create the scene GameObject via unityMCP**
+- [ ] **Step 1: Remove the obsolete scene object (added in the earlier scene-object approach)**
 
-Use `manage_gameobject` (or `execute_code` with UnityEditor API) to:
+Use unityMCP `execute_code`:
 
-1. Create GameObject named `FusionTerrainTreeDepletionState`.
-2. Add `Fusion.NetworkObject` component.
-3. Add `FusionTerrainTreeDepletionState` component.
-4. Save the scene.
+```csharp
+var states = UnityEngine.Object.FindObjectsOfType<FusionTerrainTreeDepletionState>(true);
+foreach (var s in states) UnityEngine.Object.DestroyImmediate(s.gameObject);
+```
 
-Confirm via `manage_scene(action="save")` and `manage_gameobject`/`execute_code` that the object exists with both components and is active.
+Then save the scene (`manage_scene action=save`). Confirm the object is gone via `FindObjectsOfType` returning 0.
 
-- [ ] **Step 2: Run environment validation self test**
+- [ ] **Step 2: Create the prefab**
+
+Use unityMCP `execute_code` with UnityEditor API:
+
+```csharp
+// 1. Create a temp GameObject in an empty scene
+var go = new GameObject("FusionTerrainTreeDepletionState");
+go.AddComponent<Fusion.NetworkObject>();
+go.AddComponent<FusionTerrainTreeDepletionState>();
+// 2. Save as prefab
+string folder = "Assets/Prefabs";
+if (!UnityEditor.AssetDatabase.IsValidFolder(folder)) {
+    UnityEditor.AssetDatabase.CreateFolder("Assets", "Prefabs");
+}
+string path = folder + "/FusionTerrainTreeDepletionState.prefab";
+UnityEditor.PrefabUtility.SaveAsPrefabAsset(go, path);
+UnityEngine.Object.DestroyImmediate(go);
+```
+
+Verify the prefab exists via `manage_asset(action="search", path="Assets/Prefabs", filter_type="Prefab")` and that it contains `NetworkObject` + `FusionTerrainTreeDepletionState`.
+
+- [ ] **Step 3: Register the prefab in DefaultNetworkPrefabs.asset**
+
+Use unityMCP `execute_code` to add the prefab to the Fusion prefab table:
+
+```csharp
+var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/FusionTerrainTreeDepletionState.prefab");
+var cfg = Fusion.NetworkProjectConfig.Global;
+cfg.PrefabTable.AddInstance(prefab);
+UnityEditor.EditorUtility.SetDirty(cfg);
+```
+
+Verify: after recompile/restart, `NetworkProjectConfig.Global.PrefabTable` contains the prefab (via `Contains` or by loading and checking). Note: if `AddInstance` is not the correct API signature for adding a persistent prefab to the default table, use the Unity menu `Window > Fusion > Network Prefabs Inspector` to add it, or check the Fusion editor source at `Assets/Photon/Fusion/Editor/NetworkPrefabsInspector.cs` for the correct registration path.
+
+- [ ] **Step 4: Run environment validation self test**
 
 Run via menu `Project Multiplayer/Run Terrain Tree Chopping Environment Self Test`.
-Expected: PASS (registry count still exactly 1). Confirm the new scene object does not break the validation.
+Expected: PASS (registry count still exactly 1).
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add Assets/Scenes/Environment.unity
-git commit -m "feat: add terrain tree depletion state to environment scene"
+git add Assets/Prefabs/FusionTerrainTreeDepletionState.prefab Assets/Prefabs/FusionTerrainTreeDepletionState.prefab.meta Assets/DefaultNetworkPrefabs.asset Assets/Scenes/Environment.unity
+git commit -m "feat: add depletion state prefab and register it"
+```
+
+Note: if the scene change is only the removal of the earlier scene object, stage the scene too. Verify `git diff Assets/Scenes/Environment.unity` only removes the `FusionTerrainTreeDepletionState` GameObject.
+
+---
+
+### Task 5b: Spawn Depletion State from Registry
+
+**Objective:** Make `TerrainTreeChoppingRegistry` spawn the `FusionTerrainTreeDepletionState` prefab when the runner is ready (state authority spawns once).
+
+**Files:**
+- Modify: `Assets/Scripts/Environment/TerrainTreeChoppingRegistry.cs`
+- Modify: `Assets/Scripts/PhotonFusion/FusionTerrainTreeDepletionState.cs` (add a public static helper for locating the singleton)
+- Test: `Assets/Editor/TerrainTreeChoppingRegistrySelfTest.cs`
+
+- [ ] **Step 1: Add a public static singleton accessor to the state behaviour**
+
+In `FusionTerrainTreeDepletionState.cs`, add:
+
+```csharp
+    public static FusionTerrainTreeDepletionState Instance { get; private set; }
+
+    public override void Spawned()
+    {
+        Instance = this;
+        changeDetector = GetChangeDetector(ChangeDetector.Source.SnapshotFrom);
+        ResolveReferences();
+        SyncToRegistry();
+    }
+
+    public override void Despawned(NetworkRunner runner, bool hasState)
+    {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
+    }
+```
+
+(Keep the existing `Render()` and other members.)
+
+- [ ] **Step 2: Add spawn logic to the registry**
+
+In `TerrainTreeChoppingRegistry.cs`, add fields and a method:
+
+```csharp
+    [Header("Depletion Sync")]
+    [SerializeField] private Fusion.NetworkPrefabRef depletionStatePrefab;
+
+    private FusionTerrainTreeDepletionState spawnedDepletionState;
+    private float nextSpawnRetryTime;
+    private const float SpawnRetryInterval = 0.5f;
+```
+
+Add a method to attempt the spawn (called from `Update`):
+
+```csharp
+    private void TrySpawnDepletionState()
+    {
+        if (FusionTerrainTreeDepletionState.Instance != null)
+        {
+            return;
+        }
+
+        if (spawnedDepletionState != null)
+        {
+            return;
+        }
+
+        Fusion.NetworkRunner runner = FindObjectOfType<Fusion.NetworkRunner>();
+        if (runner == null || !runner.IsRunning || !runner.IsSharedModeMasterClient)
+        {
+            return;
+        }
+
+        if (Time.unscaledTime < nextSpawnRetryTime)
+        {
+            return;
+        }
+
+        nextSpawnRetryTime = Time.unscaledTime + SpawnRetryInterval;
+        spawnedDepletionState = runner.Spawn(depletionStatePrefab).GetComponent<FusionTerrainTreeDepletionState>();
+    }
+```
+
+Add a call in `Update()`:
+
+```csharp
+    private void Update()
+    {
+        TrySpawnDepletionState();
+    }
+```
+
+Note: `runner.IsSharedModeMasterClient` is true only on the host/session creator in Shared Mode, so exactly one client spawns the object. `FusionTerrainTreeDepletionState.Instance` is set on the spawned object's `Spawned()` on all clients; `Despawned` clears it.
+
+- [ ] **Step 3: Assign the prefab reference in the scene registry**
+
+Use unityMCP `execute_code` to set `depletionStatePrefab` on the `TerrainTreeChoppingRegistry` instance in `Environment.unity` to the new prefab. Then save the scene.
+
+- [ ] **Step 4: Verify compile**
+
+Use unityMCP `refresh_unity` (compile=request, wait_for_ready=true), check `read_console` for errors.
+
+- [ ] **Step 5: Run registry self test**
+
+Run via menu `Project Multiplayer/Run Terrain Tree Chopping Registry Self Test`.
+Expected: PASS.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add Assets/Scripts/Environment/TerrainTreeChoppingRegistry.cs Assets/Scripts/PhotonFusion/FusionTerrainTreeDepletionState.cs Assets/Scenes/Environment.unity
+git commit -m "feat: spawn terrain tree depletion state from registry"
 ```
 
 ---
