@@ -1025,6 +1025,11 @@ public class FusionPlayerInventory : NetworkBehaviour
 
     public uint DropAllItemsForDeath(Vector3 worldPosition)
     {
+        if (Object == null || !Object.HasStateAuthority)
+        {
+            return 0;
+        }
+
         if (Runner == null || !Runner.IsRunning)
         {
             return 0;
@@ -1046,10 +1051,13 @@ public class FusionPlayerInventory : NetworkBehaviour
                 continue;
             }
 
-            Vector3 pos = worldPosition + new Vector3(0f, 0.5f, 0f);
+            int dropSeed = FusionSceneDropUtility.ComputeSceneDropId(worldPosition, stacks[i].ItemType, i);
+            Vector2 offset2D = FusionSceneDropUtility.ComputeDeterministicScatter(dropSeed, 0.9f);
+            Vector3 spawnPosition = GetSafeTreeDropPosition(worldPosition + new Vector3(offset2D.x, 0f, offset2D.y) + Vector3.up * 0.5f);
+
             NetworkObject obj = dropPrefab.IsValid
-                ? Runner.Spawn(dropPrefab, pos, Quaternion.identity, Object.InputAuthority)
-                : Runner.Spawn(dropPrefabObject, pos, Quaternion.identity, Object.InputAuthority);
+                ? Runner.Spawn(dropPrefab, spawnPosition, Quaternion.identity, Object.InputAuthority)
+                : Runner.Spawn(dropPrefabObject, spawnPosition, Quaternion.identity, Object.InputAuthority);
 
             if (obj == null)
             {
