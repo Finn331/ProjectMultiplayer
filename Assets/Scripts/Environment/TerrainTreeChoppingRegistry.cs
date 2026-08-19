@@ -397,7 +397,18 @@ public class TerrainTreeChoppingRegistry : MonoBehaviour
             return;
         }
 
-        spawnedDepletionState = runner.Spawn(depletionStatePrefab).GetComponent<FusionTerrainTreeDepletionState>();
+        try
+        {
+            Fusion.NetworkObject spawnedObject = runner.Spawn(depletionStatePrefab);
+            if (spawnedObject != null)
+            {
+                spawnedDepletionState = spawnedObject.GetComponent<FusionTerrainTreeDepletionState>();
+            }
+        }
+        catch (System.Exception exception)
+        {
+            Debug.LogWarning("[TerrainTreeChoppingRegistry] Depletion state spawn deferred: " + exception.Message);
+        }
     }
 
     private static int CompareTerrainsForStableIds(Terrain a, Terrain b)
