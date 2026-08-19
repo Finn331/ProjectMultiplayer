@@ -23,6 +23,10 @@ public static class FusionTerrainTreeDepletionStateSelfTest
         Expect(state.Count == 3, "Load should replace the set and de-duplicate.");
         Expect(state.Contains(9), "Load should include the new id.");
 
+        int[] loaded = state.ToArray();
+        Expect(loaded.Length == 3 && loaded[0] == 5 && loaded[1] == 7 && loaded[2] == 9,
+            "Load should keep the exact set [5, 7, 9] and filter the 0 sentinel.");
+
         ScriptableObject.DestroyImmediate(state);
         Debug.Log("FusionTerrainTreeDepletionStateSelfTest passed.");
     }

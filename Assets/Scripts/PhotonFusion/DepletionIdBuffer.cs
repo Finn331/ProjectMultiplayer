@@ -4,6 +4,8 @@ using UnityEngine;
 [CreateAssetMenu(fileName = "DepletionIdBuffer", menuName = "Multiplayer/DepletionIdBuffer")]
 public class DepletionIdBuffer : ScriptableObject
 {
+    public const int SentinelId = 0;
+
     [SerializeField] private List<int> ids = new List<int>();
     private readonly HashSet<int> set = new HashSet<int>();
 
@@ -26,7 +28,7 @@ public class DepletionIdBuffer : ScriptableObject
 
         foreach (int value in values)
         {
-            if (value != 0 && set.Add(value))
+            if (value != SentinelId && set.Add(value))
             {
                 ids.Add(value);
             }
@@ -40,7 +42,7 @@ public class DepletionIdBuffer : ScriptableObject
 
     public bool Add(int treeId)
     {
-        if (treeId == 0 || !set.Add(treeId))
+        if (treeId == SentinelId || !set.Add(treeId))
         {
             return false;
         }
