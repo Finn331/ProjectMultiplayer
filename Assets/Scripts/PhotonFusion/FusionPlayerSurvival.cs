@@ -13,7 +13,7 @@ public class FusionPlayerSurvival : NetworkBehaviour
     [Networked] public float Thirst { get; private set; }
     [Networked] public NetworkBool Injured { get; private set; }
     [Networked] public NetworkBool IsDowned { get; private set; }
-    [Networked] public NetworkBool IsRevivePending { get; set; }
+    [Networked] public NetworkBool IsRevivePending { get; private set; }
     [Networked] public NetworkBool IsInitialized { get; private set; }
     [Networked] public PlayerRef LastDamagerRef { get; set; }
     [Networked] public NetworkString<_16> DisplayName { get; private set; }
@@ -376,5 +376,15 @@ public class FusionPlayerSurvival : NetworkBehaviour
     public void ClearLastDamager()
     {
         LastDamagerRef = default;
+    }
+
+    public void ClearRevivePending()
+    {
+        if (!HasFusionStateAuthority())
+        {
+            return;
+        }
+
+        IsRevivePending = false;
     }
 }

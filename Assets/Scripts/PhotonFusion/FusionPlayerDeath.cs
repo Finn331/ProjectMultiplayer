@@ -22,11 +22,18 @@ public class FusionPlayerDeath : NetworkBehaviour
     [SerializeField] private float revivePauseCheckInterval = 0.2f;
     private float nextReviveCheckTime;
 
+    private float revivePendingSinceTime;
+
     public bool IsRespawnTimerArmedForTest() => respawnTimerArmed;
     public bool CanRespawnNowForTest() => lastDowned;
 
     public void SetDownedForTest(bool downed) { lastDowned = downed; respawnTimerArmed = downed; }
     public void SetReviveInProgressForTest(bool inProgress) { if (!inProgress) return; respawnTimerArmed = true; }
+
+    public float MaxReviveWindowForTest()
+    {
+        return Mathf.Max(respawnDelaySeconds, 10f);
+    }
 
     public override void Spawned()
     {
@@ -53,6 +60,7 @@ public class FusionPlayerDeath : NetworkBehaviour
             {
                 respawnTimerArmed = false;
                 respawnTimer = 0f;
+                revivePendingSinceTime = 0f;
             }
         }
 
@@ -68,10 +76,33 @@ public class FusionPlayerDeath : NetworkBehaviour
 
         nextReviveCheckTime = Time.unscaledTime + revivePauseCheckInterval;
 
-        if (IsReviveInProgress())
+        if (survival == null)
         {
+            revivePendingSinceTime = 0f;
             return;
         }
+
+        if (survival.IsRevivePending)
+        {
+            if (revivePendingSinceTime <= 0f)
+            {
+                revivePendingSinceTime = Time.unscaledTime;
+            }
+            else
+            {
+                float maxReviveWindow = Mathf.Max(respawnDelaySeconds, 10f);
+                if (Time.unscaledTime - revivePendingSinceTime > maxReviveWindow)
+                {
+                    survival.ClearRevivePending();
+                    revivePendingSinceTime = 0f;
+                    return;
+                }
+            }
+
+            return;
+        }
+
+        revivePendingSinceTime = 0f;
 
         respawnTimer += Time.unscaledDeltaTime;
         if (respawnTimer >= Mathf.Max(0.5f, respawnDelaySeconds))
@@ -94,6 +125,7 @@ public class FusionPlayerDeath : NetworkBehaviour
     {
         respawnTimer = 0f;
         respawnTimerArmed = true;
+        revivePendingSinceTime = 0f;
 
         EmitKillFeedEvent(isKill: false);
         TryDropInventory();
@@ -103,6 +135,7 @@ public class FusionPlayerDeath : NetworkBehaviour
     {
         respawnTimerArmed = false;
         respawnTimer = 0f;
+        revivePendingSinceTime = 0f;
 
         EmitKillFeedEvent(isKill: true);
         ResetSurvival();
@@ -113,11 +146,6 @@ public class FusionPlayerDeath : NetworkBehaviour
     private bool IsSurvivalDowned()
     {
         return survival != null && survival.IsDowned;
-    }
-
-    private bool IsReviveInProgress()
-    {
-        return survival != null && survival.IsRevivePending;
     }
 
     private void ResetSurvival()

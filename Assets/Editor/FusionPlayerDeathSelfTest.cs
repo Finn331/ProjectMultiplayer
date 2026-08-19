@@ -26,7 +26,10 @@ public static class FusionPlayerDeathSelfTest
             bool timerCancelled = !state.IsRespawnTimerArmedForTest();
             log += "timerCancelled=" + timerCancelled + "\n";
 
-            if (canRespawnInitially || !timerArmed || !timerCancelled)
+            float maxWindow = state.MaxReviveWindowForTest();
+            log += "maxReviveWindow=" + maxWindow + "\n";
+
+            if (canRespawnInitially || !timerArmed || !timerCancelled || maxWindow <= 0f)
             {
                 throw new System.Exception("FusionPlayerDeathSelfTest assertions failed:\n" + log);
             }

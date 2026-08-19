@@ -294,6 +294,8 @@ public class FusionPlayerReviveInteractor : NetworkBehaviour
         {
             pendingReviveTarget.NotifyReviveInProgress(false);
         }
+
+        wasHolding = false;
     }
 
     private void ResetReviveUI()
