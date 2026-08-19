@@ -52,22 +52,32 @@ Add `ApplyNetworkedDepletion(IEnumerable<int> treeIds)`:
 
 In `RPC_TerrainTreeHit`, after a tree is depleted on the state authority, notify the depletion state object so the id is added to the replicated array:
 
-- Locate `FusionTerrainTreeDepletionState` (scene object) and call `AddDepletedTree(treeId)` when `Object.HasStateAuthority` is true.
+- Locate `FusionTerrainTreeDepletionState` and call `AddDepletedTree(treeId)` when `Object.HasStateAuthority` is true.
 
 This happens inside the existing state-authority guard that already spawns wood drops, so authority rules stay consistent.
 
+### Runtime spawn (revised: replaces scene object)
+
+Initial design placed `FusionTerrainTreeDepletionState` as a scene NetworkObject. Runtime verification showed scene NetworkObjects are NOT initialized in this project: both `DevAutoSessionStarter` and `PhotonFusionBootstrap` start the runner with an empty `NetworkSceneInfo()` and the scene is loaded by the Unity editor Play flow, so `NetworkSceneManagerDefault` never initializes scene-based NetworkObjects (`Object` stays null).
+
+Revised approach: the depletion state is a **runtime-spawned NetworkObject prefab**, matching the proven `FusionPlayerSpawner`/`FusionPlayerInventory` pattern.
+
+- Create prefab `Assets/Prefabs/FusionTerrainTreeDepletionState.prefab` with `NetworkObject` + `FusionTerrainTreeDepletionState` components.
+- Register it in `Assets/DefaultNetworkPrefabs.asset` (Fusion prefab table).
+- `TerrainTreeChoppingRegistry` spawns it when the runner is ready (only the state authority / session creator spawns once). It keeps a reference to the spawned instance.
+- Late joiners receive the object through normal Fusion spawn replication, so `Spawned()`/`Render()` on the spawned object drives the local registry sync.
+
 ### Environment scene changes
 
-Add one scene GameObject:
-
-- `FusionTerrainTreeDepletionState` with `NetworkObject` + `FusionTerrainTreeDepletionState` component.
+No scene GameObject needed. The prefab is spawned at runtime by the registry.
 
 ## Data Flow
 
-1. Host chops a tree -> `RPC_TerrainTreeHit` -> `TryApplyDamage` depletes -> `AddDepletedTree(treeId)` on state authority.
-2. Fusion replicates `DepletedTreeIds` to all clients.
-3. Each client's `Render()` sees the change -> re-applies id set to local registry -> hides the tree locally.
-4. A late joiner spawns -> `Spawned()` reads replicated ids -> applies them -> the forest already reflects the session state.
+1. On session start, the state authority (host) spawns `FusionTerrainTreeDepletionState` from the registered prefab.
+2. Host chops a tree -> `RPC_TerrainTreeHit` -> `TryApplyDamage` depletes -> `AddDepletedTree(treeId)` on state authority.
+3. Fusion replicates `DepletedTreeIds` to all clients (including late joiners who receive the spawned object).
+4. Each client's `Render()` sees the change -> re-applies id set to local registry -> hides the tree locally.
+5. A late joiner spawns -> receives the state object via spawn sync -> `Spawned()` reads replicated ids -> applies them -> the forest already reflects the session state.
 
 ## Edge Cases
 
@@ -76,11 +86,14 @@ Add one scene GameObject:
 - **Offline / non-Fusion**: `Object` invalid -> no networked add; local chopping still works through the existing fallback path.
 - **Late join with partially applied state**: `Render()` re-applies the full set every change, so partial application self-heals on the next change.
 - **Registry not present yet when state arrives**: `ApplyNetworkedDepletion` is a no-op with a one-time warning; the next `Rebuild`/`Render` sync re-applies.
+- **Runner not ready at registry Awake**: the registry retries the spawn until the runner is running, then spawns once. A guard prevents duplicate spawns.
+- **Two registries or a scene reload mid-session**: the registry re-checks for an existing spawned instance before spawning.
 
 ## Testing
 
 - Self-test (edit mode): construct a temp registry + a networked-state simulation (or a test seam) and assert that adding depleted ids updates the registry's depleted set and hides matching records; assert idempotency (double add does not double-hide).
 - Runtime (single client / shared host): chop trees in play mode, verify `DepletedTreeIds` grows, verify registry marks the same trees depleted.
+- Runtime spawn check: enter play mode, verify `FusionTerrainTreeDepletionState` is spawned once with `Object` non-null and `HasStateAuthority` true on the host.
 - Manual multiplayer note: two-client late-join verification is documented as a manual test step (requires a second editor).
 
 ## Limitations
