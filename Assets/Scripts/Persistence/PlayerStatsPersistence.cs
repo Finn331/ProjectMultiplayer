@@ -73,6 +73,10 @@ public class PlayerStatsPersistence : MonoBehaviour
         {
             return;
         }
+        if (!dirty)
+        {
+            return;
+        }
 
         try
         {
