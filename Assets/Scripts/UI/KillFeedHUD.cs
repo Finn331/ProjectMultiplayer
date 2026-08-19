@@ -1,6 +1,8 @@
 using System.Collections;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 public class KillFeedHUD : MonoBehaviour
 {
@@ -17,6 +19,9 @@ public class KillFeedHUD : MonoBehaviour
     [Header("UI")]
     [SerializeField] private RectTransform feedRoot;
 
+    [Header("Respawn")]
+    [SerializeField] private Button respawnButton;
+
     private readonly List<string> activeMessages = new List<string>();
     private static readonly string NatureName = "Nature";
 
@@ -31,7 +36,30 @@ public class KillFeedHUD : MonoBehaviour
         if (feedRoot == null)
         {
             Debug.Log("[KillFeed] " + message);
+            return;
         }
+        SpawnRow(message, isKill);
+    }
+
+    private void SpawnRow(string message, bool isKill)
+    {
+        GameObject rowObject = new GameObject("KillFeedRow", typeof(RectTransform), typeof(TextMeshProUGUI));
+        RectTransform rowRect = rowObject.GetComponent<RectTransform>();
+        rowRect.SetParent(feedRoot, false);
+        rowRect.anchorMin = new Vector2(0f, 1f);
+        rowRect.anchorMax = new Vector2(1f, 1f);
+        rowRect.pivot = new Vector2(0.5f, 1f);
+        rowRect.anchoredPosition = Vector2.zero;
+        rowRect.sizeDelta = new Vector2(0f, 26f);
+
+        TextMeshProUGUI label = rowObject.GetComponent<TextMeshProUGUI>();
+        label.text = message;
+        label.fontSize = 18f;
+        label.color = isKill ? killColor : downedColor;
+        label.alignment = TextAlignmentOptions.Left;
+        label.raycastTarget = false;
+
+        Destroy(rowObject, messageLifetimeSeconds);
     }
 
     public string FormatMessageForTest(string killerName, string victimName, bool isKill)
@@ -49,6 +77,27 @@ public class KillFeedHUD : MonoBehaviour
             return;
         }
         Instance = this;
+    }
+
+    private void Start()
+    {
+        if (respawnButton != null)
+        {
+            respawnButton.onClick.AddListener(RequestRespawnFromLocalPlayer);
+        }
+    }
+
+    private void RequestRespawnFromLocalPlayer()
+    {
+        FusionPlayerDeath[] deaths = FindObjectsOfType<FusionPlayerDeath>();
+        for (int i = 0; i < deaths.Length; i++)
+        {
+            if (deaths[i] != null && deaths[i].Object != null && deaths[i].Object.HasStateAuthority)
+            {
+                deaths[i].RequestRespawnNow();
+                return;
+            }
+        }
     }
 
     private void OnDestroy()
