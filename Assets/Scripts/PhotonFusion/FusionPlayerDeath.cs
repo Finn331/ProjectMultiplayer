@@ -22,6 +22,9 @@ public class FusionPlayerDeath : NetworkBehaviour
 
     private float revivePendingSinceTime;
 
+    public event System.Action<bool> OnDownedChanged;
+    public bool IsDowned => lastDowned;
+
     public bool IsRespawnTimerArmedForTest() => respawnTimerArmed;
     public bool CanRespawnNowForTest() => lastDowned;
 
@@ -50,6 +53,7 @@ public class FusionPlayerDeath : NetworkBehaviour
         if (downed != lastDowned)
         {
             lastDowned = downed;
+            OnDownedChanged?.Invoke(downed);
             if (downed)
             {
                 OnDownedStarted();

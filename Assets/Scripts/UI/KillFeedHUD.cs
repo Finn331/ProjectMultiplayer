@@ -25,6 +25,8 @@ public class KillFeedHUD : MonoBehaviour
     private readonly List<string> activeMessages = new List<string>();
     private static readonly string NatureName = "Nature";
 
+    private FusionPlayerDeath localPlayerDeath;
+
     public void EnqueueMessage(string killerName, string victimName, bool isKill)
     {
         string message = FormatMessageForTest(killerName, victimName, isKill);
@@ -38,7 +40,21 @@ public class KillFeedHUD : MonoBehaviour
             Debug.Log("[KillFeed] " + message);
             return;
         }
+        PruneRows();
         SpawnRow(message, isKill);
+    }
+
+    private void PruneRows()
+    {
+        if (feedRoot == null || maxQueuedMessages <= 0)
+        {
+            return;
+        }
+        int overage = feedRoot.childCount - (maxQueuedMessages - 1);
+        for (int i = 0; i < overage && i < feedRoot.childCount; i++)
+        {
+            Destroy(feedRoot.GetChild(i).gameObject);
+        }
     }
 
     private void SpawnRow(string message, bool isKill)
@@ -84,24 +100,64 @@ public class KillFeedHUD : MonoBehaviour
         if (respawnButton != null)
         {
             respawnButton.onClick.AddListener(RequestRespawnFromLocalPlayer);
+            respawnButton.gameObject.SetActive(false);
+        }
+        StartCoroutine(EnsureLocalPlayerDeath());
+    }
+
+    private IEnumerator EnsureLocalPlayerDeath()
+    {
+        while (localPlayerDeath == null)
+        {
+            localPlayerDeath = GetLocalPlayerDeath();
+            if (localPlayerDeath == null)
+            {
+                yield return new WaitForSeconds(0.25f);
+            }
+        }
+
+        localPlayerDeath.OnDownedChanged += HandleDownedChanged;
+        HandleDownedChanged(localPlayerDeath.IsDowned);
+    }
+
+    private void HandleDownedChanged(bool downed)
+    {
+        if (respawnButton != null)
+        {
+            respawnButton.gameObject.SetActive(downed);
         }
     }
 
     private void RequestRespawnFromLocalPlayer()
     {
-        FusionPlayerDeath[] deaths = FindObjectsOfType<FusionPlayerDeath>();
-        for (int i = 0; i < deaths.Length; i++)
+        FusionPlayerDeath death = GetLocalPlayerDeath();
+        if (death != null)
         {
-            if (deaths[i] != null && deaths[i].Object != null && deaths[i].Object.HasStateAuthority)
-            {
-                deaths[i].RequestRespawnNow();
-                return;
-            }
+            death.RequestRespawnNow();
         }
+    }
+
+    private FusionPlayerDeath GetLocalPlayerDeath()
+    {
+        Fusion.NetworkRunner runner = FindObjectOfType<Fusion.NetworkRunner>();
+        if (runner == null || runner.LocalPlayer.IsNone)
+        {
+            return null;
+        }
+        if (runner.TryGetPlayerObject(runner.LocalPlayer, out Fusion.NetworkObject playerObject) && playerObject != null)
+        {
+            return playerObject.GetComponent<FusionPlayerDeath>();
+        }
+        return null;
     }
 
     private void OnDestroy()
     {
+        if (localPlayerDeath != null)
+        {
+            localPlayerDeath.OnDownedChanged -= HandleDownedChanged;
+            localPlayerDeath = null;
+        }
         if (Instance == this)
         {
             Instance = null;
