@@ -136,6 +136,11 @@ public class FusionPlayerReviveInteractor : NetworkBehaviour
         return hasPendingBandageConsume && pendingReviveTarget == target;
     }
 
+    public bool IsRevivingTarget(FusionPlayerSurvival target)
+    {
+        return hasPendingBandageConsume && pendingReviveTarget == target;
+    }
+
     public void HandleReviveRejected(FusionPlayerSurvival rejectedTarget)
     {
         HandleReviveResolved(rejectedTarget, pendingReviveRequestId, false);

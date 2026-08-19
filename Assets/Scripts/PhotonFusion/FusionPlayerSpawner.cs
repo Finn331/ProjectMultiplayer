@@ -92,6 +92,29 @@ public class FusionPlayerSpawner : MonoBehaviour
         }
     }
 
+    public void TeleportPlayerToSpawnPoint(PlayerRef player, Transform playerTransform)
+    {
+        if (playerTransform == null)
+        {
+            return;
+        }
+
+        Transform spawnPoint = GetSpawnPoint(player);
+        Vector3 position = spawnPoint != null ? spawnPoint.position : new Vector3(0f, 1.2f, -8f);
+        Quaternion rotation = spawnPoint != null ? spawnPoint.rotation : Quaternion.identity;
+        CharacterController controller = playerTransform.GetComponent<CharacterController>();
+        if (controller != null && controller.enabled)
+        {
+            controller.enabled = false;
+            playerTransform.SetPositionAndRotation(position, rotation);
+            controller.enabled = true;
+        }
+        else
+        {
+            playerTransform.SetPositionAndRotation(position, rotation);
+        }
+    }
+
     private static Vector3 SnapToGround(Vector3 position)
     {
         Terrain[] terrains = UnityEngine.Object.FindObjectsOfType<Terrain>();
@@ -123,7 +146,7 @@ public class FusionPlayerSpawner : MonoBehaviour
         return position;
     }
 
-    private static Transform GetSpawnPoint(PlayerRef player)
+    public Transform GetSpawnPoint(PlayerRef player)
     {
         FusionSpawnPoint[] points = FindObjectsOfType<FusionSpawnPoint>(true);
         if (points == null || points.Length == 0)

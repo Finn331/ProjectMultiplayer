@@ -334,4 +334,24 @@ public class FusionPlayerSurvival : NetworkBehaviour
     {
         return Object != null && Object.HasStateAuthority;
     }
+
+    public void ResetForRespawn()
+    {
+        if (!HasFusionStateAuthority() || survivalSystem == null)
+        {
+            return;
+        }
+
+        survivalSystem.Revive(1f);
+        survivalSystem.RestoreAllNeeds();
+        IsDowned = false;
+        LastDamagerRef = default;
+        QueueSnapshot(survivalSystem.CurrentHealth, survivalSystem.CurrentHunger, survivalSystem.CurrentThirst);
+        TryFlushSnapshot(true);
+    }
+
+    public void ClearLastDamager()
+    {
+        LastDamagerRef = default;
+    }
 }
