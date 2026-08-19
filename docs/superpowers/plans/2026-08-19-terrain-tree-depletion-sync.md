@@ -668,6 +668,7 @@ git commit -m "docs: add manual multiplayer verification for depletion sync"
 
 ## Self-Review Notes
 
-- Spec coverage: NetworkArray depleted-id sync (Tasks 2/4), registry application (Task 1), scene object (Task 5), runtime verify (Task 6), manual multiplayer note (Task 7).
+- Spec coverage: NetworkArray depleted-id sync (Tasks 2/4), registry application (Task 1), runtime-spawn prefab + Fusion prefab table registration (Task 5), registry spawn logic (Task 5b), runtime verify (Task 6), manual multiplayer note (Task 7).
 - Placeholder scan: all code blocks are complete; no TBD/TODO.
 - Type consistency: `AddDepletedTree`, `GetDepletedTreeIds`, `ApplyNetworkedDepletion`, `DepletionIdBuffer` names are used consistently across tasks.
+- Design revision: the original "scene NetworkObject" placement (Task 5 as first written) was replaced by a runtime-spawn prefab because the project's dev flow starts the runner with an empty `NetworkSceneInfo()` and never initializes scene NetworkObjects. See `docs/superpowers/specs/2026-08-19-terrain-tree-depletion-sync-design.md` under "Runtime spawn (revised: replaces scene object)".

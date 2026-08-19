@@ -94,7 +94,18 @@ No scene GameObject needed. The prefab is spawned at runtime by the registry.
 - Self-test (edit mode): construct a temp registry + a networked-state simulation (or a test seam) and assert that adding depleted ids updates the registry's depleted set and hides matching records; assert idempotency (double add does not double-hide).
 - Runtime (single client / shared host): chop trees in play mode, verify `DepletedTreeIds` grows, verify registry marks the same trees depleted.
 - Runtime spawn check: enter play mode, verify `FusionTerrainTreeDepletionState` is spawned once with `Object` non-null and `HasStateAuthority` true on the host.
-- Manual multiplayer note: two-client late-join verification is documented as a manual test step (requires a second editor).
+
+### Manual Multiplayer Verification (Two Editors)
+
+Late-join verification requires a second Unity editor and cannot run in the single-editor dev flow. Steps:
+
+1. **Host (editor 1)**: enter play mode in the Environment scene. `DevAutoSessionStarter` creates a room (log shows `[DevAutoSession] Session ready, room code: ROOM-XXXXXX`). Wait until the player spawns and the depletion state object spawns (`FusionTerrainTreeDepletionState.Instance` non-null, `Object.HasStateAuthority` true).
+2. **Chop on host**: chop two trees (each takes 3 axe hits). Verify `GetDepletedTreeIds()` returns both ids and both trees vanish on the host's terrain.
+3. **Late joiner (editor 2)**: open the same project, enter play mode in the same Environment scene. It joins the host's room (editor 2 may need to reuse the room code; the dev starter generates a fresh room per editor, so use the room join path in the game's main menu flow, or override the room code to match the host).
+4. **Verify on joiner**: after the joiner spawns, its `FusionTerrainTreeDepletionState` receives the replicated array via spawn sync (`Spawned()` applies the ids). The two chopped trees must already be depleted/hidden in the joiner's forest (tree count lower than the full session start), and `ApplyNetworkedDepletion` must be a no-op on the joiner when the ids arrive (idempotent).
+5. **Chop more on joiner**: chop one new tree on the joiner. If the joiner has state authority for that object (shared mode only gives state authority to the session creator), the depletion replicates back to the host; otherwise chopping still works locally via the RPC flow. Record observed behavior for the manual report.
+
+Note: in this project's dev flow, only `IsSharedModeMasterClient` (host) spawns the state object, so the joiner receives it purely via replication.
 
 ## Limitations
 
