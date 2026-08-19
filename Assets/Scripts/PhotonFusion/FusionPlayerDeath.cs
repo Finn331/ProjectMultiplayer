@@ -130,6 +130,11 @@ public class FusionPlayerDeath : NetworkBehaviour
         revivePendingSinceTime = 0f;
 
         EmitKillFeedEvent(isKill: false);
+        PlayerStatsPersistence stats = PlayerStatsPersistence.Instance;
+        if (stats != null)
+        {
+            stats.RecordDown();
+        }
         TryDropInventory();
     }
 
@@ -140,6 +145,11 @@ public class FusionPlayerDeath : NetworkBehaviour
         revivePendingSinceTime = 0f;
 
         EmitKillFeedEvent(isKill: true);
+        PlayerStatsPersistence stats = PlayerStatsPersistence.Instance;
+        if (stats != null)
+        {
+            stats.RecordKill();
+        }
         ResetSurvival();
         TeleportToRespawnPoint();
         ClearLastDamager();
