@@ -15,6 +15,13 @@ public static class PlayerStatsPersistenceSelfTest
             persistence.RecordKill();
             persistence.RecordDown();
             bool ok = persistence.TotalKillsForTest == 1 && persistence.TotalDownsForTest == 1;
+
+            // ParseInt handles primitives (regression guard for the cloud-load cast bug).
+            ok &= PlayerStatsPersistence.ParseIntForTest("7") == 7;
+            ok &= PlayerStatsPersistence.ParseIntForTest((long)9) == 9;
+            ok &= PlayerStatsPersistence.ParseIntForTest(4.0) == 4;
+            ok &= PlayerStatsPersistence.ParseIntForTest(null) == 0;
+
             if (!ok)
             {
                 throw new System.Exception("PlayerStatsPersistenceSelfTest FAILED");

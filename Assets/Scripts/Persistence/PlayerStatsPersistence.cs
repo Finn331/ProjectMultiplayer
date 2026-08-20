@@ -117,9 +117,62 @@ public class PlayerStatsPersistence : MonoBehaviour
     private static int ParseInt(object value)
     {
         if (value == null) return 0;
+
+        value = UnwrapCloudSaveValue(value);
+
         if (value is string s) { int.TryParse(s, out int r); return r; }
         if (value is long l) return (int)l;
+        if (value is int i) return i;
+        if (value is double d) return (int)d;
+        if (value is float f) return (int)f;
         return System.Convert.ToInt32(value);
+    }
+
+    public static int ParseIntForTest(object value)
+    {
+        return ParseInt(value);
+    }
+
+    private static object UnwrapCloudSaveValue(object value)
+    {
+        if (value == null)
+        {
+            return null;
+        }
+
+        // Cloud Save SDK v3 returns Item wrappers whose Value is an IDeserializable.
+        // Avoid a hard dependency on the internal assembly by resolving via reflection.
+        System.Type type = value.GetType();
+        if (type.Name == "Item" && type.Namespace == "Unity.Services.CloudSave.Models")
+        {
+            var valueProperty = type.GetProperty("Value");
+            object inner = valueProperty != null ? valueProperty.GetValue(value, null) : null;
+            if (inner == null)
+            {
+                return null;
+            }
+            return UnwrapDeserializable(inner);
+        }
+
+        return UnwrapDeserializable(value);
+    }
+
+    private static object UnwrapDeserializable(object value)
+    {
+        if (value == null)
+        {
+            return null;
+        }
+
+        System.Type type = value.GetType();
+        var getAsString = type.GetMethod("GetAsString", System.Type.EmptyTypes);
+        if (getAsString != null && getAsString.DeclaringType.Namespace == "Unity.Services.CloudSave.Internal.Http")
+        {
+            object stringValue = getAsString.Invoke(value, null);
+            return stringValue as string ?? stringValue;
+        }
+
+        return value;
     }
 
     private void OnDestroy()
