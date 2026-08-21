@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using Fusion;
 using UnityEngine;
@@ -6,6 +7,7 @@ using UnityEngine;
 public class FusionTerrainTreeDepletionState : NetworkBehaviour
 {
     private const int MaxDepletedTrees = 512;
+    private const float RegistryResolveRetryIntervalSeconds = 0.5f;
 
     public static FusionTerrainTreeDepletionState Instance { get; private set; }
 
@@ -21,8 +23,10 @@ public class FusionTerrainTreeDepletionState : NetworkBehaviour
     {
         Instance = this;
         changeDetector = GetChangeDetector(ChangeDetector.Source.SnapshotFrom);
-        ResolveReferences();
-        SyncToRegistry();
+        if (!TrySyncToRegistry())
+        {
+            StartCoroutine(ResolveRegistryWhenAvailable());
+        }
     }
 
     public override void Despawned(NetworkRunner runner, bool hasState)
@@ -44,7 +48,7 @@ public class FusionTerrainTreeDepletionState : NetworkBehaviour
         {
             if (changedProperty == nameof(DepletedTreeIds))
             {
-                SyncToRegistry();
+                TrySyncToRegistry();
                 break;
             }
         }
@@ -80,16 +84,32 @@ public class FusionTerrainTreeDepletionState : NetworkBehaviour
         return buffer.ToArray();
     }
 
-    private void ResolveReferences()
+    /// <summary>
+    /// Test hook: resolves the terrain tree chopping registry without touching
+    /// any networked state, so EditMode self-tests can exercise the late-load
+    /// recovery path outside a running runner.
+    /// </summary>
+    public bool TryResolveRegistryForTests()
     {
-        if (registry == null)
+        return EnsureRegistryResolved();
+    }
+
+    private IEnumerator ResolveRegistryWhenAvailable()
+    {
+        while (!TrySyncToRegistry())
         {
-            registry = FindObjectOfType<TerrainTreeChoppingRegistry>();
+            yield return new WaitForSecondsRealtime(RegistryResolveRetryIntervalSeconds);
         }
     }
 
-    private void SyncToRegistry()
+    private bool TrySyncToRegistry()
     {
+        if (!EnsureRegistryResolved())
+        {
+            WarnMissingRegistryOnce();
+            return false;
+        }
+
         if (buffer == null)
         {
             buffer = new DepletionIdBuffer();
@@ -97,23 +117,39 @@ public class FusionTerrainTreeDepletionState : NetworkBehaviour
 
         buffer.Load(ReadBufferFromNetwork());
 
-        if (registry == null)
+        int[] depletedIds = buffer.ToArray();
+        registry.ApplyNetworkedDepletion(depletedIds);
+
+        if (depletedIds.Length > 0 && !HasStateAuthority)
         {
-            ResolveReferences();
+            Debug.Log("[FusionTerrainTreeDepletionState] Applied " + depletedIds.Length
+                + " depleted tree id(s) to registry.");
         }
 
-        if (registry == null)
-        {
-            if (!warnedMissingRegistry)
-            {
-                warnedMissingRegistry = true;
-                Debug.LogWarning("[FusionTerrainTreeDepletionState] TerrainTreeChoppingRegistry not found; skipping depletion sync.");
-            }
+        return true;
+    }
 
+    private bool EnsureRegistryResolved()
+    {
+        if (registry != null)
+        {
+            return true;
+        }
+
+        registry = FindObjectOfType<TerrainTreeChoppingRegistry>();
+        return registry != null;
+    }
+
+    private void WarnMissingRegistryOnce()
+    {
+        if (warnedMissingRegistry)
+        {
             return;
         }
 
-        registry.ApplyNetworkedDepletion(buffer.ToArray());
+        warnedMissingRegistry = true;
+        Debug.LogWarning("[FusionTerrainTreeDepletionState] TerrainTreeChoppingRegistry not found yet; "
+            + "will keep retrying every " + RegistryResolveRetryIntervalSeconds + "s until the forest scene finishes loading.");
     }
 
     private int[] ReadBufferFromNetwork()

@@ -27,7 +27,53 @@ public static class FusionTerrainTreeDepletionStateSelfTest
         Expect(loaded.Length == 3 && loaded[0] == 5 && loaded[1] == 7 && loaded[2] == 9,
             "Load should keep the exact set [5, 7, 9] and filter the 0 sentinel.");
 
+        RunLateRegistryResolutionTest();
+
         Debug.Log("FusionTerrainTreeDepletionStateSelfTest passed.");
+    }
+
+    private static void RunLateRegistryResolutionTest()
+    {
+        GameObject host = new GameObject("FusionTerrainTreeDepletionStateSelfTest_LateResolve");
+        try
+        {
+            FusionTerrainTreeDepletionState depletionState = host.AddComponent<FusionTerrainTreeDepletionState>();
+
+            // Simulate Spawned() before the forest scene finished loading: no cached registry yet.
+            System.Reflection.FieldInfo registryField = typeof(FusionTerrainTreeDepletionState)
+                .GetField("registry", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            registryField.SetValue(depletionState, null);
+
+            bool registryExistsInOpenScene = Object.FindObjectOfType<TerrainTreeChoppingRegistry>() != null;
+            bool firstAttempt = depletionState.TryResolveRegistryForTests();
+            if (registryExistsInOpenScene)
+            {
+                Expect(firstAttempt,
+                    "Resolution should find a TerrainTreeChoppingRegistry that already exists in an open scene.");
+            }
+            else
+            {
+                Expect(!firstAttempt,
+                    "Resolution should fail while no TerrainTreeChoppingRegistry exists in the scene.");
+            }
+
+            TerrainTreeChoppingRegistry fallbackRegistry = host.AddComponent<TerrainTreeChoppingRegistry>();
+            fallbackRegistry.RebuildForTests(new Terrain[0]);
+            registryField.SetValue(depletionState, null);
+
+            if (!registryExistsInOpenScene)
+            {
+                Expect(depletionState.TryResolveRegistryForTests(),
+                    "Retry resolution should succeed once the registry component exists (late scene load).");
+            }
+
+            Expect(depletionState.TryResolveRegistryForTests(),
+                "Resolved state should stay sticky across repeated calls.");
+        }
+        finally
+        {
+            Object.DestroyImmediate(host);
+        }
     }
 
     private static void Expect(bool condition, string message)
