@@ -90,6 +90,42 @@ public class MainMenuController : MonoBehaviour
         this.RefreshCurrency();
         this.RefreshRoomInfo();
         this.SetStatus("Siap. Tekan Play untuk mulai.");
+        this.TryAutoJoinFromCommandLine();
+    }
+
+    private void TryAutoJoinFromCommandLine()
+    {
+        if (!Application.isEditor && TryGetCommandLineValue("-autoJoin", out string roomCode) && !string.IsNullOrEmpty(roomCode))
+        {
+            string playerName = TryGetCommandLineValue("-playerName", out string name) && !string.IsNullOrEmpty(name)
+                ? name
+                : "Player";
+            if (joinRoomCodeInput != null)
+            {
+                joinRoomCodeInput.text = roomCode;
+            }
+            if (playerNameInput != null)
+            {
+                playerNameInput.text = playerName;
+            }
+            this.SetStatus("Auto-join room " + roomCode + " sebagai " + playerName + "...");
+            bootstrap?.JoinRoom(roomCode, playerName);
+        }
+    }
+
+    private static bool TryGetCommandLineValue(string key, out string value)
+    {
+        value = null;
+        string[] args = System.Environment.GetCommandLineArgs();
+        for (int i = 0; i < args.Length - 1; i++)
+        {
+            if (string.Equals(args[i], key, System.StringComparison.OrdinalIgnoreCase))
+            {
+                value = args[i + 1];
+                return true;
+            }
+        }
+        return false;
     }
 
     private void OnEnable()
@@ -101,6 +137,8 @@ public class MainMenuController : MonoBehaviour
             bootstrap.StatusChanged += this.OnBootstrapStatus;
             bootstrap.SessionListUpdated -= this.OnSessionListUpdated;
             bootstrap.SessionListUpdated += this.OnSessionListUpdated;
+            bootstrap.RunnerStarted -= this.HandleRunnerStarted;
+            bootstrap.RunnerStarted += this.HandleRunnerStarted;
         }
     }
 
@@ -110,6 +148,42 @@ public class MainMenuController : MonoBehaviour
         {
             bootstrap.StatusChanged -= this.OnBootstrapStatus;
             bootstrap.SessionListUpdated -= this.OnSessionListUpdated;
+            bootstrap.RunnerStarted -= this.HandleRunnerStarted;
+        }
+    }
+
+    private void HandleRunnerStarted(Fusion.NetworkRunner runner)
+    {
+        if (runner == null || !runner.IsRunning)
+        {
+            return;
+        }
+
+        string activeScene = SceneManager.GetActiveScene().name;
+        if (!string.Equals(activeScene, "MainMenu", System.StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        // Host (MasterClient) drives scene sync via Runner.LoadScene; clients fallback to local load
+        // so build clients (PM2) don't stay stuck in MainMenu without a FusionPlayerSpawner.
+        if (bootstrap != null && bootstrap.IsMasterClient)
+        {
+            this.SetStatus("Memuat " + officeLobbySceneName + " (host auto-transition)...");
+            try
+            {
+                runner.LoadScene(Fusion.SceneRef.FromIndex(1));
+            }
+            catch (System.Exception exception)
+            {
+                Debug.LogWarning("[MainMenu] Runner.LoadScene failed: " + exception.Message);
+                this.LoadSceneSafely(officeLobbySceneName);
+            }
+        }
+        else
+        {
+            this.SetStatus("Join OK — memuat " + officeLobbySceneName + "...");
+            this.LoadSceneSafely(officeLobbySceneName);
         }
     }
 

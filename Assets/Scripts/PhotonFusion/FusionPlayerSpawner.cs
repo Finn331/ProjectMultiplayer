@@ -17,6 +17,40 @@ public class FusionPlayerSpawner : MonoBehaviour
         }
     }
 
+    private void OnEnable()
+    {
+        PhotonFusionBootstrap bootstrap = PhotonFusionBootstrap.Instance;
+        if (bootstrap == null)
+        {
+            bootstrap = FindObjectOfType<PhotonFusionBootstrap>(true);
+        }
+
+        if (bootstrap != null)
+        {
+            bootstrap.RunnerStarted -= HandleRunnerStarted;
+            bootstrap.RunnerStarted += HandleRunnerStarted;
+        }
+    }
+
+    private void OnDisable()
+    {
+        PhotonFusionBootstrap bootstrap = PhotonFusionBootstrap.Instance;
+        if (bootstrap == null)
+        {
+            bootstrap = FindObjectOfType<PhotonFusionBootstrap>(true);
+        }
+
+        if (bootstrap != null)
+        {
+            bootstrap.RunnerStarted -= HandleRunnerStarted;
+        }
+    }
+
+    private void HandleRunnerStarted(NetworkRunner runner)
+    {
+        TrySpawnLocalPlayer(runner);
+    }
+
     public void TrySpawnLocalPlayer(NetworkRunner runner)
     {
         if (runner == null || !runner.IsRunning || !playerPrefab.IsValid)

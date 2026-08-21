@@ -13,6 +13,7 @@ public class DevAutoSessionStarter : MonoBehaviour
 {
     private const string DefaultPlayerName = "DevPlayer";
     private const int DefaultMaxPlayers = 8;
+    private const string RoomCodeOverrideKey = "DevAutoSessionRoomCode";
 
     private NetworkRunner runner;
     private bool shutdownInProgress;
@@ -32,7 +33,11 @@ public class DevAutoSessionStarter : MonoBehaviour
             return;
         }
 
-        string roomCode = GenerateRoomCode();
+        string roomCode = PlayerPrefs.GetString(RoomCodeOverrideKey, string.Empty);
+        if (string.IsNullOrWhiteSpace(roomCode))
+        {
+            roomCode = GenerateRoomCode();
+        }
         PhotonFusionSessionState.Set(new PhotonFusionSessionState.Session
         {
             PlayerName = DefaultPlayerName,
