@@ -214,6 +214,7 @@ GameObject:
   - component: {fileID: 4850024101745319058}
   - component: {fileID: 2993861514588934046}
   - component: {fileID: 7768689424264221136}
+  - component: {fileID: 4937394701735701012}
   m_Layer: 0
   m_Name: FusionPlayer
   m_TagString: Untagged
@@ -1443,6 +1444,37 @@ MonoBehaviour:
   audioSource: {fileID: 2993861514588934046}
   spatialMinDistance: 2.5
   spatialMaxDistance: 22
+--- !u!114 &4937394701735701012
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4472293491055181419}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fdbf2df2251c1cf4d8ba7280f126121e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  footstepAudio: {fileID: 0}
+  controller: {fileID: 0}
+  raycastOriginHeight: 1.5
+  raycastMaxDistance: 4
+  hitMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  detectInterval: 0.25
+  snowLayerNames:
+  - Snow
+  woodLayerNames:
+  - Rock
+  - Grass
+  - Dirt
+  - Ground
+  iceLayerNames:
+  - Ice
+  iceMaterialKeyword: ice
+  snowMaterialKeyword: snow
 --- !u!1 &7516938604735521551
 GameObject:
   m_ObjectHideFlags: 0

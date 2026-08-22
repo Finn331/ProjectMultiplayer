@@ -1,0 +1,172 @@
+using UnityEngine;
+
+/// <summary>
+/// Deteksi permukaan di bawah player secara otomatis:
+/// 1. Raycast ke bawah dari kaki player.
+/// 2. Kena Terrain -> baca splat weight dominan (TerrainData.GetInterpolation)
+///    -> nama Terrain Layer dipetakan ke surface ID.
+/// 3. Kena object lain -> cek nama material (misal mengandung "ice") -> surface ID.
+/// Hasil diteruskan ke PlayerFootstepAudio.SetSurface().
+/// Lookup di-throttle (default 0.25s) karena GetInterpolation mengalokasikan array.
+/// </summary>
+[RequireComponent(typeof(PlayerFootstepAudio))]
+public class PlayerSurfaceDetector : MonoBehaviour
+{
+    [Header("Target")]
+    [SerializeField] private PlayerFootstepAudio footstepAudio;
+    [SerializeField] private CharacterController controller;
+
+    [Header("Raycast")]
+    [SerializeField] private float raycastOriginHeight = 1.5f; // tinggi start ray dari pivot
+    [SerializeField] private float raycastMaxDistance = 4f;
+    [SerializeField] private LayerMask hitMask = ~0;
+
+    [Header("Throttle")]
+    [SerializeField] private float detectInterval = 0.25f;
+
+    [Header("Mapping: nama Terrain Layer -> surface ID (0=wood,1=snow,2=ice)")]
+    [SerializeField] private string[] snowLayerNames = { "Snow" };
+    [SerializeField] private string[] woodLayerNames = { "Rock", "Grass", "Dirt", "Ground" };
+    [SerializeField] private string[] iceLayerNames = { "Ice" };
+
+    [Header("Mapping non-terrain: substring nama material -> surface")]
+    [SerializeField] private string iceMaterialKeyword = "ice";
+    [SerializeField] private string snowMaterialKeyword = "snow";
+
+    private float nextDetectTime;
+    private int lastSurface = -1;
+
+    private void Awake()
+    {
+        if (footstepAudio == null) footstepAudio = GetComponent<PlayerFootstepAudio>();
+        if (controller == null) controller = GetComponent<CharacterController>();
+    }
+
+    private void Update()
+    {
+        if (footstepAudio == null || Time.time < nextDetectTime) return;
+        nextDetectTime = Time.time + detectInterval;
+
+        Vector3 origin = transform.position + Vector3.up * raycastOriginHeight;
+        RaycastHit hit;
+        if (!TryRaycastGround(origin, out hit))
+        {
+            return; // di udara / belum ada ground — pertahankan surface terakhir
+        }
+
+        int surface = ResolveSurface(hit);
+        if (surface != lastSurface)
+        {
+            lastSurface = surface;
+            footstepAudio.SetSurface(surface);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            Debug.Log("[SurfaceDetector] " + hit.collider.name + " -> surface " + surface + " (" + SurfaceName(surface) + ")");
+#endif
+        }
+    }
+
+    /// <summary>Raycast ke bawah, melewati collider milik player sendiri.</summary>
+    private bool TryRaycastGround(Vector3 origin, out RaycastHit groundHit)
+    {
+        var hits = Physics.RaycastAll(origin, Vector3.down, raycastOriginHeight + raycastMaxDistance, hitMask, QueryTriggerInteraction.Ignore);
+        System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+        for (int i = 0; i < hits.Length; i++)
+        {
+            var col = hits[i].collider;
+            if (col == null) continue;
+            if (col.transform == transform || col.transform.IsChildOf(transform)) continue; // skip diri sendiri
+            if (controller != null && col == controller) continue;
+            groundHit = hits[i];
+            return true;
+        }
+        groundHit = default(RaycastHit);
+        return false;
+    }
+
+    private int ResolveSurface(RaycastHit hit)
+    {
+        // 1) Terrain splatmap dominan
+        Terrain terrain = hit.collider.GetComponent<Terrain>();
+        if (terrain != null && terrain.terrainData != null)
+        {
+            string layerName = GetDominantTerrainLayerName(terrain, hit.point);
+            if (layerName != null)
+            {
+                if (ContainsAny(layerName, iceLayerNames)) return 2;
+                if (ContainsAny(layerName, snowLayerNames)) return 1;
+                if (ContainsAny(layerName, woodLayerNames)) return 0;
+                return 0; // layer tak dikenal -> default wood
+            }
+        }
+
+        // 2) Non-terrain: nama material
+        var renderer = hit.collider.GetComponentInChildren<Renderer>();
+        if (renderer != null && renderer.sharedMaterials != null)
+        {
+            for (int i = 0; i < renderer.sharedMaterials.Length; i++)
+            {
+                var mat = renderer.sharedMaterials[i];
+                if (mat == null || string.IsNullOrEmpty(mat.name)) continue;
+                string n = mat.name.ToLowerInvariant();
+                if (n.Contains(iceMaterialKeyword)) return 2;
+                if (!string.IsNullOrEmpty(snowMaterialKeyword) && n.Contains(snowMaterialKeyword)) return 1;
+            }
+        }
+
+        return 0; // default
+    }
+
+    /// <returns>Nama Terrain Layer dengan splat weight tertinggi pada titik dunia; null jika di luar terrain.</returns>
+    private string GetDominantTerrainLayerName(Terrain terrain, Vector3 worldPoint)
+    {
+        TerrainData td = terrain.terrainData;
+        Vector3 tPos = terrain.transform.position;
+        Vector3 size = td.size;
+
+        float nx = Mathf.Clamp01((worldPoint.x - tPos.x) / Mathf.Max(0.001f, size.x));
+        float nz = Mathf.Clamp01((worldPoint.z - tPos.z) / Mathf.Max(0.001f, size.z));
+
+        int mapX = Mathf.FloorToInt(nx * (td.alphamapWidth - 1));
+        int mapY = Mathf.FloorToInt(nz * (td.alphamapHeight - 1));
+        mapX = Mathf.Clamp(mapX, 0, td.alphamapWidth - 1);
+        mapY = Mathf.Clamp(mapY, 0, td.alphamapHeight - 1);
+
+        float[,,] alpha = td.GetAlphamaps(mapX, mapY, 1, 1);
+        if (alpha == null || alpha.Length == 0) return null;
+
+        int layerCount = alpha.GetLength(2);
+        int best = 0;
+        for (int i = 1; i < layerCount; i++)
+        {
+            if (alpha[0, 0, i] > alpha[0, 0, best]) best = i;
+        }
+
+        var layers = td.terrainLayers;
+        if (best >= layers.Length || layers[best] == null) return null;
+        return layers[best].name;
+    }
+
+    private bool ContainsAny(string name, string[] keywords)
+    {
+        if (keywords == null) return false;
+        for (int i = 0; i < keywords.Length; i++)
+        {
+            if (!string.IsNullOrEmpty(keywords[i]) &&
+                name.IndexOf(keywords[i], System.StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static string SurfaceName(int id)
+    {
+        switch (id)
+        {
+            case 1: return "snow";
+            case 2: return "ice";
+            default: return "wood";
+        }
+    }
+}
