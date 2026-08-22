@@ -6,8 +6,11 @@ using UnityEngine;
 /// Footstep SFX untuk player. Non-networked: tiap client memutar audio
 /// secara lokal berdasarkan state movement yang sudah tersinkron (CharacterController velocity).
 ///
-/// - Walk / Run / Sprint pakai clip set berbeda (folder per surface).
-/// - Jump up / jump down dipicu dari transisi grounded.
+/// - Walk / Run / Sprint pakai clip set berbeda (folder per surface), LOOPING selama player bergerak.
+/// - Loop distabilkan terhadap flicker CharacterController.isGrounded di terrain berbukit:
+///   langkah tetap berjalan selama ada tanah di bawah kaki dan player tidak jatuh bebas.
+/// - Jump up / jump down hanya dipicu oleh airborne yang BENAR (bukan flicker grounding),
+///   dengan ambang air-time supaya bump terrain tidak memicu suara lompat palsu.
 /// - Random clip + pitch variation supaya tidak monoton.
 /// - 3D spatial (rolloff) sehingga pemain lain mendengar langkah dari posisi aslinya.
 /// </summary>
@@ -45,17 +48,31 @@ public class PlayerFootstepAudio : MonoBehaviour
     [SerializeField] private float runSpeedThreshold = 3.4f; // >= ini = run
     [SerializeField] private float sprintSpeedThreshold = 5.5f; // >= ini = sprint
 
+    [Header("Grounding Stabilizer (anti flicker di terrain)")]
+    [Tooltip("Layer yang dianggap tanah. Default: semuanya (collider sendiri otomatis diabaikan).")]
+    [SerializeField] private LayerMask groundMask = ~0;
+    [Tooltip("Toleransi jarak tanah di bawah telapak kaki agar tetap dianggap grounded.")]
+    [SerializeField] private float groundCheckExtra = 0.3f;
+    [Tooltip("Velocity Y di bawah nilai ini = benar-benar jatuh bebas (berhenti langkah).")]
+    [SerializeField] private float freeFallVelocity = -6f;
+    [Tooltip("Air-time minimum (detik) sebelum transisi dihitung sebagai lompatan/mendaratan sungguhan.")]
+    [SerializeField] private float jumpMinAirTime = 0.12f;
+
     [Header("AudioSource")]
     [SerializeField] private AudioSource audioSource;
     [SerializeField] private float spatialMinDistance = 2.5f;
     [SerializeField] private float spatialMaxDistance = 22f;
+
+    [Header("Debug")]
+    [SerializeField] private bool debugLogSteps = false;
 
     private const string ResourceRoot = "Audio/Footsteps/";
     private static readonly string[] SurfaceNames = { "wood", "snow", "ice" };
 
     private FusionPlayerMovement movement;
     private CharacterController controller;
-    private bool wasGrounded = true;
+    private bool wasStableGrounded = true;
+    private float airTime;
     private float stepTimer;
     private Vector3 lastPosition;
     private bool hasLastPosition;
@@ -134,30 +151,70 @@ public class PlayerFootstepAudio : MonoBehaviour
         {
             Vector3 delta = position - lastPosition;
             delta.y = 0f;
-            hSpeed = delta.magnitude / Mathf.Max(Time.deltaTime, 0.0001f);
+            // Hitch guard: saat editor/browser stutter, deltaTime besar membuat delta per-detik
+            // membengkak (mis. 22-37 m/s) dan langkah salah diklasifikasi sprint.
+            float dt = Mathf.Max(Time.deltaTime, 0.0001f);
+            if (dt > 0.2f)
+            {
+                hSpeed = 0f; // frame putus: jangan hitung kecepatan dari frame ini
+                hasLastPosition = true;
+                lastPosition = position;
+            }
+            else
+            {
+                hSpeed = delta.magnitude / dt;
+            }
         }
         lastPosition = position;
 
-        if (movement.ControlsBlocked) { stepTimer = 0f; return; }
+        if (movement.ControlsBlocked)
+        {
+            stepTimer = 0f;
+            airTime = 0f;
+            wasStableGrounded = true;
+            return;
+        }
         // Death handling: biarkan FusionPlayerDeath mengurus mute jika perlu.
 
-        bool grounded = controller.isGrounded;
+        // Grounding stabil: isGrounded sering flicker false beberapa frame di lereng/
+        // bump terrain (Move() hanya dipanggil per Fusion tick). Anggap grounded selama
+        // ada tanah dekat di bawah kaki dan kita tidak sedang naik tinggi / jatuh bebas.
+        bool rawGrounded = controller.isGrounded;
+        bool stableGrounded = rawGrounded
+            || (controller.velocity.y < 1f && controller.velocity.y > freeFallVelocity && HasGroundBelow());
 
-        // Landing / takeoff
-        if (wasGrounded && !grounded)
+        float airBefore = airTime;
+        if (stableGrounded)
+        {
+            airTime = 0f;
+        }
+        else
+        {
+            airTime += Time.deltaTime;
+        }
+
+        // Takeoff: hanya jika benar-benar meninggalkan tanah (bukan flicker grounding).
+        if (wasStableGrounded && !stableGrounded && airTime >= jumpMinAirTime && controller.velocity.y > 0.5f)
         {
             PlayRandom(jumpUpClips, BaseVolume());
+            if (debugLogSteps) Debug.Log("[Footstep] jump up");
         }
-        else if (!wasGrounded && grounded && controller.velocity.y < -0.1f)
+        // Landing: hanya jika sempat benar-benar di udara.
+        else if (!wasStableGrounded && stableGrounded && airBefore >= jumpMinAirTime && controller.velocity.y < -0.1f)
         {
             PlayRandom(jumpDownClips, BaseVolume() * jumpVolumeScale);
             stepTimer = 0f; // langkah pertama setelah mendarat langsung
+            if (debugLogSteps) Debug.Log("[Footstep] landed");
         }
-        wasGrounded = grounded;
+        wasStableGrounded = stableGrounded;
 
-        if (!grounded || hSpeed < minSpeedToStep)
+        if (!stableGrounded || hSpeed < minSpeedToStep)
         {
-            stepTimer = Mathf.Min(stepTimer, 0.05f);
+            if (!stableGrounded)
+            {
+                // Di udara: tahan timer, jangan tumpuk waktu langkah.
+                stepTimer = Mathf.Min(stepTimer, 0.05f);
+            }
             return;
         }
 
@@ -185,7 +242,35 @@ public class PlayerFootstepAudio : MonoBehaviour
         {
             stepTimer = 0f;
             PlayRandom(set, BaseVolume());
+            if (debugLogSteps) Debug.Log("[Footstep] step (" + SurfaceNames[(int)surface] + ") hSpeed=" + hSpeed.ToString("F1"));
         }
+    }
+
+    /// <summary>
+    /// Cek ada tanah dekat di bawah telapak kaki (fallback saat isGrounded flicker).
+    /// Raycast ke bawah dari sekitar pinggang, abaikan collider milik player sendiri.
+    /// </summary>
+    private bool HasGroundBelow()
+    {
+        if (controller == null) return false;
+
+        float probeTop = Mathf.Max(controller.height * 0.9f, 0.8f);
+        Vector3 origin = transform.position + Vector3.up * probeTop;
+        float maxDistance = probeTop + groundCheckExtra;
+
+        RaycastHit[] hits = Physics.RaycastAll(origin, Vector3.down, maxDistance, groundMask, QueryTriggerInteraction.Ignore);
+        for (int i = 0; i < hits.Length; i++)
+        {
+            Collider hitCollider = hits[i].collider;
+            if (hitCollider == null) continue;
+            if (hitCollider.transform == transform || hitCollider.transform.IsChildOf(transform)) continue;
+            // Tanah harus di bawah telapak (dekat ujung ray), bukan dinding di sebelah kaki.
+            if (hits[i].distance >= probeTop - 0.15f)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     private float moveSpeedRef()
