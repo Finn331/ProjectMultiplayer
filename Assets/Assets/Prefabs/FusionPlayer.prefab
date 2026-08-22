@@ -215,6 +215,7 @@ GameObject:
   - component: {fileID: 2993861514588934046}
   - component: {fileID: 7768689424264221136}
   - component: {fileID: 4937394701735701012}
+  - component: {fileID: 4289780020064991489}
   m_Layer: 0
   m_Name: FusionPlayer
   m_TagString: Untagged
@@ -1475,6 +1476,38 @@ MonoBehaviour:
   - Ice
   iceMaterialKeyword: ice
   snowMaterialKeyword: snow
+--- !u!114 &4289780020064991489
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4472293491055181419}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d850fc04c961bbc44a8edfab877dcba2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  survivalSystem: {fileID: 0}
+  dayNightCycle: {fileID: 0}
+  maxWarmth: 100
+  startWarmth: 100
+  nightDrainPerSecond: 1.8
+  duskDrainPerSecond: 1.2
+  dawnDrainPerSecond: 0.5
+  dayRegenPerSecond: 2.5
+  campfireRegenPerSecond: 15
+  campfireWarmRadius: 6
+  campfireScanInterval: 0.5
+  campfireMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  freezeDamagePerSecond: 2.5
+  freezeDamageGracePeriod: 8
+  applyFreezingPenalty: 1
+  freezingSpeedMultiplier: 0.75
+  freezingThresholdNormalized: 0.2
+  debugLog: 0
 --- !u!1 &7516938604735521551
 GameObject:
   m_ObjectHideFlags: 0
