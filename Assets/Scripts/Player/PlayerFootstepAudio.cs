@@ -32,7 +32,7 @@ public class PlayerFootstepAudio : MonoBehaviour
     [SerializeField] private float sprintStepInterval = 0.28f;
 
     [Header("Volume")]
-    [Range(0f, 1f)] public float localVolume = 0.35f;   // volume untuk pemain lokal sendiri
+    [Range(0f, 1f)] public float localVolume = 0.7f;    // volume untuk pemain lokal sendiri
     [Range(0f, 1f)] public float remoteVolume = 0.9f;   // volume langkah pemain lain
     [SerializeField] private float jumpVolumeScale = 1.15f;
 
@@ -57,6 +57,8 @@ public class PlayerFootstepAudio : MonoBehaviour
     private CharacterController controller;
     private bool wasGrounded = true;
     private float stepTimer;
+    private Vector3 lastPosition;
+    private bool hasLastPosition;
     private readonly System.Random rng = new System.Random();
 
     private void Awake()
@@ -118,11 +120,27 @@ public class PlayerFootstepAudio : MonoBehaviour
     private void Update()
     {
         if (movement == null || controller == null || audioSource == null) return;
+
+        // Kecepatan aktual dari position delta (bukan controller.velocity yang
+        // stale antara Fusion ticks — Move() dipanggil di FixedUpdateNetwork).
+        Vector3 position = transform.position;
+        float hSpeed;
+        if (!hasLastPosition)
+        {
+            hSpeed = 0f;
+            hasLastPosition = true;
+        }
+        else
+        {
+            Vector3 delta = position - lastPosition;
+            delta.y = 0f;
+            hSpeed = delta.magnitude / Mathf.Max(Time.deltaTime, 0.0001f);
+        }
+        lastPosition = position;
+
         if (movement.ControlsBlocked) { stepTimer = 0f; return; }
         // Death handling: biarkan FusionPlayerDeath mengurus mute jika perlu.
 
-        Vector3 v = controller.velocity;
-        float hSpeed = new Vector3(v.x, 0f, v.z).magnitude;
         bool grounded = controller.isGrounded;
 
         // Landing / takeoff
@@ -130,7 +148,7 @@ public class PlayerFootstepAudio : MonoBehaviour
         {
             PlayRandom(jumpUpClips, BaseVolume());
         }
-        else if (!wasGrounded && grounded && v.y < -0.1f)
+        else if (!wasGrounded && grounded && controller.velocity.y < -0.1f)
         {
             PlayRandom(jumpDownClips, BaseVolume() * jumpVolumeScale);
             stepTimer = 0f; // langkah pertama setelah mendarat langsung
