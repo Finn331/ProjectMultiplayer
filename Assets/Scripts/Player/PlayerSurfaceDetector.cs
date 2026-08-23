@@ -1,13 +1,16 @@
 using UnityEngine;
 
 /// <summary>
-/// Deteksi permukaan di bawah player secara otomatis:
-/// 1. Raycast ke bawah dari kaki player.
-/// 2. Kena Terrain -> baca splat weight dominan (TerrainData.GetInterpolation)
+/// Deteksi permukaan di bawah player secara otomatis, urutan prioritas:
+/// 0. TAG OVERRIDE (tertinggi): tag collider / induknya "Wood"/"Snow"/"Ice"
+///    -> langsung dipakai, melewati semua heuristik. Pakai ini untuk lantai
+///    buatan (base kayu, dermaga, dsb.) yang menumpuk terrain.
+/// 1. Raycast ke bawah dari kaki player (difilter via LayerMask hitMask).
+/// 2. Kena Terrain -> baca splat weight dominan (TerrainData.GetAlphamaps)
 ///    -> nama Terrain Layer dipetakan ke surface ID.
 /// 3. Kena object lain -> cek nama material (misal mengandung "ice") -> surface ID.
 /// Hasil diteruskan ke PlayerFootstepAudio.SetSurface().
-/// Lookup di-throttle (default 0.25s) karena GetInterpolation mengalokasikan array.
+/// Lookup di-throttle (default 0.25s) karena GetAlphamaps mengalokasikan array.
 /// </summary>
 [RequireComponent(typeof(PlayerFootstepAudio))]
 public class PlayerSurfaceDetector : MonoBehaviour
@@ -23,6 +26,11 @@ public class PlayerSurfaceDetector : MonoBehaviour
 
     [Header("Throttle")]
     [SerializeField] private float detectInterval = 0.25f;
+
+    [Header("Mapping: Tag override -> surface ID (prioritas tertinggi, dicek ke collider & seluruh induknya)")]
+    [SerializeField] private string[] woodTagNames = { "Wood" };
+    [SerializeField] private string[] snowTagNames = { "Snow" };
+    [SerializeField] private string[] iceTagNames = { "Ice" };
 
     [Header("Mapping: nama Terrain Layer -> surface ID (0=wood,1=snow,2=ice)")]
     [SerializeField] private string[] snowLayerNames = { "Snow" };
@@ -85,6 +93,17 @@ public class PlayerSurfaceDetector : MonoBehaviour
 
     private int ResolveSurface(RaycastHit hit)
     {
+        // 0) TAG OVERRIDE — prioritas tertinggi: cek tag collider dan seluruh induknya.
+        // Berguna untuk lantai buatan (base kayu dsb.) yang menumpuk terrain snow.
+        Transform t = hit.collider.transform;
+        while (t != null)
+        {
+            if (ContainsAny(t.tag, woodTagNames)) return 0;
+            if (ContainsAny(t.tag, snowTagNames)) return 1;
+            if (ContainsAny(t.tag, iceTagNames)) return 2;
+            t = t.parent;
+        }
+
         // 1) Terrain splatmap dominan
         Terrain terrain = hit.collider.GetComponent<Terrain>();
         if (terrain != null && terrain.terrainData != null)
