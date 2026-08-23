@@ -23,6 +23,8 @@ public class PlayerSurfaceDetector : MonoBehaviour
     [SerializeField] private float raycastOriginHeight = 1.5f; // tinggi start ray dari pivot
     [SerializeField] private float raycastMaxDistance = 4f;
     [SerializeField] private LayerMask hitMask = ~0;
+    [Tooltip("Hit ber-tag surface (Wood/Snow/Ice) yang sedikit lebih bawah dari hit terdekat tetap diutamakan (meter). Berguna saat lantai buatan tertimbun sedikit di bawah terrain yang menonjol.")]
+    [SerializeField] private float tagPreferenceWindow = 0.5f;
 
     [Header("Throttle")]
     [SerializeField] private float detectInterval = 0.25f;
@@ -73,21 +75,51 @@ public class PlayerSurfaceDetector : MonoBehaviour
         }
     }
 
-    /// <summary>Raycast ke bawah, melewati collider milik player sendiri.</summary>
+    /// <summary>
+    /// Raycast ke bawah, melewati collider milik player sendiri.
+    /// Prioritas: hit terdekat; TAPI hit ber-tag surface (Wood/Snow/Ice) yang
+    /// berada dalam jendela tagPreferenceWindow di bawah hit terdekat diutamakan —
+    /// menangani lantai buatan yang sedikit tertimbun di bawah terrain menonjol.
+    /// </summary>
     private bool TryRaycastGround(Vector3 origin, out RaycastHit groundHit)
     {
         var hits = Physics.RaycastAll(origin, Vector3.down, raycastOriginHeight + raycastMaxDistance, hitMask, QueryTriggerInteraction.Ignore);
         System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+
+        int firstIdx = -1;
         for (int i = 0; i < hits.Length; i++)
         {
             var col = hits[i].collider;
             if (col == null) continue;
             if (col.transform == transform || col.transform.IsChildOf(transform)) continue; // skip diri sendiri
             if (controller != null && col == controller) continue;
-            groundHit = hits[i];
+            if (firstIdx < 0) firstIdx = i;
+
+            // Hit ber-tag surface dalam jendela toleransi mengalahkan hit terdekat non-tag.
+            if (i > firstIdx && (hits[i].distance - hits[firstIdx].distance) <= tagPreferenceWindow && HasSurfaceTag(hits[i].collider.transform))
+            {
+                groundHit = hits[i];
+                return true;
+            }
+        }
+
+        if (firstIdx >= 0)
+        {
+            groundHit = hits[firstIdx];
             return true;
         }
         groundHit = default(RaycastHit);
+        return false;
+    }
+
+    /// <summary>True jika collider / induknya membawa salah satu tag surface.</summary>
+    private bool HasSurfaceTag(Transform t)
+    {
+        while (t != null)
+        {
+            if (ContainsAny(t.tag, woodTagNames) || ContainsAny(t.tag, snowTagNames) || ContainsAny(t.tag, iceTagNames)) return true;
+            t = t.parent;
+        }
         return false;
     }
 
