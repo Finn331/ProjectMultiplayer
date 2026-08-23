@@ -35,6 +35,15 @@ public class FusionPlayerMovement : NetworkBehaviour
     private Vector2 animatorMoveInput;
     private float animatorSpeed;
 
+    // Surface modifier (deep snow slowdown) — diisi PlayerSurfaceEffects.
+    private float surfaceSpeedMultiplier = 1f;
+
+    /// <summary>Kalikan kecepatan gerak dari permukaan tanah (1 = normal, <1 = lambat).</summary>
+    public void SetSurfaceSpeedMultiplier(float multiplier)
+    {
+        surfaceSpeedMultiplier = Mathf.Clamp(multiplier, 0.2f, 2f);
+    }
+
     public float MoveSpeed => moveSpeed;
     public Vector3 AnimatorPlanarVelocity => animatorPlanarVelocity;
     public Vector2 AnimatorMoveInput => animatorMoveInput;
@@ -163,7 +172,8 @@ public class FusionPlayerMovement : NetworkBehaviour
         }
 
         animatorMoveInput = Vector2.ClampMagnitude(input, 1f);
-        animatorPlanarVelocity = direction.normalized * (moveSpeed * inputMagnitude);
+        float effectiveSpeed = moveSpeed * surfaceSpeedMultiplier;
+        animatorPlanarVelocity = direction.normalized * (effectiveSpeed * inputMagnitude);
         animatorSpeed = Mathf.Clamp01(animatorPlanarVelocity.magnitude / Mathf.Max(0.01f, moveSpeed));
 
         controller.Move(animatorPlanarVelocity * GetDeltaTime());

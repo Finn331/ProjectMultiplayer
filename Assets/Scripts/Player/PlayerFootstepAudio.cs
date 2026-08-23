@@ -100,6 +100,13 @@ public class PlayerFootstepAudio : MonoBehaviour
     private bool hasLastPosition;
     private readonly System.Random rng = new System.Random();
 
+    /// <summary>
+    /// Dipicu tiap langkah (jalur sync animasi maupun timer fallback).
+    /// Argumen: surface ID saat ini (0=wood,1=snow,2=ice) dan kecepatan horizontal (m/s).
+    /// Dipakai PlayerSurfaceEffects untuk jejak kaki salju.
+    /// </summary>
+    public event System.Action<int, float> Footfall;
+
     private void Awake()
     {
         movement = GetComponent<FusionPlayerMovement>();
@@ -255,6 +262,7 @@ public class PlayerFootstepAudio : MonoBehaviour
         if (hasPrevFootfall && hSpeed >= syncedMinSpeed && footfallIndex != prevFootfallIndex)
         {
             PlayRandom(isRun ? runClips : walkClips, BaseVolume());
+            Footfall?.Invoke((int)surface, hSpeed);
             if (debugLogSteps) Debug.Log("[Footstep] step state=" + (isRun ? runStateName : walkStateName)
                 + " nT=" + normalizedTime.ToString("F2") + " hSpeed=" + hSpeed.ToString("F1"));
         }
@@ -357,6 +365,7 @@ public class PlayerFootstepAudio : MonoBehaviour
         {
             stepTimer = 0f;
             PlayRandom(set, BaseVolume());
+            Footfall?.Invoke((int)surface, hSpeed);
             if (debugLogSteps) Debug.Log("[Footstep] step (timer) surface=" + SurfaceNames[(int)surface]
                 + " hSpeed=" + hSpeed.ToString("F1"));
         }

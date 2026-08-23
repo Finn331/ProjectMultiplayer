@@ -46,6 +46,12 @@ public class PlayerSurfaceDetector : MonoBehaviour
     private float nextDetectTime;
     private int lastSurface = -1;
 
+    /// <summary>ID permukaan aktif terakhir (0=wood, 1=snow, 2=ice; -1 = belum terdeteksi).</summary>
+    public int CurrentSurface => lastSurface;
+
+    /// <summary>Dipanggil saat permukaan berganti (argumen = ID surface baru).</summary>
+    public event System.Action<int> SurfaceChanged;
+
     private void Awake()
     {
         if (footstepAudio == null) footstepAudio = GetComponent<PlayerFootstepAudio>();
@@ -69,6 +75,7 @@ public class PlayerSurfaceDetector : MonoBehaviour
         {
             lastSurface = surface;
             footstepAudio.SetSurface(surface);
+            SurfaceChanged?.Invoke(surface);
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             Debug.Log("[SurfaceDetector] " + hit.collider.name + " -> surface " + surface + " (" + SurfaceName(surface) + ")");
 #endif

@@ -216,6 +216,7 @@ GameObject:
   - component: {fileID: 7768689424264221136}
   - component: {fileID: 4937394701735701012}
   - component: {fileID: 4289780020064991489}
+  - component: {fileID: 8193601595173232817}
   m_Layer: 0
   m_Name: FusionPlayer
   m_TagString: Untagged
@@ -509,7 +510,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 4472293491055181419}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fff0960ef4ea6e04eac66b4a7fd2189d, type: 3}
   m_Name: 
@@ -1230,7 +1231,7 @@ MonoBehaviour:
     m_Bits: 4294967295
   placementBlockedMask:
     serializedVersion: 2
-    m_Bits: 4294967255
+    m_Bits: 23
   previewBounds: {x: 1, y: 1, z: 1}
   ghostPrefabs:
   - itemType: 10
@@ -1437,12 +1438,24 @@ MonoBehaviour:
   jumpVolumeScale: 1.15
   pitchMin: 0.92
   pitchMax: 1.08
+  animator: {fileID: 0}
+  walkStateName: Walk
+  runStateName: Run
+  jumpStartStateName: JumpStart
+  landStateName: Land
+  syncedMinSpeed: 0.3
   minSpeedToStep: 0.6
   runSpeedThreshold: 3.4
   sprintSpeedThreshold: 5.5
+  groundMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  groundCheckExtra: 0.3
+  freeFallVelocity: -6
   audioSource: {fileID: 2993861514588934046}
   spatialMinDistance: 2.5
   spatialMaxDistance: 22
+  debugLogSteps: 0
 --- !u!114 &4937394701735701012
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1462,7 +1475,14 @@ MonoBehaviour:
   hitMask:
     serializedVersion: 2
     m_Bits: 4294967295
+  tagPreferenceWindow: 0.5
   detectInterval: 0.25
+  woodTagNames:
+  - Wood
+  snowTagNames:
+  - Snow
+  iceTagNames:
+  - Ice
   snowLayerNames:
   - Snow
   woodLayerNames:
@@ -1506,6 +1526,30 @@ MonoBehaviour:
   freezingSpeedMultiplier: 0.75
   freezingThresholdNormalized: 0.2
   debugLog: 0
+--- !u!114 &8193601595173232817
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4472293491055181419}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 84b25b6be04758e4786db482277f7ad1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  surfaceDetector: {fileID: 0}
+  footstepAudio: {fileID: 0}
+  movement: {fileID: 0}
+  snowSpeedMultiplier: 0.72
+  iceSpeedMultiplier: 1.06
+  enableSnowTrails: 1
+  footprintSize: 0.32
+  footprintLifetime: 12
+  maxFootprints: 90
+  yOffsetAboveGround: 0.03
+  minStepSpacing: 0.45
+  minTrailSpeed: 0.8
 --- !u!1 &7516938604735521551
 GameObject:
   m_ObjectHideFlags: 0
