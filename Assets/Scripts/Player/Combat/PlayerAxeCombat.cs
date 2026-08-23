@@ -334,6 +334,13 @@ public class PlayerAxeCombat : MonoBehaviour
             return;
         }
 
+        TerrainTreeColliderMarker terrainTreeMarker = hit.collider.GetComponent<TerrainTreeColliderMarker>();
+        if (terrainTreeMarker != null)
+        {
+            this.ApplyTerrainTreeHitById(terrainTreeMarker.TreeId, hit.point);
+            return;
+        }
+
         TreeChoppable tree = hit.collider.GetComponentInParent<TreeChoppable>();
         if (tree != null)
         {
@@ -538,6 +545,29 @@ public class PlayerAxeCombat : MonoBehaviour
         Vector3 direction = playerCamera != null ? playerCamera.transform.forward : this.GetHitDirection();
         float distance = Mathf.Max(0.1f, terrainTreeAssistDistance);
         return registry.TryFindBestTreeForChop(origin, direction, distance, terrainTreeAssistForwardDot, out hit);
+    }
+
+    private void ApplyTerrainTreeHitById(int treeId, Vector3 hitPoint)
+    {
+        float appliedTreeDamage = Mathf.Max(0f, treeDamagePerHit * runtimeTreeDamageMultiplier);
+        FusionPlayerCombat fusionCombat = GetComponent<FusionPlayerCombat>();
+        Vector3 chopperPosition = transform.position;
+
+        TerrainTreeChoppingRegistry registry = FindObjectOfType<TerrainTreeChoppingRegistry>();
+        if (registry == null || !registry.TryGetTreeHit(treeId, out TerrainTreeChoppingRegistry.TreeHit hit))
+        {
+            return;
+        }
+
+        if (fusionCombat != null && fusionCombat.RequestTerrainTreeHit(hit.TreeId, hit.WorldPosition, chopperPosition, appliedTreeDamage))
+        {
+            return;
+        }
+
+        if (registry.TryApplyDamage(hit.TreeId, appliedTreeDamage, out bool depleted, out TerrainTreeChoppingRegistry.TreeHit depletedHit) && depleted)
+        {
+            registry.TryPlayFallingProxy(depletedHit.TreeId, depletedHit.WorldPosition - chopperPosition);
+        }
     }
 
     private void ApplyTerrainTreeHit(TerrainTreeChoppingRegistry.TreeHit hit)

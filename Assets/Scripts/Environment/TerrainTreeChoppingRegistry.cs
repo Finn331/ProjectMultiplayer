@@ -50,12 +50,41 @@ public class TerrainTreeChoppingRegistry : MonoBehaviour
     private readonly List<TerrainSnapshot> snapshots = new List<TerrainSnapshot>();
     private readonly List<TreeRecord> records = new List<TreeRecord>();
     private readonly Dictionary<int, TreeRecord> recordsById = new Dictionary<int, TreeRecord>();
+    private TerrainTreeColliderGenerator colliderGenerator;
+
+    [Header("Tree Colliders")]
+    [SerializeField] private bool generateTreeColliders = true;
+    [SerializeField] private float trunkColliderRadius = 0.45f;
+    [SerializeField] private float trunkColliderHeight = 3.5f;
+    [SerializeField] private bool addRockBoxColliders = true;
+
+    /// <summary>Tampilan read-only satu pohon untuk generator collider.</summary>
+    public struct TreeRecordView
+    {
+        public int TreeId;
+        public Vector3 WorldPosition;
+        public GameObject PrototypePrefab;
+        public bool Depleted;
+    }
 
     public int TreeCount => records.Count;
 
     public bool HasUniqueTreeIds()
     {
         return records.Count == recordsById.Count;
+    }
+
+    /// <summary>Ambil data hit pohon berdasarkan ID (untuk jalur collider fisika).</summary>
+    public bool TryGetTreeHit(int treeId, out TreeHit hit)
+    {
+        if (recordsById.TryGetValue(treeId, out TreeRecord record) && !record.Depleted)
+        {
+            hit = CreateHit(record);
+            return true;
+        }
+
+        hit = default;
+        return false;
     }
 
     private void Awake()
@@ -66,6 +95,10 @@ public class TerrainTreeChoppingRegistry : MonoBehaviour
     private void OnDisable()
     {
         RestoreAllRuntimeTreeInstances();
+        if (colliderGenerator != null)
+        {
+            colliderGenerator.ClearChunks();
+        }
     }
 
     public void RebuildForTests(Terrain[] terrains)
@@ -133,6 +166,36 @@ public class TerrainTreeChoppingRegistry : MonoBehaviour
                 recordsById[treeId] = record;
             }
         }
+
+        BuildTreeColliders();
+    }
+
+    private void BuildTreeColliders()
+    {
+        if (!generateTreeColliders)
+        {
+            return;
+        }
+
+        if (colliderGenerator == null)
+        {
+            colliderGenerator = TerrainTreeColliderGenerator.EnsureFor(this);
+        }
+
+        List<TreeRecordView> views = new List<TreeRecordView>(records.Count);
+        for (int i = 0; i < records.Count; i++)
+        {
+            TreeRecord record = records[i];
+            views.Add(new TreeRecordView
+            {
+                TreeId = record.TreeId,
+                WorldPosition = record.WorldPosition,
+                PrototypePrefab = record.PrototypePrefab,
+                Depleted = record.Depleted
+            });
+        }
+
+        colliderGenerator.BuildFromRecords(views, trunkColliderRadius, trunkColliderHeight, addRockBoxColliders);
     }
 
     public bool TryFindBestTreeForChop(Vector3 origin, Vector3 direction, float maxDistance, float minForwardDot, out TreeHit hit)
@@ -328,6 +391,10 @@ public class TerrainTreeChoppingRegistry : MonoBehaviour
         if (record.Snapshot.HiddenTreeIds.Add(record.TreeId))
         {
             RebuildRuntimeTreeInstances(record.Snapshot);
+            if (colliderGenerator != null)
+            {
+                colliderGenerator.SetTreeEnabled(record.TreeId, false);
+            }
         }
     }
 
