@@ -265,7 +265,10 @@ public class PlayerSurfaceEffects : MonoBehaviour
         {
             GameObject go = new GameObject("Footprint_" + i);
             go.SetActive(false);
-            go.hideFlags = HideFlags.HideInHierarchy; // jangan banjiri hierarchy
+            // Jangan tampil di hierarchy DAN jangan pernah ikut tersimpan ke file
+            // scene (pernah menyebabkan 90 quad ter-bake ke Gameplay.unity ketika
+            // scene di-save dari sesi probe edit-mode).
+            go.hideFlags = HideFlags.HideInHierarchy | HideFlags.DontSaveInEditor;
 
             MeshFilter mf = go.AddComponent<MeshFilter>();
             mf.sharedMesh = quadMesh;

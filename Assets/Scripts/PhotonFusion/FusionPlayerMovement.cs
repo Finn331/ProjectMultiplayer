@@ -174,7 +174,10 @@ public class FusionPlayerMovement : NetworkBehaviour
         animatorMoveInput = Vector2.ClampMagnitude(input, 1f);
         float effectiveSpeed = moveSpeed * surfaceSpeedMultiplier;
         animatorPlanarVelocity = direction.normalized * (effectiveSpeed * inputMagnitude);
-        animatorSpeed = Mathf.Clamp01(animatorPlanarVelocity.magnitude / Mathf.Max(0.01f, moveSpeed));
+        // animatorSpeed = GAIT INTENT dari input mentah (bukan kecepatan efektif):
+        // tarikan penuh tetap terbaca 1.0 -> blend tree masuk Run/sprint walau fisik
+        // melambat karena salju (slowdown hanya mengubah displacement, bukan gaya jalan).
+        animatorSpeed = Mathf.Clamp01(inputMagnitude);
 
         controller.Move(animatorPlanarVelocity * GetDeltaTime());
     }
