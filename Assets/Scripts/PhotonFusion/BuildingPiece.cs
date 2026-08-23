@@ -396,7 +396,15 @@ public class BuildingPiece : NetworkBehaviour
         }
 
         FusionPlayerSurvival fusionSurvival = requester.GetComponent<FusionPlayerSurvival>();
-        return fusionSurvival != null && fusionSurvival.IsDowned;
+        // Properti networked hanya boleh dibaca bila objek sudah valid/spawned
+        // pada runner-nya (menghindari InvalidOperationException pada objek
+        // yang belum selesai spawn).
+        if (fusionSurvival == null || fusionSurvival.Object == null || !fusionSurvival.Object.IsValid)
+        {
+            return false;
+        }
+
+        return fusionSurvival.IsDowned;
     }
 
     private void DropDemolishResources()

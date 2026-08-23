@@ -314,6 +314,11 @@ public class FusionPlayerCombat : NetworkBehaviour
 
     private bool IsDowned()
     {
+        if (Object == null || !Object.IsValid)
+        {
+            return false;
+        }
+
         FusionPlayerSurvival survival = GetComponent<FusionPlayerSurvival>();
         return survival != null && survival.IsDowned;
     }
