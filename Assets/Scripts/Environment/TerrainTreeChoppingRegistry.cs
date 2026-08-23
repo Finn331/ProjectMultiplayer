@@ -407,7 +407,11 @@ public class TerrainTreeChoppingRegistry : MonoBehaviour
         }
         catch (System.Exception exception)
         {
-            Debug.LogWarning("[TerrainTreeChoppingRegistry] Depletion state spawn deferred: " + exception.Message);
+            // NRE di sini biasanya race startup: Spawn dipanggil ketika scene jaringan
+            // Fusion belum selesai dimuat. Retry otomatis (SpawnRetryInterval) — log
+            // exception PENUH supaya penyebab asli tidak hilang.
+            Debug.LogWarning("[TerrainTreeChoppingRegistry] Depletion state spawn deferred (akan retry tiap "
+                + SpawnRetryInterval + "s): " + exception);
         }
     }
 
