@@ -324,6 +324,17 @@ public class PlayerInteractionSystem : MonoBehaviour
             return;
         }
 
+        ForestExitDoor forestExitDoor = currentTarget.GetComponent<ForestExitDoor>();
+        if (forestExitDoor != null)
+        {
+            if (forestExitDoor.TryInteract() && pickButton != null)
+            {
+                pickButton.SetActive(false);
+            }
+
+            return;
+        }
+
         currentTarget.Interact();
         if (pickButton != null)
         {
