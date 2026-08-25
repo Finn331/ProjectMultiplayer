@@ -349,7 +349,7 @@ public class PlayerAxeCombat : MonoBehaviour
         }
 
         AnimalAI animal = hit.collider.GetComponentInParent<AnimalAI>();
-        if (animal != null && !animal.IsDead())
+        if (animal != null && !animal.IsDead)
         {
             float appliedAnimalDamage = Mathf.Max(0f, this.treeDamagePerHit * this.runtimeTreeDamageMultiplier);
             animal.TakeDamage(appliedAnimalDamage);

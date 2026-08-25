@@ -1,20 +1,23 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.AI;
 
 /// <summary>
-/// Spawner wildlife untuk scene Environment (taiga): polar bear, arctic wolf, deer, arctic fox.
-/// v1 LOKAL per klien (non-networked) — tiap client punya dunia hewan sendiri.
-/// SELF-BOOTSTRAP: dibuat otomatis saat scene "Environment" termuat (tanpa bake objek ke
-/// scene file); musnah otomatis saat scene berganti bersama seluruh hewan.
-/// Trigger spawn: menunggu karakter player lokal ber-authority muncul, lalu spawn ring
-/// 25–60 m di atas tanah (raycast, kompatibel multi-tile taiga).
+/// Spawner wildlife NETWORKED (v2) untuk scene Environment (taiga).
+/// HANYA master client yang menjalankan spawn: hewan = instance prefab networked
+/// (Resources/Wildlife/ArcticAnimal) dengan state authority di master; seluruh klien
+/// melihat hewan yang sama. Gerakan memakai NavMeshAgent pada master — NavMesh dibake
+/// runtime dari physics collider scene (multi-tile taiga) sekali per sesi.
+/// Mati -> tiap klien spawn kubus daging LOKAL (siapa pun mengambil, miliknya),
+/// bangkai tenggelam, authority despawn object networked-nya.
 /// </summary>
 public class WildlifeManager : MonoBehaviour
 {
     public static WildlifeManager Instance { get; private set; }
 
     private const string ForestSceneName = "Environment";
+    private const string AnimalPrefabPath = "Wildlife/ArcticAnimal";
 
     [System.Serializable]
     public struct SpeciesConfig
@@ -30,7 +33,6 @@ public class WildlifeManager : MonoBehaviour
         public int meatDropAmount;
         public Color bodyColor;
         public float bodyHeight;
-        public GameObject visualPrefab; // opsional: model asli; null = kapsul prosedural.
     }
 
     [Header("Konfigurasi spesies (kosong = default 4 spesies arktik)")]
@@ -45,74 +47,18 @@ public class WildlifeManager : MonoBehaviour
     [Header("Spawn")]
     [SerializeField] private float minDistanceFromPlayer = 25f;
     [SerializeField] private float maxDistanceFromPlayer = 60f;
-    [SerializeField] private float groundRayLength = 60f;
 
-    private readonly List<AnimalAI> aliveAnimals = new List<AnimalAI>();
+    [Header("NavMesh")]
+    [SerializeField] private float navMeshVoxelSize = 0.8f;
+
+    private Fusion.NetworkRunner masterRunner;
     private bool spawnedForThisSession;
     private float triggerScanTimer;
-
-    public static void SpawnPickables(ItemType itemType, int totalAmount, Vector3 worldPosition)
-    {
-        if (Instance == null)
-        {
-            return;
-        }
-
-        Instance.StartCoroutine(Instance.SpawnPickablesRoutine(itemType, totalAmount, worldPosition));
-    }
-
-    private IEnumerator SpawnPickablesRoutine(ItemType itemType, int totalAmount, Vector3 worldPosition)
-    {
-        yield return null; // tunggu bangkai selesai mematikan collider.
-
-        int remaining = Mathf.Max(1, totalAmount);
-        while (remaining > 0)
-        {
-            int stack = Mathf.Min(remaining, 4);
-            remaining -= stack;
-
-            GameObject drop = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            drop.name = itemType + " (WildlifeDrop)";
-            Vector3 jitter = new Vector3(Random.Range(-0.7f, 0.7f), 0f, Random.Range(-0.7f, 0.7f));
-            if (Physics.Raycast(worldPosition + Vector3.up * 5f, Vector3.down, out RaycastHit hit, 40f))
-            {
-                drop.transform.position = hit.point + Vector3.up * 0.25f + jitter;
-            }
-            else
-            {
-                drop.transform.position = worldPosition + Vector3.up * 0.5f + jitter;
-            }
-
-            drop.transform.localScale = new Vector3(0.28f, 0.28f, 0.28f);
-
-            Interactable interactable = drop.GetComponent<Interactable>();
-            if (interactable == null)
-            {
-                drop.AddComponent<Interactable>();
-            }
-
-            PickableItem pickable = drop.GetComponent<PickableItem>();
-            if (pickable == null)
-            {
-                pickable = drop.AddComponent<PickableItem>();
-            }
-
-            pickable.itemType = itemType;
-            pickable.itemName = itemType.ToString();
-            pickable.amount = stack;
-
-            if (drop.GetComponent<Rigidbody>() == null)
-            {
-                drop.AddComponent<Rigidbody>();
-            }
-        }
-    }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void AutoBootstrap()
     {
         UnityEngine.SceneManagement.SceneManager.sceneLoaded += OnSceneLoadedStatic;
-        // Jika editor play dimulai langsung di dalam forest:
         TryCreateForActiveScene();
     }
 
@@ -134,18 +80,13 @@ public class WildlifeManager : MonoBehaviour
             return;
         }
 
-        if (Instance != null || FindExistingManager() != null)
+        if (Instance != null || FindObjectOfType<WildlifeManager>() != null)
         {
             return;
         }
 
         new GameObject("WildlifeManager").AddComponent<WildlifeManager>();
         Debug.Log("[WildlifeManager] bootstrap di scene forest.");
-    }
-
-    private static WildlifeManager FindExistingManager()
-    {
-        return FindObjectOfType<WildlifeManager>();
     }
 
     private void Awake()
@@ -179,20 +120,34 @@ public class WildlifeManager : MonoBehaviour
         }
 
         triggerScanTimer = 0.5f;
-        Transform localPlayer = FindLocalAuthorityCharacter();
-        if (localPlayer != null)
+
+        foreach (Fusion.NetworkRunner runner in FindObjectsOfType<Fusion.NetworkRunner>())
         {
+            if (!runner.IsRunning || !runner.IsSharedModeMasterClient)
+            {
+                continue;
+            }
+
+            Transform localCharacter = FindLocalAuthorityCharacter();
+            if (localCharacter == null)
+            {
+                return; // master sudah ada tapi karakter lokal belum — tunggu scan berikutnya.
+            }
+
             spawnedForThisSession = true;
-            StartCoroutine(SpawnAllRoutine(localPlayer.position));
+            masterRunner = runner;
+            StartCoroutine(BakeNavMeshThenSpawn(localCharacter.position));
+            return;
         }
     }
 
     private static Transform FindLocalAuthorityCharacter()
     {
-        foreach (var networkObject in FindObjectsOfType<Fusion.NetworkObject>())
+        foreach (Fusion.NetworkObject networkObject in FindObjectsOfType<Fusion.NetworkObject>())
         {
-            var survival = networkObject.GetComponent<FusionPlayerSurvival>();
-            if (survival != null && networkObject.HasStateAuthority && networkObject.gameObject.activeInHierarchy)
+            if (networkObject.GetComponent<FusionPlayerSurvival>() != null
+                && networkObject.HasStateAuthority
+                && networkObject.gameObject.activeInHierarchy)
             {
                 return networkObject.transform;
             }
@@ -201,95 +156,101 @@ public class WildlifeManager : MonoBehaviour
         return null;
     }
 
-    /// <summary>Hook publik untuk alur lain (mis. pintu/panggilan manual).</summary>
-    public static void RequestSpawnAround(Vector3 localPlayerPosition)
+    private IEnumerator BakeNavMeshThenSpawn(Vector3 center)
     {
-        if (Instance != null && !Instance.spawnedForThisSession)
+        yield return null;
+
+        // Bake NavMesh runtime lewat API modul UnityEngine.AI (selalu tersedia).
+        // Pola kanonik: data kosong DIADD DULU di identitas, lalu dibake IN-PLACE
+        // dengan sumber ber-koordinat dunia (hindari bug offset BuildNavMeshData).
+        NavMeshBuildSettings settings = UnityEngine.AI.NavMesh.GetSettingsByIndex(0);
+        settings.overrideVoxelSize = true;
+        settings.voxelSize = navMeshVoxelSize;
+
+        Bounds bounds = new Bounds(center + Vector3.up * 30f, new Vector3(520f, 90f, 520f));
+        List<UnityEngine.AI.NavMeshBuildSource> buildSources = new List<UnityEngine.AI.NavMeshBuildSource>();
+        List<UnityEngine.AI.NavMeshBuildMarkup> markups = new List<UnityEngine.AI.NavMeshBuildMarkup>();
+        UnityEngine.AI.NavMeshBuilder.CollectSources(
+            bounds,
+            UnityEngine.AI.NavMesh.AllAreas,
+            UnityEngine.AI.NavMeshCollectGeometry.PhysicsColliders,
+            0,
+            markups,
+            buildSources);
+
+        UnityEngine.AI.NavMeshData navData = new UnityEngine.AI.NavMeshData();
+        UnityEngine.AI.NavMesh.AddNavMeshData(navData);
+        // UpdateNavMeshData bersifat synchronous dan return bool (true = sukses update).
+        bool bakeOk = UnityEngine.AI.NavMeshBuilder.UpdateNavMeshData(navData, settings, buildSources, bounds);
+        if (!bakeOk)
         {
-            Instance.spawnedForThisSession = true;
-            Instance.StartCoroutine(Instance.SpawnAllRoutine(localPlayerPosition));
+            Debug.LogWarning("[WildlifeManager] UpdateNavMeshData return false — NavMesh mungkin kosong/tidak ada sumber.");
+        }
+
+        int vertexCount = UnityEngine.AI.NavMesh.CalculateTriangulation().vertices.Length;
+        if (vertexCount == 0)
+        {
+            Debug.LogError("[WildlifeManager] bake NavMesh menghasilkan mesh kosong — fallback raycast dipakai.");
+        }
+        else
+        {
+            Debug.Log("[WildlifeManager] NavMesh siap (" + buildSources.Count + " sumber, " + vertexCount + " verts).");
+        }
+
+        yield return SpawnAllRoutine(center);
+    }
+
+    /// <summary>Drop daging LOKAL per klien saat hewan mati (dipanggil AnimalAI).</summary>
+    public static void SpawnLocalMeatCubes(ItemType itemType, int totalAmount, Vector3 worldPosition)
+    {
+        int remaining = Mathf.Max(1, totalAmount);
+        while (remaining > 0)
+        {
+            int stack = Mathf.Min(remaining, 4);
+            remaining -= stack;
+
+            GameObject drop = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            drop.name = itemType + " (WildlifeDrop)";
+            Vector3 jitter = new Vector3(Random.Range(-0.7f, 0.7f), 0f, Random.Range(-0.7f, 0.7f));
+            if (TrySampleGroundForDrop(worldPosition, out Vector3 grounded))
+            {
+                drop.transform.position = grounded + Vector3.up * 0.25f + jitter;
+            }
+            else
+            {
+                drop.transform.position = worldPosition + Vector3.up * 0.5f + jitter;
+            }
+
+            drop.transform.localScale = new Vector3(0.28f, 0.28f, 0.28f);
+
+            Interactable interactable = drop.GetComponent<Interactable>();
+            if (interactable == null)
+            {
+                drop.AddComponent<Interactable>();
+            }
+
+            PickableItem pickable = drop.GetComponent<PickableItem>();
+            if (pickable == null)
+            {
+                pickable = drop.AddComponent<PickableItem>();
+            }
+
+            pickable.itemType = itemType;
+            pickable.itemName = itemType.ToString();
+            pickable.amount = stack;
+
+            Rigidbody rb = drop.GetComponent<Rigidbody>();
+            if (rb == null)
+            {
+                rb = drop.AddComponent<Rigidbody>();
+            }
         }
     }
 
-    private IEnumerator SpawnAllRoutine(Vector3 center)
-    {
-        yield return null; // satu frame agar terrain & collider siap.
-
-        SpeciesConfig bear = GetSpeciesOrDefault(0);
-        SpeciesConfig wolf = GetSpeciesOrDefault(1);
-        SpeciesConfig deer = GetSpeciesOrDefault(2);
-        SpeciesConfig fox = GetSpeciesOrDefault(3);
-
-        for (int i = 0; i < bearCount; i++) TrySpawn(bear, center);
-        bool packAnchorDone = false;
-        for (int i = 0; i < wolfPackSize; i++)
-        {
-            TrySpawn(wolf, center, !packAnchorDone ? minDistanceFromPlayer : minDistanceFromPlayer + 8f);
-            packAnchorDone = true;
-        }
-        for (int i = 0; i < deerCount; i++) TrySpawn(deer, center);
-        for (int i = 0; i < foxCount; i++) TrySpawn(fox, center);
-
-        Debug.Log("[WildlifeManager] spawn selesai: " + aliveAnimals.Count + " hewan.");
-    }
-
-    private SpeciesConfig GetSpeciesOrDefault(int index)
-    {
-        List<SpeciesConfig> list = (species != null && species.Count > 0) ? species : BuildDefaultSpecies();
-        return list[Mathf.Clamp(index, 0, list.Count - 1)];
-    }
-
-    private void TrySpawn(SpeciesConfig config, Vector3 center, float? minDistanceOverride = null)
-    {
-        const int MaxAttempts = 24;
-        float minDistance = minDistanceOverride ?? minDistanceFromPlayer;
-        for (int attempt = 0; attempt < MaxAttempts; attempt++)
-        {
-            Vector2 offset = Random.insideUnitCircle.normalized * Random.Range(minDistance, maxDistanceFromPlayer);
-            Vector3 candidate = center + new Vector3(offset.x, 0f, offset.y);
-
-            if (!TrySampleGround(candidate, out Vector3 grounded))
-            {
-                continue;
-            }
-
-            if (IsBlockedByObstacle(grounded))
-            {
-                continue;
-            }
-
-            CreateAnimal(config, grounded);
-            return;
-        }
-    }
-
-    private static bool IsBlockedByObstacle(Vector3 groundedPosition)
-    {
-        // Cek manual: jangan pakai CheckSphere dengan mask penuh karena terrain sendiri
-        // selalu terkena -> spawn tak pernah berhasil.
-        Collider[] around = Physics.OverlapSphere(groundedPosition + Vector3.up * 1f, 1.2f);
-        foreach (Collider candidate in around)
-        {
-            if (candidate is TerrainCollider)
-            {
-                continue;
-            }
-
-            if (candidate.GetComponentInParent<AnimalAI>() != null)
-            {
-                continue; // hewan lain boleh berdekatan.
-            }
-
-            return true; // pohon/batu/player menghalangi titik ini.
-        }
-
-        return false;
-    }
-
-    private bool TrySampleGround(Vector3 sampleAt, out Vector3 grounded)
+    private static bool TrySampleGroundForDrop(Vector3 sampleAt, out Vector3 grounded)
     {
         grounded = sampleAt;
-        RaycastHit[] hits = Physics.RaycastAll(sampleAt + Vector3.up * 8f, Vector3.down, groundRayLength);
+        RaycastHit[] hits = Physics.RaycastAll(sampleAt + Vector3.up * 5f, Vector3.down, 40f);
         float bestDistance = float.MaxValue;
         bool found = false;
         foreach (RaycastHit hit in hits)
@@ -299,9 +260,10 @@ public class WildlifeManager : MonoBehaviour
                 continue;
             }
 
-            if (hit.collider.GetComponentInParent<AnimalAI>() != null || hit.collider.GetComponentInParent<FusionPlayerSurvival>() != null)
+            if (hit.collider.GetComponentInParent<AnimalAI>() != null
+                || hit.collider.GetComponentInParent<FusionPlayerSurvival>() != null)
             {
-                continue; // jangan gunjang hewan/player lain sebagai "tanah".
+                continue;
             }
 
             if (hit.distance < bestDistance)
@@ -315,86 +277,120 @@ public class WildlifeManager : MonoBehaviour
         return found;
     }
 
-    private void CreateAnimal(SpeciesConfig config, Vector3 position)
+    private IEnumerator SpawnAllRoutine(Vector3 center)
     {
-        GameObject root = new GameObject("Wildlife_" + config.speciesName);
-        root.transform.position = position;
-        root.transform.rotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
-
-        if (config.visualPrefab != null)
+        GameObject prefab = Resources.Load<GameObject>(AnimalPrefabPath);
+        if (prefab == null)
         {
-            Object.Instantiate(config.visualPrefab, root.transform);
-        }
-        else
-        {
-            BuildProceduralBody(root.transform, config);
+            Debug.LogError("[WildlifeManager] prefab '" + AnimalPrefabPath + "' tidak ditemukan di Resources.");
+            yield break;
         }
 
-        CapsuleCollider collider = root.AddComponent<CapsuleCollider>();
-        collider.height = Mathf.Max(1.4f, config.bodyHeight);
-        collider.radius = 0.55f;
-        collider.center = new Vector3(0f, collider.height * 0.5f, 0f);
+        SpeciesConfig bear = GetSpeciesOrDefault(0);
+        SpeciesConfig wolf = GetSpeciesOrDefault(1);
+        SpeciesConfig deer = GetSpeciesOrDefault(2);
+        SpeciesConfig fox = GetSpeciesOrDefault(3);
 
-        AnimalAI ai = root.AddComponent<AnimalAI>();
-        ai.speciesName = config.speciesName;
-        ai.maxHealth = config.maxHealth;
-        SetPrivateField(ai, "walkSpeed", config.walkSpeed);
-        SetPrivateField(ai, "runSpeed", config.runSpeed);
-        SetPrivateField(ai, "aggroRadius", config.aggroRadius);
-        SetPrivateField(ai, "fleeRadius", config.fleeRadius);
-        SetPrivateField(ai, "attackDamage", config.attackDamage);
-        SetPrivateField(ai, "meatDropAmount", config.meatDropAmount);
-        SetPrivateField(ai, "isPredator", config.isPredator);
+        for (int i = 0; i < bearCount; i++)
+        {
+            TrySpawn(masterRunner, prefab, bear, center, minDistanceFromPlayer);
+        }
 
-        aliveAnimals.Add(ai);
+        bool packAnchorDone = false;
+        for (int i = 0; i < wolfPackSize; i++)
+        {
+            float minRange = packAnchorDone ? minDistanceFromPlayer + 8f : minDistanceFromPlayer;
+            TrySpawn(masterRunner, prefab, wolf, center, minRange);
+            packAnchorDone = true;
+        }
+
+        for (int i = 0; i < deerCount; i++)
+        {
+            TrySpawn(masterRunner, prefab, deer, center, minDistanceFromPlayer);
+        }
+
+        for (int i = 0; i < foxCount; i++)
+        {
+            TrySpawn(masterRunner, prefab, fox, center, minDistanceFromPlayer);
+        }
+
+        Debug.Log("[WildlifeManager] spawn networked selesai: " + FindObjectsOfType<AnimalAI>().Length + " hewan.");
     }
 
-    private static void BuildProceduralBody(Transform parent, SpeciesConfig config)
+    private SpeciesConfig GetSpeciesOrDefault(int index)
     {
-        GameObject body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-        Object.Destroy(body.GetComponent<Collider>()); // fisika cukup dari collider root.
-        body.name = "Body";
-        body.transform.SetParent(parent, false);
-        body.transform.localScale = new Vector3(0.7f, Mathf.Max(0.4f, config.bodyHeight * 0.5f), 1.1f);
-        body.transform.localPosition = new Vector3(0f, config.bodyHeight * 0.55f, 0f);
+        List<SpeciesConfig> list = (species != null && species.Count > 0) ? species : BuildDefaultSpecies();
+        return list[Mathf.Clamp(index, 0, list.Count - 1)];
+    }
 
-        GameObject head = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        Object.Destroy(head.GetComponent<Collider>());
-        head.name = "Head";
-        head.transform.SetParent(parent, false);
-        head.transform.localScale = new Vector3(0.42f, 0.42f, 0.55f);
-        head.transform.localPosition = new Vector3(0f, config.bodyHeight * 0.75f, 0.85f);
-
-        Shader shader = Shader.Find("Universal Render Pipeline/Lit");
-        if (shader == null)
+    private void TrySpawn(Fusion.NetworkRunner runner, GameObject prefab, SpeciesConfig config, Vector3 center, float minDistance)
+    {
+        const int MaxAttempts = 24;
+        for (int attempt = 0; attempt < MaxAttempts; attempt++)
         {
-            shader = Shader.Find("Standard");
-        }
+            Vector2 offset = Random.insideUnitCircle.normalized * Random.Range(minDistance, maxDistanceFromPlayer);
+            Vector3 candidate = center + new Vector3(offset.x, 0f, offset.y);
 
-        if (shader != null)
-        {
-            Material material = new Material(shader);
-            if (material.HasProperty("_BaseColor"))
+            // Wajib titik yang VALID di NavMesh agar NavMeshAgent langsung hidup.
+            if (!NavMesh.SamplePosition(candidate, out NavMeshHit navHit, 6f, NavMesh.AllAreas))
             {
-                material.SetColor("_BaseColor", config.bodyColor);
-            }
-            else if (material.HasProperty("_Color"))
-            {
-                material.SetColor("_Color", config.bodyColor);
+                continue;
             }
 
-            body.GetComponent<MeshRenderer>().sharedMaterial = material;
-            head.GetComponent<MeshRenderer>().sharedMaterial = material;
+            Vector3 grounded = navHit.position;
+            if (IsBlockedByObstacle(grounded))
+            {
+                continue;
+            }
+
+            Fusion.NetworkObject spawnedObject = runner.Spawn(
+                prefab,
+                grounded,
+                Quaternion.Euler(0f, Random.Range(0f, 360f), 0f),
+                Fusion.PlayerRef.None);
+
+            if (spawnedObject == null)
+            {
+                Debug.LogWarning("[WildlifeManager] Runner.Spawn gagal untuk " + config.speciesName);
+                return;
+            }
+
+            AnimalAI ai = spawnedObject.GetComponent<AnimalAI>();
+            if (ai != null)
+            {
+                ai.speciesName = config.speciesName;
+                ai.InitializeFromConfig(config.isPredator, config.maxHealth, config.walkSpeed, config.runSpeed,
+                    config.aggroRadius, config.fleeRadius, config.attackDamage, config.meatDropAmount);
+            }
+
+            return;
         }
     }
 
-    private static void SetPrivateField(object target, string fieldName, object value)
+    private static bool IsBlockedByObstacle(Vector3 groundedPosition)
     {
-        var field = target.GetType().GetField(fieldName, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
-        if (field != null)
+        Collider[] around = Physics.OverlapSphere(groundedPosition + Vector3.up * 1f, 1.2f);
+        foreach (Collider candidate in around)
         {
-            field.SetValue(target, value);
+            if (candidate is TerrainCollider)
+            {
+                continue;
+            }
+
+            if (candidate.GetComponentInParent<AnimalAI>() != null)
+            {
+                continue;
+            }
+
+            if (candidate.GetComponentInParent<PlayerSurvivalSystem>() != null)
+            {
+                continue;
+            }
+
+            return true;
         }
+
+        return false;
     }
 
     private static List<SpeciesConfig> BuildDefaultSpecies()

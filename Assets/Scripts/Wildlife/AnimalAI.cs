@@ -1,16 +1,17 @@
 using System.Collections;
+using Fusion;
 using UnityEngine;
+using UnityEngine.AI;
 
 /// <summary>
-/// AI hewan arktik sederhana (non-networked v1): Idle / Wander / Flee / Chase / Attack / Dead.
-/// Gerakan mengikuti medan via raycast ke bawah (kompatibel 9 tile taiga; JANGAN pakai
-/// Terrain.activeTerrain karena hanya menunjuk tile pertama).
-/// Damage dari pemain masuk lewat TakeDamage() (dipanggil PlayerAxeCombat.ProcessHit).
-/// Predator melukai pemain via jalur networked FusionPlayerSurvival.ApplyDamageForStateAuthority
-/// (fallback lokal PlayerSurvivalSystem untuk mode tanpa sesi).
-/// Mati -> drop bahan makanan (default RawMeat) via WildlifeManager.SpawnPickables.
+/// AI hewan arktik NETWORKED (v2): state authority = master client menjalankan seluruh
+/// logika (Idle/Wander/Flee/Chase/Attack) + NavMeshAgent; klien lain hanya lerp ke
+/// posisi/rotasi tersinkronisasi. HP tersinkron via [Networked]; kapak dari klien mana pun
+/// masuk lewat RPC (pola sama dengan tebang pohon). Mati -> semua klien spawn drop daging
+/// lokal + bangkai tenggelam; authority despawn object. Predator melukai player via RPC ke
+/// pemilik karakter (shared mode: tiap pemain state authority atas karakternya sendiri).
 /// </summary>
-public class AnimalAI : MonoBehaviour
+public class AnimalAI : NetworkBehaviour
 {
     public enum State { Idle, Wander, Flee, Chase, Attack, Dead }
 
@@ -18,7 +19,7 @@ public class AnimalAI : MonoBehaviour
     public string speciesName = "Deer";
 
     [Header("Stat")]
-    public float maxHealth = 60f;
+    [SerializeField] private float maxHealth = 60f;
     [SerializeField] private float walkSpeed = 1.7f;
     [SerializeField] private float runSpeed = 4.6f;
     [SerializeField] private float turnSpeedDegPerSec = 240f;
@@ -48,35 +49,95 @@ public class AnimalAI : MonoBehaviour
     [SerializeField] private float carcassSinkDelaySeconds = 12f;
     [SerializeField] private float carcassSinkDuration = 4f;
 
+    [Networked] public float Health { get; set; }
+    [Networked] public NetworkBool IsDead { get; set; }
+    [Networked] private Vector3 SyncPosition { get; set; }
+    [Networked] private Quaternion SyncRotation { get; set; }
+
     public State CurrentState { get; private set; } = State.Idle;
-    public float Health { get; private set; }
 
-    public bool IsDead()
-    {
-        return CurrentState == State.Dead;
-    }
-
+    private NavMeshAgent agent;
     private Transform playerTarget;
     private Vector3 homePosition;
     private Vector3 wanderDestination;
     private float wanderTimer;
     private float detectTimer;
     private float attackCooldown;
-    private bool dyingStarted;
+    private bool deathVisualApplied;
+    private bool authorityDespawnScheduled;
 
-    private void Start()
+    public void InitializeFromConfig(bool predatorFlag, float healthMax, float speedWalk, float speedRun,
+        float aggro, float flee, float damage, int meatCount)
     {
-        // Start (bukan Awake): WildlifeManager mengisi config SEGERA setelah AddComponent,
-        // sehingga nilai akhir (maxHealth dll.) yang terpaksa.
-        Health = maxHealth;
+        // Dipanggil WildlifeMaster saat prefab tidak carry konfigurasi (jalur prosedural).
+        isPredator = predatorFlag;
+        maxHealth = healthMax;
+        walkSpeed = speedWalk;
+        runSpeed = speedRun;
+        aggroRadius = aggro;
+        fleeRadius = flee;
+        attackDamage = damage;
+        meatDropAmount = meatCount;
+    }
+
+    public override void Spawned()
+    {
+        agent = GetComponent<NavMeshAgent>();
+        CurrentState = State.Idle;
         homePosition = transform.position;
         wanderDestination = transform.position;
+        wanderTimer = Random.Range(0.5f, 3f);
+
+        if (Object.HasStateAuthority)
+        {
+            Health = maxHealth;
+            if (agent != null)
+            {
+                agent.enabled = true;
+            }
+        }
+        else
+        {
+            if (agent != null)
+            {
+                agent.enabled = false;
+            }
+            SyncPosition = transform.position;
+            SyncRotation = transform.rotation;
+        }
     }
 
     private void Update()
     {
-        if (CurrentState == State.Dead)
+        if (IsDead)
         {
+            if (!deathVisualApplied)
+            {
+                ApplyDeathVisuals();
+            }
+
+            return;
+        }
+
+        if (!Object.HasStateAuthority)
+        {
+            // Proxy: haluskan menuju posisi tersinkronisasi.
+            float t = Time.deltaTime * 8f;
+            transform.position = Vector3.Lerp(transform.position, SyncPosition, t);
+            transform.rotation = Quaternion.Slerp(transform.rotation, SyncRotation, t);
+        }
+    }
+
+    public override void FixedUpdateNetwork()
+    {
+        if (!Object.HasStateAuthority || IsDead)
+        {
+            return;
+        }
+
+        if (Health <= 0f)
+        {
+            BeginDeath();
             return;
         }
 
@@ -101,7 +162,7 @@ public class AnimalAI : MonoBehaviour
                 break;
 
             case State.Wander:
-                StepToward(wanderDestination, walkSpeed);
+                MoveToward(wanderDestination, walkSpeed);
                 wanderTimer -= Time.deltaTime;
                 if (HasArrived(wanderDestination) || wanderTimer <= 0f)
                 {
@@ -111,12 +172,15 @@ public class AnimalAI : MonoBehaviour
                 break;
 
             case State.Flee:
-                if (playerTarget != null)
+                if (playerTarget == null)
                 {
-                    Vector3 away = transform.position - playerTarget.position;
-                    away.y = 0f;
-                    StepToward(transform.position + away.normalized * 6f, runSpeed);
+                    CurrentState = State.Wander;
+                    break;
                 }
+
+                Vector3 away = transform.position - playerTarget.position;
+                away.y = 0f;
+                MoveToward(transform.position + away.normalized * 6f, runSpeed);
                 break;
 
             case State.Chase:
@@ -126,10 +190,11 @@ public class AnimalAI : MonoBehaviour
                     break;
                 }
 
-                StepToward(playerTarget.position, runSpeed);
+                MoveToward(playerTarget.position, runSpeed);
                 if (GetFlatDistance(playerTarget.position) <= attackRange)
                 {
                     CurrentState = State.Attack;
+                    StopMovement();
                 }
                 break;
 
@@ -150,48 +215,94 @@ public class AnimalAI : MonoBehaviour
                 if (attackCooldown <= 0f)
                 {
                     attackCooldown = attackIntervalSeconds;
-                    // Prioritas jalur networked (sumber kebenaran HP player),
-                    // fallback lokal untuk mode tanpa sesi.
-                    var fusionVictim = playerTarget.GetComponentInParent<FusionPlayerSurvival>();
-                    if (fusionVictim != null)
+                    NetworkObject victimObject = playerTarget.GetComponentInParent<FusionPlayerSurvival>() != null
+                        ? playerTarget.GetComponentInParent<FusionPlayerSurvival>().Object
+                        : null;
+                    if (victimObject != null)
                     {
-                        fusionVictim.ApplyDamageForStateAuthority(attackDamage, Fusion.PlayerRef.None);
-                    }
-                    else
-                    {
-                        PlayerSurvivalSystem victim = playerTarget.GetComponentInParent<PlayerSurvivalSystem>();
-                        if (victim != null)
-                        {
-                            victim.ApplyDamage(attackDamage);
-                        }
+                        RPC_DamagePlayer(victimObject.InputAuthority, attackDamage);
                     }
                 }
                 break;
         }
+
+        PublishSync();
     }
 
-    /// <summary>Dipanggil PlayerAxeCombat ketika kapak kena collider hewan.</summary>
+    /// <summary>Dipanggil PlayerAxeCombat di klien mana pun; route otomatis ke authority.</summary>
     public void TakeDamage(float amount)
     {
-        if (CurrentState == State.Dead || amount <= 0f)
+        if (IsDead || amount <= 0f)
         {
             return;
         }
 
-        Health -= amount;
-        if (Health <= 0f)
+        if (Object == null || !Object.IsValid)
         {
-            Die();
+            // Jalur non-networked (uji editor / tanpa sesi): HP lokal saja.
+            Health = Mathf.Max(0f, Health - amount);
             return;
         }
 
-        // Prey langsung kabur; predator membalas mengejar penyerang terdekat.
+        if (Object.HasStateAuthority)
+        {
+            ApplyHitLocally(amount);
+        }
+        else
+        {
+            RPC_RequestHit(amount);
+        }
+    }
+
+    [Rpc(RpcSources.All, RpcTargets.All)]
+    private void RPC_RequestHit(float amount, RpcInfo info = default)
+    {
+        if (Object.HasStateAuthority)
+        {
+            ApplyHitLocally(amount);
+        }
+    }
+
+    [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
+    private void RPC_DamagePlayer(PlayerRef victimPlayer, float amount, RpcInfo info = default)
+    {
+        if (Runner == null || Runner.LocalPlayer != victimPlayer)
+        {
+            return;
+        }
+
+        foreach (var networkObject in FindObjectsOfType<Fusion.NetworkObject>())
+        {
+            if (!networkObject.HasStateAuthority || networkObject.InputAuthority != Runner.LocalPlayer)
+            {
+                continue;
+            }
+
+            var survival = networkObject.GetComponent<FusionPlayerSurvival>();
+            if (survival != null)
+            {
+                survival.ApplyDamageForStateAuthority(amount, Fusion.PlayerRef.None);
+            }
+
+            break;
+        }
+    }
+
+    private void ApplyHitLocally(float amount)
+    {
+        Health = Mathf.Max(0f, Health - amount);
+
         UpdatePlayerTarget();
-        if (!isPredator && playerTarget != null)
+        if (playerTarget == null)
+        {
+            return;
+        }
+
+        if (!isPredator)
         {
             CurrentState = State.Flee;
         }
-        else if (isPredator && playerTarget != null && CurrentState != State.Attack)
+        else if (CurrentState != State.Attack)
         {
             CurrentState = State.Chase;
         }
@@ -260,7 +371,27 @@ public class AnimalAI : MonoBehaviour
         wanderTimer = wanderRepickSeconds;
     }
 
-    private void StepToward(Vector3 destination, float speed)
+    private void MoveToward(Vector3 destination, float speed)
+    {
+        if (agent != null && agent.enabled && agent.isOnNavMesh)
+        {
+            agent.speed = speed;
+            agent.SetDestination(destination);
+            return;
+        }
+
+        StepTowardRaycast(destination, speed);
+    }
+
+    private void StopMovement()
+    {
+        if (agent != null && agent.enabled && agent.isOnNavMesh)
+        {
+            agent.ResetPath();
+        }
+    }
+
+    private void StepTowardRaycast(Vector3 destination, float speed)
     {
         Vector3 flat = destination - transform.position;
         flat.y = 0f;
@@ -307,15 +438,6 @@ public class AnimalAI : MonoBehaviour
                 continue;
             }
 
-            // WAJIB skip collider diri sendiri (jebakan klasik: tanpa ini hewan
-            // memanjat ke langit +-2 m/frame dengan berdiri di atas kepalanya).
-            if (hit.collider.GetComponentInParent<AnimalAI>() == this)
-            {
-                continue;
-            }
-
-            // Tolak permukaan yang lebih tinggi dari posisi sekarang (kanopi/dahan):
-            // hewan tidak boleh "naik" karena raycast.
             if (hit.point.y > sampleAt.y + 2.5f)
             {
                 continue;
@@ -344,37 +466,63 @@ public class AnimalAI : MonoBehaviour
         return GetFlatDistance(destination) <= 1.2f;
     }
 
-    private void Die()
+    private void PublishSync()
     {
-        CurrentState = State.Dead;
-        if (!dyingStarted)
-        {
-            dyingStarted = true;
-            StartCoroutine(DieRoutine());
-        }
+        SyncPosition = transform.position;
+        SyncRotation = transform.rotation;
     }
 
-    private IEnumerator DieRoutine()
+    private void BeginDeath()
     {
-        // Matikan collider supaya bangkai tidak menghalangi pemain/tembakan berikutnya.
+        IsDead = true;
+    }
+
+    private void ApplyDeathVisuals()
+    {
+        deathVisualApplied = true;
+        CurrentState = State.Dead;
+
+        if (agent != null)
+        {
+            agent.enabled = false;
+        }
+
         foreach (Collider collider in GetComponentsInChildren<Collider>())
         {
             collider.enabled = false;
         }
 
-        WildlifeManager.SpawnPickables(meatItemType, Mathf.Max(1, meatDropAmount), transform.position);
+        // Drop daging LOKAL di tiap klien (siapa pun yang mengambil, masuk inventarisnya).
+        WildlifeManager.SpawnLocalMeatCubes(meatItemType, Mathf.Max(1, meatDropAmount), transform.position);
 
+        StartCoroutine(SinkRoutine());
+        if (Object.HasStateAuthority && !authorityDespawnScheduled)
+        {
+            authorityDespawnScheduled = true;
+            StartCoroutine(AuthorityDespawnRoutine());
+        }
+    }
+
+    private IEnumerator SinkRoutine()
+    {
         yield return new WaitForSeconds(carcassSinkDelaySeconds);
 
         Vector3 startPosition = transform.position;
         float elapsed = 0f;
-        while (elapsed < carcassSinkDuration)
+        while (elapsed < carcassSinkDuration && this != null && gameObject != null)
         {
             elapsed += Time.deltaTime;
             transform.position = startPosition - Vector3.up * (elapsed * 0.35f);
             yield return null;
         }
+    }
 
-        Destroy(gameObject);
+    private IEnumerator AuthorityDespawnRoutine()
+    {
+        yield return new WaitForSeconds(carcassSinkDelaySeconds + carcassSinkDuration + 0.5f);
+        if (Object != null && Object.IsValid && Runner != null)
+        {
+            Runner.Despawn(Object);
+        }
     }
 }
