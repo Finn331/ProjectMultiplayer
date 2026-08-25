@@ -108,6 +108,20 @@ public class FusionPlayerSpawner : MonoBehaviour
         PlayerInventory inventory = playerObject.GetComponent<PlayerInventory>();
         PlayerSurvivalSystem survival = playerObject.GetComponent<PlayerSurvivalSystem>();
         FusionPlayerPersistence.TryRestore(roomCode, runner.GetInstanceID(), inventory, survival);
+
+        // Lobby (Gameplay) adalah zona aman: karakter yang baru dibuat di sini
+        // selalu lahir sehat, terlepas dari sisa state jaringan sesi sebelumnya
+        // (mis. tepat setelah wipe-return dari forest, objek pengganti bisa
+        // mewarisi snapshot hp=0/downed dan player terkunci hingga timer
+        // respawn 20 detik habis).
+        if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "Gameplay")
+        {
+            FusionPlayerSurvival fusionSurvival = playerObject.GetComponent<FusionPlayerSurvival>();
+            if (fusionSurvival != null && fusionSurvival.IsDowned)
+            {
+                fusionSurvival.ResetForRespawn();
+            }
+        }
     }
 
     private static void ApplySpawnTransform(NetworkObject playerObject, Vector3 position, Quaternion rotation)
