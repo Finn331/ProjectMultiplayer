@@ -348,6 +348,14 @@ public class PlayerAxeCombat : MonoBehaviour
             return;
         }
 
+        AnimalAI animal = hit.collider.GetComponentInParent<AnimalAI>();
+        if (animal != null && !animal.IsDead())
+        {
+            float appliedAnimalDamage = Mathf.Max(0f, this.treeDamagePerHit * this.runtimeTreeDamageMultiplier);
+            animal.TakeDamage(appliedAnimalDamage);
+            return;
+        }
+
         PlayerSurvivalSystem targetSurvival = hit.collider.GetComponentInParent<PlayerSurvivalSystem>();
         if (targetSurvival != null && targetSurvival.gameObject != gameObject)
         {
