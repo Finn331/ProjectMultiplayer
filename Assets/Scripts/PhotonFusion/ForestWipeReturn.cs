@@ -136,13 +136,30 @@ public class ForestWipeReturn : MonoBehaviour
             return bootstrap.Runner;
         }
 
-        NetworkRunner runner = FindObjectOfType<NetworkRunner>();
-        if (runner != null && runner.IsRunning)
+        // Bila proses memuat lebih dari satu runner (mis. harness dev),
+        // prioritaskan Shared Mode master client agar keputusan wipe
+        // selalu dievaluasi oleh otoritas scene, bukan bergantung pada
+        // urutan FindObjectOfType yang tidak deterministik.
+        NetworkRunner fallback = null;
+        foreach (NetworkRunner candidate in FindObjectsOfType<NetworkRunner>())
         {
-            return runner;
+            if (candidate == null || !candidate.IsRunning)
+            {
+                continue;
+            }
+
+            if (candidate.IsSharedModeMasterClient)
+            {
+                return candidate;
+            }
+
+            if (fallback == null)
+            {
+                fallback = candidate;
+            }
         }
 
-        return null;
+        return fallback;
     }
 
     private WipeCheckResult EvaluatePlayers(NetworkRunner runner)
