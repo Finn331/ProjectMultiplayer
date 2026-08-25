@@ -28,7 +28,9 @@ public enum ItemType
     WallItem,
     FloorItem,
     RoofItem,
-    DoorItem
+    DoorItem,
+    RawMeat,
+    CookedMeat
 }
 
 public class PickableItem : MonoBehaviour

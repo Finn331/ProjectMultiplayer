@@ -427,6 +427,7 @@ public class FusionFurnace : NetworkBehaviour
         return itemType == ItemType.Iron
             || itemType == ItemType.RawChicken
             || itemType == ItemType.RawFish
+            || itemType == ItemType.RawMeat
             || itemType == ItemType.Wood;
     }
 
@@ -436,6 +437,7 @@ public class FusionFurnace : NetworkBehaviour
         if (itemType == ItemType.Iron) return (int)ItemType.IronIngot;
         if (itemType == ItemType.RawChicken) return (int)ItemType.CookedChicken;
         if (itemType == ItemType.RawFish) return (int)ItemType.CookedFish;
+        if (itemType == ItemType.RawMeat) return (int)ItemType.CookedMeat;
         if (itemType == ItemType.Wood) return (int)ItemType.Ash;
         return -1;
     }

@@ -372,7 +372,7 @@ public class PlayerInteractionSystem : MonoBehaviour
             return campfire.TryAddToCampfireFromSlot(inventory, -1, true, -1);
         }
 
-        if ((selectedItem == ItemType.RawChicken || selectedItem == ItemType.RawFish) && inventory.GetSlotAmount(globalSlot) > 0)
+        if ((selectedItem == ItemType.RawChicken || selectedItem == ItemType.RawFish || selectedItem == ItemType.RawMeat) && inventory.GetSlotAmount(globalSlot) > 0)
         {
             return campfire.TryAddToCampfireFromSlot(inventory, globalSlot, false, -1);
         }
@@ -408,7 +408,7 @@ public class PlayerInteractionSystem : MonoBehaviour
             return furnace.TryAddToFurnaceFromSlot(inventory, -1, true, -1);
         }
 
-        if ((selectedItem == ItemType.Iron || selectedItem == ItemType.RawChicken || selectedItem == ItemType.RawFish) && inventory.GetSlotAmount(globalSlot) > 0)
+        if ((selectedItem == ItemType.Iron || selectedItem == ItemType.RawChicken || selectedItem == ItemType.RawFish || selectedItem == ItemType.RawMeat) && inventory.GetSlotAmount(globalSlot) > 0)
         {
             return furnace.TryAddToFurnaceFromSlot(inventory, globalSlot, false, -1);
         }

@@ -35,6 +35,8 @@ public class FusionPlayerInventory : NetworkBehaviour
     [Header("Food Drop Prefabs")]
     [SerializeField] private GameObject rawChickenDropPrefab;
     [SerializeField] private GameObject cookedChickenDropPrefab;
+    [SerializeField] private GameObject rawMeatDropPrefab;
+    [SerializeField] private GameObject cookedMeatDropPrefab;
     [SerializeField] private GameObject rawFishDropPrefab;
     [SerializeField] private GameObject cookedFishDropPrefab;
 
@@ -454,6 +456,8 @@ public class FusionPlayerInventory : NetworkBehaviour
             || itemType == ItemType.CookedChicken
             || itemType == ItemType.RawFish
             || itemType == ItemType.CookedFish
+            || itemType == ItemType.RawMeat
+            || itemType == ItemType.CookedMeat
             || itemType == ItemType.Iron
             || itemType == ItemType.CookingPot
             || itemType == ItemType.Wood
@@ -484,7 +488,8 @@ public class FusionPlayerInventory : NetworkBehaviour
             }
         }
         else if (itemType == ItemType.RawChicken || itemType == ItemType.CookedChicken
-            || itemType == ItemType.RawFish || itemType == ItemType.CookedFish)
+            || itemType == ItemType.RawFish || itemType == ItemType.CookedFish
+            || itemType == ItemType.RawMeat || itemType == ItemType.CookedMeat)
         {
             droppedObject = SpawnFoodDropObject(itemType, position);
         }
@@ -592,6 +597,8 @@ public class FusionPlayerInventory : NetworkBehaviour
         GameObject prefab = null;
         if (itemType == ItemType.RawChicken) prefab = instance.rawChickenDropPrefab;
         else if (itemType == ItemType.CookedChicken) prefab = instance.cookedChickenDropPrefab;
+        else if (itemType == ItemType.RawMeat) prefab = instance.rawMeatDropPrefab;
+        else if (itemType == ItemType.CookedMeat) prefab = instance.cookedMeatDropPrefab;
         else if (itemType == ItemType.RawFish) prefab = instance.rawFishDropPrefab;
         else if (itemType == ItemType.CookedFish) prefab = instance.cookedFishDropPrefab;
 

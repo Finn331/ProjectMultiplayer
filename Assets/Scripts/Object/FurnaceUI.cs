@@ -263,7 +263,8 @@ public class FurnaceUI : MonoBehaviour
     private static bool IsValidInput(ItemType? itemType)
     {
         return itemType == ItemType.Iron || itemType == ItemType.RawChicken
-            || itemType == ItemType.RawFish || itemType == ItemType.Wood;
+            || itemType == ItemType.RawFish || itemType == ItemType.RawMeat
+            || itemType == ItemType.Wood;
     }
 
     private void RefreshUI()

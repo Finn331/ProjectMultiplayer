@@ -46,6 +46,9 @@ public static class ConsumableItemCatalog
             case ItemType.CookedFish:
                 effect = new ConsumableItemEffect(0f, 30f, 0f);
                 return true;
+            case ItemType.CookedMeat:
+                effect = new ConsumableItemEffect(0f, 45f, 0f);
+                return true;
             case ItemType.Fertilizer:
                 effect = new ConsumableItemEffect(15f, 0f, 0f);
                 return true;

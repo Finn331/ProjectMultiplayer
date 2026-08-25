@@ -6,9 +6,9 @@ using UnityEngine;
 /// Gerakan mengikuti medan via raycast ke bawah (kompatibel 9 tile taiga; JANGAN pakai
 /// Terrain.activeTerrain karena hanya menunjuk tile pertama).
 /// Damage dari pemain masuk lewat TakeDamage() (dipanggil PlayerAxeCombat.ProcessHit).
-/// Predator melukai pemain via PlayerSurvivalSystem.ApplyDamage — pola sama dengan
-/// PlayerWarmthSystem (freeze damage), konsisten untuk fase lokal.
-/// Mati -> drop bahan makanan (default RawChicken) via WildlifeManager.SpawnPickables.
+/// Predator melukai pemain via jalur networked FusionPlayerSurvival.ApplyDamageForStateAuthority
+/// (fallback lokal PlayerSurvivalSystem untuk mode tanpa sesi).
+/// Mati -> drop bahan makanan (default RawMeat) via WildlifeManager.SpawnPickables.
 /// </summary>
 public class AnimalAI : MonoBehaviour
 {
@@ -41,7 +41,7 @@ public class AnimalAI : MonoBehaviour
     [SerializeField] private float detectIntervalSeconds = 0.3f;
 
     [Header("Drop saat mati")]
-    [SerializeField] private ItemType meatItemType = ItemType.RawChicken;
+    [SerializeField] private ItemType meatItemType = ItemType.RawMeat;
     [SerializeField] private int meatDropAmount = 2;
 
     [Header("Bangkai")]

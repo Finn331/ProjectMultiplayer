@@ -78,7 +78,7 @@ public class TestingResourceVendingMachine : MonoBehaviour
     public void DispenseFiber() { Dispense(ItemType.Fiber, "Fiber"); }
     public void DispenseStone() { Dispense(ItemType.Stone, "Stone"); }
     public void DispenseCloth() { Dispense(ItemType.Cloth, "Cloth"); }
-    public void DispenseRawMeat() { Dispense(ItemType.RawChicken, "Raw Chicken"); }
+    public void DispenseRawMeat() { Dispense(ItemType.RawMeat, "Raw Meat"); }
     public void DispenseRawFish() { Dispense(ItemType.RawFish, "Raw Fish"); }
     public void DispenseIron() { Dispense(ItemType.Iron, "Iron"); }
 

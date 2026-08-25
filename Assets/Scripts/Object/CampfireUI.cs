@@ -262,7 +262,7 @@ public class CampfireUI : MonoBehaviour
 
     private static bool IsValidInput(ItemType? itemType)
     {
-        return itemType == ItemType.RawChicken || itemType == ItemType.RawFish;
+        return itemType == ItemType.RawChicken || itemType == ItemType.RawFish || itemType == ItemType.RawMeat;
     }
 
     private void RefreshUI()
