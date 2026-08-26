@@ -16,9 +16,9 @@ public class DayNightCycle : MonoBehaviour
     [SerializeField] private AnimationCurve sunIntensityCurve = AnimationCurve.EaseInOut(0f, 0.4f, 1f, 1.6f);
 
     [Header("Ambient")]
-    [SerializeField] private Gradient ambientSkyGradient;
-    [SerializeField] private Gradient ambientEquatorGradient;
-    [SerializeField] private Gradient ambientGroundGradient;
+    [SerializeField] private Gradient ambientSkyGradient = DefaultGradient(new Color(0.65f, 0.72f, 0.85f));
+    [SerializeField] private Gradient ambientEquatorGradient = DefaultGradient(new Color(0.5f, 0.55f, 0.6f));
+    [SerializeField] private Gradient ambientGroundGradient = DefaultGradient(new Color(0.25f, 0.22f, 0.18f));
 
     [Header("Fog")]
     [SerializeField] private bool enableFog = false;
@@ -46,7 +46,18 @@ public class DayNightCycle : MonoBehaviour
     {
         if (sunLight == null) sunLight = GetComponent<Light>();
         if (startTime == 0d) startTime = Time.timeAsDouble - (nightDurationSeconds + dawnDurationSeconds + dayDurationSeconds * 0.5); // mulai di fase siang
+        // Pastikan ambient pakai mode Trilight (Gradient) — tidak butuh ambient probe bake, langsung terang
+        RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
+        RenderSettings.ambientIntensity = 1.2f;
         CalculatePhaseTimes();
+    }
+
+    private static Gradient DefaultGradient(Color color)
+    {
+        var g = new Gradient();
+        g.colorKeys = new[] { new GradientColorKey(color, 0f), new GradientColorKey(color, 1f) };
+        g.alphaKeys = new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(1f, 1f) };
+        return g;
     }
 
     private void OnValidate()
@@ -143,6 +154,9 @@ public class DayNightCycle : MonoBehaviour
 
     private void ApplyAmbient(float t)
     {
+        // Gunakan mode Trilight (Gradient Sky/Equator/Ground) — terang tanpa perlu ambient probe bake
+        RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
+
         if (ambientSkyGradient != null)
             RenderSettings.ambientSkyColor = ambientSkyGradient.Evaluate(t);
 
