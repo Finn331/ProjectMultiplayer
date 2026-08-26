@@ -194,32 +194,15 @@ public class MainMenuController : MonoBehaviour
             return;
         }
 
-        string activeScene = SceneManager.GetActiveScene().name;
-        if (!string.Equals(activeScene, "MainMenu", System.StringComparison.OrdinalIgnoreCase))
-        {
-            return;
-        }
-
-        // Host (MasterClient) drives scene sync via Runner.LoadScene; clients fallback to local load
-        // so build clients (PM2) don't stay stuck in MainMenu without a FusionPlayerSpawner.
-        if (bootstrap != null && bootstrap.IsMasterClient)
-        {
-            this.SetStatus("Memuat " + officeLobbySceneName + " (host auto-transition)...");
-            try
-            {
-                runner.LoadScene(Fusion.SceneRef.FromIndex(1));
-            }
-            catch (System.Exception exception)
-            {
-                Debug.LogWarning("[MainMenu] Runner.LoadScene failed: " + exception.Message);
-                this.LoadSceneSafely(officeLobbySceneName);
-            }
-        }
-        else
-        {
-            this.SetStatus("Join OK — memuat " + officeLobbySceneName + "...");
-            this.LoadSceneSafely(officeLobbySceneName);
-        }
+        // PENTING: jangan auto-load scene di sini. Callback ini menyala segera
+        // setelah CreateRoom/JoinRoom — untuk alur manual (tombol "Create Room"
+        // / "Join Room") pemain HARUS menekan "Start Lobby" dulu agar scene
+        // berpindah. Auto-load di sini membuat tombol "Start Lobby" terlewati.
+        // (Auto-transition hanya dipakai oleh driver headless -autoForest.)
+        //
+        // Cukup refresh UI host control agar status sesi ter-update; perpindahan
+        // scene tetap di tangan tombol HostStartLobby / HostStartForest.
+        this.RefreshHostActionButtons();
     }
 
     private void OnApplicationQuit()
