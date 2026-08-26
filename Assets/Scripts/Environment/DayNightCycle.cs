@@ -21,7 +21,7 @@ public class DayNightCycle : MonoBehaviour
     [SerializeField] private Gradient ambientGroundGradient;
 
     [Header("Fog")]
-    [SerializeField] private bool enableFog = true;
+    [SerializeField] private bool enableFog = false;
     [SerializeField] private Gradient fogColorGradient;
     [SerializeField] private AnimationCurve fogDensityCurve = AnimationCurve.EaseInOut(0f, 0.03f, 1f, 0.01f);
 
