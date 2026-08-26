@@ -89,10 +89,14 @@ public class DayNightCycle : MonoBehaviour
         DeterminePhase(cycleTime, out phase, out phaseNormalized);
         CurrentPhase = phase;
 
-        ApplySun(phaseNormalized);
-        ApplyAmbient(phaseNormalized);
-        ApplyFog(phaseNormalized);
-        ApplySkybox(phaseNormalized);
+        // Pakai normalized sepanjang full cycle (0=malam -> 1=siang) agar gradient/curve
+        // dievaluasi KONTINU dan tidak loncat di batas fase (hindari choppy).
+        float fullT = GetFullCycleNormalized(phaseNormalized);
+
+        ApplySun(fullT);
+        ApplyAmbient(fullT);
+        ApplyFog(fullT);
+        ApplySkybox(fullT);
     }
 
     private void DeterminePhase(float t, out TimeOfDay phase, out float normalized)
