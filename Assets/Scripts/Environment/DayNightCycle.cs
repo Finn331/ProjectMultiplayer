@@ -13,7 +13,7 @@ public class DayNightCycle : MonoBehaviour
 
     [Header("Sun Light Colors")]
     [SerializeField] private Gradient sunColorGradient;
-    [SerializeField] private AnimationCurve sunIntensityCurve = AnimationCurve.EaseInOut(0f, 0.1f, 1f, 1.2f);
+    [SerializeField] private AnimationCurve sunIntensityCurve = AnimationCurve.EaseInOut(0f, 0.4f, 1f, 1.6f);
 
     [Header("Ambient")]
     [SerializeField] private Gradient ambientSkyGradient;
@@ -23,7 +23,7 @@ public class DayNightCycle : MonoBehaviour
     [Header("Fog")]
     [SerializeField] private bool enableFog = true;
     [SerializeField] private Gradient fogColorGradient;
-    [SerializeField] private AnimationCurve fogDensityCurve = AnimationCurve.EaseInOut(0f, 0.08f, 1f, 0.02f);
+    [SerializeField] private AnimationCurve fogDensityCurve = AnimationCurve.EaseInOut(0f, 0.03f, 1f, 0.01f);
 
     [Header("Skybox")]
     [SerializeField] private Material skyboxMaterial;
@@ -45,7 +45,7 @@ public class DayNightCycle : MonoBehaviour
     private void Awake()
     {
         if (sunLight == null) sunLight = GetComponent<Light>();
-        if (startTime == 0d) startTime = Time.timeAsDouble;
+        if (startTime == 0d) startTime = Time.timeAsDouble - (nightDurationSeconds + dawnDurationSeconds + dayDurationSeconds * 0.5); // mulai di fase siang
         CalculatePhaseTimes();
     }
 
