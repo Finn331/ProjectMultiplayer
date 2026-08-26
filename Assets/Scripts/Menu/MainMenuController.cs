@@ -130,9 +130,10 @@ public class MainMenuController : MonoBehaviour
             // Playtest automation: langsung masuk forest setelah join.
             if (TryGetCommandLineValue("-autoForest", out string autoForest) && !string.IsNullOrEmpty(autoForest) && autoForest != "0")
             {
-                autoForestRequested = true;
-                autoForestTimer = 0f;
-                autoForestDone = false;
+                // Driver DontDestroyOnLoad lintas-scene: MainMenuController ikut
+                // hancur saat pindah scene, loop Update() lama mati sebelum sempat
+                // trigger. Driver menunggu master + karakter lokal, lalu load forest.
+                AutoForestDriver.CreateFromCommandLine();
             }
         }
     }
@@ -229,31 +230,9 @@ public class MainMenuController : MonoBehaviour
         }
     }
 
-    private bool autoForestRequested;
-    private bool autoForestDone;
-    private float autoForestTimer;
-
     private void Update()
     {
         this.RefreshHostActionButtons();
-
-        // Playtest automation: masuk forest otomatis setelah join (host-only).
-        if (autoForestRequested && !autoForestDone)
-        {
-            autoForestTimer += Time.deltaTime;
-            if (autoForestTimer >= 10f && bootstrap != null && bootstrap.Runner != null && bootstrap.IsMasterClient)
-            {
-                autoForestDone = true;
-                this.SetStatus("Auto-enter Forest...");
-                HostStartForest();
-                WildlifeTestLogMainMenu("[MainMenu] AutoEnterForest via Update: HostStartForest called");
-            }
-            else if (autoForestTimer >= 60f)
-            {
-                autoForestDone = true;
-                WildlifeTestLogMainMenu("[MainMenu] AutoEnterForest timeout 60s");
-            }
-        }
 
         if (!hostControlMode)
         {

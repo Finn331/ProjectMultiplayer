@@ -93,6 +93,14 @@ public class AnimalAI : NetworkBehaviour
             Health = maxHealth;
             if (agent != null)
             {
+                // Guard anti-drift-Y: kalau posisi spawn belum di NavMesh, cari
+                // titik valid terdekat dan Warp SEBELUM agent di-enable.
+                if (!agent.isOnNavMesh
+                    && UnityEngine.AI.NavMesh.SamplePosition(transform.position, out NavMeshHit spawnHit, 8f, UnityEngine.AI.NavMesh.AllAreas))
+                {
+                    transform.position = spawnHit.position;
+                    agent.Warp(spawnHit.position);
+                }
                 agent.enabled = true;
             }
         }
@@ -100,6 +108,9 @@ public class AnimalAI : NetworkBehaviour
         {
             if (agent != null)
             {
+                // Safety net: prefab lama / replika diterima sebelum bake NavMesh
+                // lokal bisa menyisakan agent AKTIF tanpa NavMesh (agent rusak,
+                // tidak auto-recover). Proxy tidak memakai agent, jadi matikan.
                 agent.enabled = false;
             }
             SyncPosition = transform.position;

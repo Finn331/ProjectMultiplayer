@@ -53,6 +53,7 @@ public class WildlifeManager : MonoBehaviour
 
     private Fusion.NetworkRunner masterRunner;
     private bool spawnedForThisSession;
+    private bool navMeshBaked;
     private float triggerScanTimer;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -123,7 +124,7 @@ public class WildlifeManager : MonoBehaviour
 
         foreach (Fusion.NetworkRunner runner in FindObjectsOfType<Fusion.NetworkRunner>())
         {
-            if (!runner.IsRunning || !runner.IsSharedModeMasterClient)
+            if (!runner.IsRunning)
             {
                 continue;
             }
@@ -131,12 +132,28 @@ public class WildlifeManager : MonoBehaviour
             Transform localCharacter = FindLocalAuthorityCharacter();
             if (localCharacter == null)
             {
-                return; // master sudah ada tapi karakter lokal belum — tunggu scan berikutnya.
+                return; // sesi ada tapi karakter lokal belum — tunggu scan berikutnya.
+            }
+
+            bool isMaster = runner.IsSharedModeMasterClient;
+
+            // SEMUA klien bake NavMesh: proxy hewan di klien non-master butuh
+            // NavMesh agar "Failed to create agent" tidak terjadi.
+            if (!navMeshBaked)
+            {
+                navMeshBaked = true;
+                StartCoroutine(BakeNavMeshRoutine(localCharacter.position));
+            }
+
+            if (!isMaster)
+            {
+                spawnedForThisSession = true; // klien non-master: cukup bake, jangan spawn
+                return;
             }
 
             spawnedForThisSession = true;
             masterRunner = runner;
-            StartCoroutine(BakeNavMeshThenSpawn(localCharacter.position));
+            StartCoroutine(SpawnAllWhenNavMeshReady(localCharacter.position));
             return;
         }
     }
@@ -156,7 +173,7 @@ public class WildlifeManager : MonoBehaviour
         return null;
     }
 
-    private IEnumerator BakeNavMeshThenSpawn(Vector3 center)
+    private IEnumerator BakeNavMeshRoutine(Vector3 center)
     {
         yield return null;
 
@@ -197,6 +214,25 @@ public class WildlifeManager : MonoBehaviour
         {
             Debug.Log("[WildlifeManager] NavMesh siap (" + buildSources.Count + " sumber, " + vertexCount + " verts).");
             WildlifeTestLog("NavMesh READY - verts=" + vertexCount + " sources=" + buildSources.Count);
+        }
+    }
+
+    private IEnumerator SpawnAllWhenNavMeshReady(Vector3 center)
+    {
+        // Master: tunggu bake selesai (NavMesh punya verts) lalu spawn semua hewan.
+        const float TimeoutSeconds = 20f;
+        float waited = 0f;
+        while (UnityEngine.AI.NavMesh.CalculateTriangulation().vertices.Length == 0 && waited < TimeoutSeconds)
+        {
+            yield return new WaitForSeconds(0.25f);
+            waited += 0.25f;
+        }
+
+        if (UnityEngine.AI.NavMesh.CalculateTriangulation().vertices.Length == 0)
+        {
+            Debug.LogError("[WildlifeManager] NavMesh tidak siap dalam " + TimeoutSeconds + "s — spawn dibatalkan.");
+            WildlifeTestLog("SPAWN ABORTED - navmesh never ready");
+            yield break;
         }
 
         yield return SpawnAllRoutine(center);
@@ -372,6 +408,16 @@ public class WildlifeManager : MonoBehaviour
             AnimalAI ai = spawnedObject.GetComponent<AnimalAI>();
             if (ai != null)
             {
+                // Paksa posisi ke titik NavMesh yang tervalidasi (guard anti-drift-Y):
+                // beberapa kasus Fusion spawn + NavMeshAgent enable membuat transform
+                // melenceng; snap + Warp memastikan hewan mulai di tanah.
+                ai.transform.position = grounded;
+                UnityEngine.AI.NavMeshAgent spawnedAgent = spawnedObject.GetComponent<UnityEngine.AI.NavMeshAgent>();
+                if (spawnedAgent != null && spawnedAgent.isActiveAndEnabled)
+                {
+                    spawnedAgent.Warp(grounded);
+                }
+
                 ai.speciesName = config.speciesName;
                 ai.InitializeFromConfig(config.isPredator, config.maxHealth, config.walkSpeed, config.runSpeed,
                     config.aggroRadius, config.fleeRadius, config.attackDamage, config.meatDropAmount);

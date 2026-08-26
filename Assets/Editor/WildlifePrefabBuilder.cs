@@ -39,6 +39,10 @@ public static class WildlifePrefabBuilder
         agent.stoppingDistance = 0.4f;
         agent.radius = 0.45f;
         agent.height = 1.6f;
+        // Agent OFF secara default: klien non-master bisa menerima replika hewan
+        // SEBELUM bake NavMesh lokal selesai ("Failed to create agent"). Authority
+        // meng-enable agent di AnimalAI.Spawned(); proxy bergerak via lerp transform.
+        agent.enabled = false;
 
         root.AddComponent<AnimalAI>();
         root.AddComponent<Fusion.NetworkObject>();
