@@ -90,6 +90,11 @@ public class MainMenuController : MonoBehaviour
         this.RefreshCurrency();
         this.RefreshRoomInfo();
         this.SetStatus("Siap. Tekan Play untuk mulai.");
+    }
+
+    private void Start()
+    {
+        // Panggil dari Start (bukan Awake) agar coroutine bisa jalan.
         this.TryAutoJoinFromCommandLine();
     }
 
@@ -108,9 +113,38 @@ public class MainMenuController : MonoBehaviour
             {
                 playerNameInput.text = playerName;
             }
-            this.SetStatus("Auto-join room " + roomCode + " sebagai " + playerName + "...");
-            bootstrap?.JoinRoom(roomCode, playerName);
+
+            // Playtest automation: -host berarti create room, selain itu join.
+            bool isHost = TryGetCommandLineValue("-host", out string hostFlag) && !string.IsNullOrEmpty(hostFlag) && hostFlag != "0";
+            if (isHost)
+            {
+                this.SetStatus("Auto-create room " + roomCode + " sebagai " + playerName + "...");
+                bootstrap?.CreateRoom(roomCode, playerName, 8);
+            }
+            else
+            {
+                this.SetStatus("Auto-join room " + roomCode + " sebagai " + playerName + "...");
+                bootstrap?.JoinRoom(roomCode, playerName);
+            }
+
+            // Playtest automation: langsung masuk forest setelah join.
+            if (TryGetCommandLineValue("-autoForest", out string autoForest) && !string.IsNullOrEmpty(autoForest) && autoForest != "0")
+            {
+                autoForestRequested = true;
+                autoForestTimer = 0f;
+                autoForestDone = false;
+            }
         }
+    }
+
+    private static void WildlifeTestLogMainMenu(string message)
+    {
+        try
+        {
+            string path = UnityEngine.Application.persistentDataPath + "/wildlife_test.log";
+            System.IO.File.AppendAllText(path, System.DateTime.Now.ToString("HH:mm:ss") + " " + message + "\n");
+        }
+        catch (System.Exception) { /* ignore */ }
     }
 
     private static bool TryGetCommandLineValue(string key, out string value)
@@ -195,9 +229,31 @@ public class MainMenuController : MonoBehaviour
         }
     }
 
+    private bool autoForestRequested;
+    private bool autoForestDone;
+    private float autoForestTimer;
+
     private void Update()
     {
         this.RefreshHostActionButtons();
+
+        // Playtest automation: masuk forest otomatis setelah join (host-only).
+        if (autoForestRequested && !autoForestDone)
+        {
+            autoForestTimer += Time.deltaTime;
+            if (autoForestTimer >= 10f && bootstrap != null && bootstrap.Runner != null && bootstrap.IsMasterClient)
+            {
+                autoForestDone = true;
+                this.SetStatus("Auto-enter Forest...");
+                HostStartForest();
+                WildlifeTestLogMainMenu("[MainMenu] AutoEnterForest via Update: HostStartForest called");
+            }
+            else if (autoForestTimer >= 60f)
+            {
+                autoForestDone = true;
+                WildlifeTestLogMainMenu("[MainMenu] AutoEnterForest timeout 60s");
+            }
+        }
 
         if (!hostControlMode)
         {

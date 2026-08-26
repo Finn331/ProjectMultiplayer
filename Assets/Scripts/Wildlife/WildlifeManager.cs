@@ -191,13 +191,25 @@ public class WildlifeManager : MonoBehaviour
         if (vertexCount == 0)
         {
             Debug.LogError("[WildlifeManager] bake NavMesh menghasilkan mesh kosong — fallback raycast dipakai.");
+            WildlifeTestLog("NavMesh EMPTY - bake failed");
         }
         else
         {
             Debug.Log("[WildlifeManager] NavMesh siap (" + buildSources.Count + " sumber, " + vertexCount + " verts).");
+            WildlifeTestLog("NavMesh READY - verts=" + vertexCount + " sources=" + buildSources.Count);
         }
 
         yield return SpawnAllRoutine(center);
+    }
+
+    public static void WildlifeTestLog(string message)
+    {
+        try
+        {
+            string path = UnityEngine.Application.persistentDataPath + "/wildlife_test.log";
+            System.IO.File.AppendAllText(path, System.DateTime.Now.ToString("HH:mm:ss") + " " + message + "\n");
+        }
+        catch (System.Exception) { /* ignore */ }
     }
 
     /// <summary>Drop daging LOKAL per klien saat hewan mati (dipanggil AnimalAI).</summary>
@@ -314,7 +326,9 @@ public class WildlifeManager : MonoBehaviour
             TrySpawn(masterRunner, prefab, fox, center, minDistanceFromPlayer);
         }
 
-        Debug.Log("[WildlifeManager] spawn networked selesai: " + FindObjectsOfType<AnimalAI>().Length + " hewan.");
+        int animalCount = FindObjectsOfType<AnimalAI>().Length;
+        Debug.Log("[WildlifeManager] spawn networked selesai: " + animalCount + " hewan.");
+        WildlifeTestLog("SPAWN DONE - animals=" + animalCount);
     }
 
     private SpeciesConfig GetSpeciesOrDefault(int index)
