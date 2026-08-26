@@ -130,16 +130,27 @@ public class DayNightCycle : MonoBehaviour
 
     private float GetFullCycleNormalized(float phaseNormalized)
     {
+        // Pemetaan KONTINU sepanjang cycle dengan malam di kedua ujung (t=0 dan t=1),
+        // puncak siang di tengah (t=0.5). Agar saat cycle wrap (dusk -> night) tidak ada
+        // lonjakan: t=1 (akhir dusk) = malam = sama dengan t=0 (awal night).
+        float nightEnd = nightStartTime / totalCycleTime;
+        float dawnEnd = dawnStartTime / totalCycleTime;
+        float dayEnd = dayStartTime / totalCycleTime;
+        float duskEnd = duskStartTime / totalCycleTime;
         switch (CurrentPhase)
         {
             case TimeOfDay.Night:
-                return Mathf.Lerp(0f, dawnStartTime / totalCycleTime, phaseNormalized);
+                // malam flat di t=0
+                return 0f;
             case TimeOfDay.Dawn:
-                return Mathf.Lerp(dawnStartTime / totalCycleTime, dayStartTime / totalCycleTime, phaseNormalized);
+                // naik dari malam (0) ke puncak siang (0.5)
+                return Mathf.Lerp(0f, 0.5f, phaseNormalized);
             case TimeOfDay.Day:
-                return Mathf.Lerp(dayStartTime / totalCycleTime, duskStartTime / totalCycleTime, phaseNormalized);
+                // siang penuh di sekitar tengah: map ke [0.5, 0.5] (flat) atau sedikit variasi
+                return Mathf.Lerp(0.5f, 0.5f, phaseNormalized);
             case TimeOfDay.Dusk:
-                return Mathf.Lerp(duskStartTime / totalCycleTime, 1f, phaseNormalized);
+                // turun dari puncak siang (0.5) ke malam (1.0) -> wrap ke t=0 = kontinu
+                return Mathf.Lerp(0.5f, 1f, phaseNormalized);
             default:
                 return 0f;
         }
