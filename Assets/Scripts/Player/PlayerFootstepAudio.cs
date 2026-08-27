@@ -15,16 +15,21 @@ using UnityEngine;
 ///   `IsGrounded` (lebih reliable dari raycast di terrain uneven) dengan fallback
 ///   ke `controller.isGrounded`. Tidak bergantung pada nama state animasi.
 ///   Berlaku konsisten untuk jalan pelan maupun lari.
-/// - V4 (sekarang): DISTANCE-BASED step trigger — `interval = stepLength / speed`.
-///   Natural karena langkah manusia konstan per meter, bukan per detik.
-///   Sebelumnya time-based (`dt * speed/15` + reset 0.5s) terlalu lambat di speed
-///   rendah dan terlalu cepat di speed tinggi. Default step length pakai ukuran
-///   langkah manusia realistis (walk 0.75m, run 1.5m, sprint 1.75m).
+/// - V4 (sekarang): RAYCAST FOOT-DOWN detection sebagai primary — bunyi langkah
+///   SAAT kaki (raycast bawah CharacterController) benar-benar menyentuh tanah,
+///   bukan pakai timer. Ini sinkron dengan animasi kaki (setiap foot-down = 1 step).
+///   Fallback: distance-based timer (`stepLength / speed`) jika raycast dimatikan.
+///   Default step length pakai ukuran langkah manusia realistis (walk 0.75m,
+///   run 1.5m, sprint 1.75m). Debounce 0.30s = max ~3.3 langkah/detik (cadence
+///   manusia natural, TIDAK terlalu cepat).
 ///
 /// Desain:
-/// - Distance-based: `stepInterval = stepLength / horizontalSpeed`, di-clamp ke
-///   [minStepInterval, maxStepInterval] supaya natural di semua speed range.
-/// - Min-speed threshold rendah (0.3 m/s) supaya jalan pelan tetap bunyi.
+/// - Raycast foot-down: `CheckFootDown()` dari origin di antara 2 kaki ke bawah.
+///   Trigger jika raycast hit tanah dalam `groundCheckDist` (0.3m, ketat anti-bounce)
+///   + elapsed >= `stepDebounceTime` (0.30s anti-double-trigger).
+/// - Fallback distance-based: `stepInterval = stepLength / horizontalSpeed` di-clamp
+///   ke [minStepInterval, maxStepInterval] supaya natural di semua speed range.
+/// - Min-speed threshold 0.8 m/s supaya idle micro-move tidak bunyi.
 /// - Landing dideteksi dari perubahan sign `VerticalVelocity` (negatif) + ground
 ///   check, dengan debounce anti-double-trigger.
 /// - Jump up dideteksi dari `VerticalVelocity` tiba-tiba positif saat leave-ground.
@@ -58,7 +63,7 @@ public class PlayerFootstepAudio : MonoBehaviour
     [Tooltip("Panjang satu langkah dalam meter saat sprint. Standar pelari cepat: 1.6-1.9m.")]
     [SerializeField, Range(0.6f, 3f)] private float sprintStepLength = 1.75f;
     [Tooltip("Interval minimum antar langkah (anti double-play saat frame hitch).")]
-    [SerializeField, Range(0.05f, 0.4f)] private float minStepInterval = 0.14f;
+    [SerializeField, Range(0.05f, 0.4f)] private float minStepInterval = 0.30f;
     [Tooltip("Interval maksimum antar langkah (anti jeda terlalu panjang saat jalan super pelan).")]
     [SerializeField, Range(0.4f, 1.5f)] private float maxStepInterval = 0.7f;
 
@@ -72,8 +77,8 @@ public class PlayerFootstepAudio : MonoBehaviour
     [SerializeField] private float pitchMax = 1.3f;
 
     [Header("Detection")]
-    [Tooltip("Kecepatan horizontal minimum untuk bunyi langkah (m/s). 0.3 = jalan pelan.")]
-    [SerializeField] private float minSpeedToStep = 0.3f;
+    [Tooltip("Kecepatan horizontal minimum untuk bunyi langkah (m/s). 0.8 = jalan pelan di atas ini baru bunyi (skip idle micro-move).")]
+    [SerializeField] private float minSpeedToStep = 0.8f;
     [Tooltip(">= ini = run clip.")]
     [SerializeField] private float runSpeedThreshold = 3.4f;
     [Tooltip(">= ini = sprint clip.")]
@@ -84,10 +89,10 @@ public class PlayerFootstepAudio : MonoBehaviour
     [SerializeField] private float landingVelocity = -1.5f;
     [Tooltip("Waktu minimum di udara sebelum landing bisa trigger (anti false-positive).")]
     [SerializeField] private float minAirTimeForLand = 0.08f;
-    [Tooltip("Jarak raycast dari bawah CharacterController ke tanah untuk deteksi foot-down (meter). Lebih besar = lebih toleran saat lari cepat (bouncing).")]
-    [SerializeField] private float groundCheckDist = 0.5f;
-    [Tooltip("Debounce antar langkah (anti double-trigger saat kaki menyentuh tanah flat). Di-scale oleh speed supaya sprint tidak terlalu sering.")]
-    [SerializeField] private float stepDebounceTime = 0.15f;
+    [Tooltip("Jarak raycast dari bawah CharacterController ke tanah untuk deteksi foot-down (meter). Lebih kecil = lebih ketat (hanya trigger saat kaki benar-benar di tanah, bukan saat bounce).")]
+    [SerializeField] private float groundCheckDist = 0.3f;
+    [Tooltip("Debounce antar langkah (anti double-trigger saat kaki menyentuh tanah flat). 0.30s = max ~3.3 langkah/detik (cadence manusia natural).")]
+    [SerializeField] private float stepDebounceTime = 0.30f;
     [Tooltip("Gunakan raycast foot-down detection sebagai primary (lebih akurat dari timer).")]
     [SerializeField] private bool useRaycastFootDown = true;
 

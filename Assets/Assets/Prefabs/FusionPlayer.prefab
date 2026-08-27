@@ -1440,14 +1440,14 @@ MonoBehaviour:
   walkStepLength: 0.75
   runStepLength: 1.5
   sprintStepLength: 1.75
-  minStepInterval: 0.14
+  minStepInterval: 0.30
   maxStepInterval: 0.7
   localVolume: 0.7
   remoteVolume: 0.9
   jumpVolumeScale: 1.15
   pitchMin: 0.7
   pitchMax: 1.3
-  minSpeedToStep: 0.3
+  minSpeedToStep: 0.8
   runSpeedThreshold: 3.4
   sprintSpeedThreshold: 5.5
   jumpUpVelocity: 1.2
