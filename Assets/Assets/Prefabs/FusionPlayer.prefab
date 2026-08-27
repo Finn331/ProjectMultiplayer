@@ -1437,9 +1437,9 @@ MonoBehaviour:
   sprintClips: []
   jumpUpClips: []
   jumpDownClips: []
-  walkStepLength: 0.75
-  runStepLength: 1.5
-  sprintStepLength: 1.75
+  walkStepLength: 1.4
+  runStepLength: 2.2
+  sprintStepLength: 2.8
   minStepInterval: 0.30
   maxStepInterval: 0.7
   localVolume: 0.7

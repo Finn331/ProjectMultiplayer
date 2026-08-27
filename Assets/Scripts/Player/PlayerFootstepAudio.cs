@@ -15,30 +15,25 @@ using UnityEngine;
 ///   `IsGrounded` (lebih reliable dari raycast di terrain uneven) dengan fallback
 ///   ke `controller.isGrounded`. Tidak bergantung pada nama state animasi.
 ///   Berlaku konsisten untuk jalan pelan maupun lari.
-/// - V4 (sekarang): RAYCAST FOOT-DOWN detection sebagai primary — bunyi langkah
-///   SAAT kaki (raycast bawah CharacterController) benar-benar menyentuh tanah,
-///   bukan pakai timer. Ini sinkron dengan animasi kaki (setiap foot-down = 1 step).
-///   Fallback: distance-based timer (`stepLength / speed`) jika raycast dimatikan.
-///   Default step length pakai ukuran langkah manusia realistis (walk 0.75m,
-///   run 1.5m, sprint 1.75m). Debounce 0.30s = max ~3.3 langkah/detik (cadence
-///   manusia natural, TIDAK terlalu cepat).
+/// - V4 (sekarang): HYBRID STRIDE TIMER + RAYCAST GATE.
+///   Primary = distance-based stride timer (`stepLength / speed`) — natural cadence
+///   manusia (langkah konstan per meter, bukan per detik). Raycast foot-down jadi
+///   GATE opsional (bunyi hanya saat kaki di tanah, TIDAK reset timer → anti-ghost).
+///   Strategi ini menghindari "terlalu cepat" yang terjadi saat raycast dijadikan
+///   trigger utama (kaki menyentuh tanah tiap frame, 2x per cycle).
+///   Default stride: walk 1.4m, run 2.2m, sprint 2.8m → ~2.0-2.7 langkah/detik (natural).
 ///
 /// Desain:
-/// - Raycast foot-down: `CheckFootDown()` dari origin di antara 2 kaki ke bawah.
-///   Trigger jika raycast hit tanah dalam `groundCheckDist` (0.3m, ketat anti-bounce)
-///   + elapsed >= `stepDebounceTime` (0.30s anti-double-trigger).
-/// - Fallback distance-based: `stepInterval = stepLength / horizontalSpeed` di-clamp
-///   ke [minStepInterval, maxStepInterval] supaya natural di semua speed range.
+/// - Stride timer: `stepTimer -= dt`; saat <= 0 → trigger + `stepTimer = stepLength/speed`
+///   (clamp [minStepInterval, maxStepInterval]).
+/// - Raycast gate: `CheckFootDown()` untuk memblokir trigger saat kaki di udara.
 /// - Min-speed threshold 0.8 m/s supaya idle micro-move tidak bunyi.
-/// - Landing dideteksi dari perubahan sign `VerticalVelocity` (negatif) + ground
-///   check, dengan debounce anti-double-trigger.
+/// - Landing dideteksi dari perubahan sign `VerticalVelocity` (negatif) + ground check.
 /// - Jump up dideteksi dari `VerticalVelocity` tiba-tiba positif saat leave-ground.
 /// - Random clip + pitch variation (0.7-1.3) supaya tidak monoton.
 /// - 3D spatial (rolloff) sehingga pemain lain mendengar dari posisi asli.
-/// - Dedicated AudioSource kedua (index 1) agar tidak interferensi dengan audio
-///   senjata (pola Cowsins).
-/// - PlayerSurfaceEffects hook tetap dipanggil via event Footfall untuk jejak
-///   salju (kompatibilitas mundur).
+/// - Dedicated AudioSource kedua (index 1) agar tidak interferensi dengan audio senjata.
+/// - PlayerSurfaceEffects hook tetap dipanggil via event Footfall untuk jejak salju.
 /// </summary>
 [RequireComponent(typeof(FusionPlayerMovement))]
 public class PlayerFootstepAudio : MonoBehaviour
@@ -56,12 +51,12 @@ public class PlayerFootstepAudio : MonoBehaviour
     [SerializeField] private AudioClip[] jumpDownClips;
 
     [Header("Timing")]
-    [Tooltip("Panjang satu langkah dalam meter saat jalan pelan. Standar manusia: 0.7-0.8m.")]
-    [SerializeField, Range(0.3f, 1.5f)] private float walkStepLength = 0.75f;
-    [Tooltip("Panjang satu langkah dalam meter saat lari. Standar manusia: 1.3-1.6m.")]
-    [SerializeField, Range(0.5f, 2.5f)] private float runStepLength = 1.5f;
-    [Tooltip("Panjang satu langkah dalam meter saat sprint. Standar pelari cepat: 1.6-1.9m.")]
-    [SerializeField, Range(0.6f, 3f)] private float sprintStepLength = 1.75f;
+    [Tooltip("Panjang satu langkah dalam meter saat jalan pelan. Standar manusia langkah pendek: 0.7-0.8m. Nilai ini akan diinterpretasikan sebagai stride (2 langkah = 1 stride cycle).")]
+    [SerializeField, Range(0.3f, 3f)] private float walkStepLength = 1.4f;
+    [Tooltip("Panjang satu langkah (stride) dalam meter saat lari. Standar pelari: 1.8-2.2m.")]
+    [SerializeField, Range(0.5f, 4f)] private float runStepLength = 2.2f;
+    [Tooltip("Panjang satu langkah (stride) dalam meter saat sprint. Standar sprinter: 2.5-3.0m.")]
+    [SerializeField, Range(0.6f, 4f)] private float sprintStepLength = 2.8f;
     [Tooltip("Interval minimum antar langkah (anti double-play saat frame hitch).")]
     [SerializeField, Range(0.05f, 0.4f)] private float minStepInterval = 0.30f;
     [Tooltip("Interval maksimum antar langkah (anti jeda terlalu panjang saat jalan super pelan).")]
@@ -89,12 +84,10 @@ public class PlayerFootstepAudio : MonoBehaviour
     [SerializeField] private float landingVelocity = -1.5f;
     [Tooltip("Waktu minimum di udara sebelum landing bisa trigger (anti false-positive).")]
     [SerializeField] private float minAirTimeForLand = 0.08f;
-    [Tooltip("Jarak raycast dari bawah CharacterController ke tanah untuk deteksi foot-down (meter). Lebih kecil = lebih ketat (hanya trigger saat kaki benar-benar di tanah, bukan saat bounce).")]
+    [Tooltip("Jika true: raycast foot-down jadi GATE tambahan supaya bunyi hanya saat kaki di tanah (tidak reset timer).")]
+    [SerializeField] private bool gateStepOnRaycast = true;
+    [Tooltip("Jarak raycast gate (meter). 0.3m = ketat (hanya saat kaki di tanah).")]
     [SerializeField] private float groundCheckDist = 0.3f;
-    [Tooltip("Debounce antar langkah (anti double-trigger saat kaki menyentuh tanah flat). 0.30s = max ~3.3 langkah/detik (cadence manusia natural).")]
-    [SerializeField] private float stepDebounceTime = 0.30f;
-    [Tooltip("Gunakan raycast foot-down detection sebagai primary (lebih akurat dari timer).")]
-    [SerializeField] private bool useRaycastFootDown = true;
 
     [Header("Animator (opsional, untuk ground & velocity parameter)")]
     [SerializeField] private Animator animator;
@@ -129,7 +122,6 @@ public class PlayerFootstepAudio : MonoBehaviour
     private float prevVerticalVelocity;
     private Vector3 lastPosition;
     private bool hasLastPosition;
-    private float lastStepTime;
     private readonly System.Random rng = new System.Random();
 
     /// <summary>
@@ -178,10 +170,7 @@ public class PlayerFootstepAudio : MonoBehaviour
         CacheAnimatorParams();
 
         // stepTimer mulai pada interval menengah supaya langkah pertama tidak terlalu cepat/lambat.
-        stepTimer = minStepInterval;
-
-        // lastStepTime bebas debounce di awal.
-        lastStepTime = -10f;
+        stepTimer = 0.4f;
 
         LoadClipsFromResources();
     }
@@ -254,12 +243,11 @@ public class PlayerFootstepAudio : MonoBehaviour
 
     private void ResetTrackers()
     {
-        stepTimer = 0f;
+        stepTimer = 0.4f;
         airTime = 0f;
         wasGrounded = true;
         prevVerticalVelocity = 0f;
         hasLastPosition = false;
-        lastStepTime = -10f; // bebas debounce di awal
     }
 
     // ------------------------------------------------------------------
@@ -362,7 +350,7 @@ public class PlayerFootstepAudio : MonoBehaviour
                 PlayRandom(jumpDownClips, BaseVolume() * jumpVolumeScale);
                 if (debugLogSteps) Debug.Log($"[Footstep] LAND (vY={prevVerticalVelocity:F2} airTime={airTime:F2})");
                 // Reset separuh interval agar langkah pertama setelah landing tidak kelamaan.
-                stepTimer = minStepInterval;
+                stepTimer = 0.4f;
             }
             airTime = 0f;
         }
@@ -396,37 +384,24 @@ public class PlayerFootstepAudio : MonoBehaviour
         else if (hSpeed >= runSpeedThreshold) { set = runClips; setName = "run"; }
         else { set = walkClips; setName = "walk"; }
 
-        bool stepped = false;
+        // === STRIDE TIMER (primary): bunyi tiap stepLength meter berjalan ===
+        // Ini natural karena langkah manusia konstan per meter, bukan per detik.
+        float stepLength = (hSpeed >= sprintSpeedThreshold) ? sprintStepLength
+                          : (hSpeed >= runSpeedThreshold) ? runStepLength : walkStepLength;
+        float interval = Mathf.Clamp(stepLength / hSpeed, minStepInterval, maxStepInterval);
+        stepTimer -= Time.deltaTime;
+        bool timerReady = (stepTimer <= 0f);
 
-        if (useRaycastFootDown)
-        {
-            // RAYCAST FOOT-DOWN: bunyi saat kaki (raycast bawah) benar-benar menyentuh tanah.
-            // Ini sinkron dengan animasi kaki (bukan timer), sehingga cocok dengan visual langkah.
-            if (CheckFootDown() && (Time.time - lastStepTime) >= stepDebounceTime)
-            {
-                stepped = true;
-            }
-        }
-        else
-        {
-            // FALLBACK: distance-based timer (natural rhythm jika animator tidak punya foot keyframe).
-            float stepLength = (hSpeed >= sprintSpeedThreshold) ? sprintStepLength
-                              : (hSpeed >= runSpeedThreshold) ? runStepLength : walkStepLength;
-            float interval = Mathf.Clamp(stepLength / hSpeed, minStepInterval, maxStepInterval);
-            stepTimer -= Time.deltaTime;
-            if (stepTimer <= 0f)
-            {
-                stepTimer = interval;
-                stepped = true;
-            }
-        }
+        // === RAYCAST GATE (optional): bunyi hanya saat kaki benar-benar di tanah ===
+        // TIDAK reset timer — hanya memblokir trigger saat kaki di udara (anti ghost step).
+        bool raycastOk = gateStepOnRaycast ? CheckFootDown() : true;
 
-        if (stepped)
+        if (timerReady && raycastOk)
         {
-            lastStepTime = Time.time;
+            stepTimer = interval;
             PlayRandom(set, BaseVolume());
             Footfall?.Invoke((int)surface, hSpeed);
-            if (debugLogSteps) Debug.Log($"[Footstep] STEP {setName} surface={SurfaceNames[(int)surface]} hSpeed={hSpeed:F1} raycast={useRaycastFootDown}");
+            if (debugLogSteps) Debug.Log($"[Footstep] STEP {setName} surface={SurfaceNames[(int)surface]} hSpeed={hSpeed:F1} interval={interval:F2}s");
         }
     }
 
