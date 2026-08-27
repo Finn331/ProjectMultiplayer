@@ -401,6 +401,10 @@ MonoBehaviour:
   movementController: {fileID: 8542162098600954690}
   injuredAnimationController: {fileID: 9217926100670740843}
   godMode: 0
+  hungerDecayMultiplier: 1
+  thirstDecayMultiplier: 1
+  warmthDecayMultiplier: 1
+  fallDamageMultiplier: 1
 --- !u!95 &1638545557662441806
 Animator:
   serializedVersion: 5
@@ -803,6 +807,7 @@ MonoBehaviour:
   terrainTreeAssistDistance: 2.25
   terrainTreeAssistForwardDot: 0.15
   treeDamagePerHit: 1
+  animalDamagePerHit: 25
   playerDamagePerHit: 10
   heavySwingStateName: Standing Melee Attack Downward
   heavySwingTriggerName: HeavyWeaponSwing
@@ -956,6 +961,8 @@ MonoBehaviour:
     type: 3}
   cookedChickenDropPrefab: {fileID: 6494479680293001691, guid: ceab7f70c6ea6de48bc726375c3a5cd9,
     type: 3}
+  rawMeatDropPrefab: {fileID: 0}
+  cookedMeatDropPrefab: {fileID: 0}
   rawFishDropPrefab: {fileID: 5211742341678424403, guid: dd0a10b30d4f0ec4085865838454ff0b,
     type: 3}
   cookedFishDropPrefab: {fileID: 6339178896466320526, guid: 65b759abfe2f81141be4cd9444886116,
@@ -1430,28 +1437,26 @@ MonoBehaviour:
   sprintClips: []
   jumpUpClips: []
   jumpDownClips: []
-  walkStepInterval: 0.52
-  runStepInterval: 0.36
-  sprintStepInterval: 0.28
-  localVolume: 0.35
+  walkStepLength: 0.75
+  runStepLength: 1.5
+  sprintStepLength: 1.75
+  minStepInterval: 0.14
+  maxStepInterval: 0.7
+  localVolume: 0.7
   remoteVolume: 0.9
   jumpVolumeScale: 1.15
-  pitchMin: 0.92
-  pitchMax: 1.08
-  animator: {fileID: 0}
-  walkStateName: Walk
-  runStateName: Run
-  jumpStartStateName: JumpStart
-  landStateName: Land
-  syncedMinSpeed: 0.3
-  minSpeedToStep: 0.6
+  pitchMin: 0.7
+  pitchMax: 1.3
+  minSpeedToStep: 0.3
   runSpeedThreshold: 3.4
   sprintSpeedThreshold: 5.5
-  groundMask:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  groundCheckExtra: 0.3
-  freeFallVelocity: -6
+  jumpUpVelocity: 1.2
+  landingVelocity: -1.5
+  minAirTimeForLand: 0.08
+  animator: {fileID: 0}
+  isGroundedParam: IsGrounded
+  verticalVelocityParam: VerticalVelocity
+  speedParam: Speed
   audioSource: {fileID: 2993861514588934046}
   spatialMinDistance: 2.5
   spatialMaxDistance: 22
@@ -1468,7 +1473,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fdbf2df2251c1cf4d8ba7280f126121e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  footstepAudio: {fileID: 0}
+  footstepAudio: {fileID: 7768689424264221136}
   controller: {fileID: 0}
   raycastOriginHeight: 1.5
   raycastMaxDistance: 4
@@ -1483,6 +1488,12 @@ MonoBehaviour:
   - Snow
   iceTagNames:
   - Ice
+  grassTagNames:
+  - Grass
+  metalTagNames:
+  - Metal
+  mudTagNames:
+  - Mud
   snowLayerNames:
   - Snow
   woodLayerNames:
@@ -1492,8 +1503,19 @@ MonoBehaviour:
   - Ground
   iceLayerNames:
   - Ice
+  grassLayerNames:
+  - Grass
+  metalLayerNames:
+  - Metal
+  - Iron
+  - Steel
+  mudLayerNames:
+  - Mud
   iceMaterialKeyword: ice
   snowMaterialKeyword: snow
+  grassMaterialKeyword: grass
+  metalMaterialKeyword: metal
+  mudMaterialKeyword: mud
 --- !u!114 &4289780020064991489
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1539,7 +1561,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   surfaceDetector: {fileID: 0}
-  footstepAudio: {fileID: 0}
+  footstepAudio: {fileID: 7768689424264221136}
   movement: {fileID: 0}
   snowSpeedMultiplier: 0.72
   iceSpeedMultiplier: 1.06

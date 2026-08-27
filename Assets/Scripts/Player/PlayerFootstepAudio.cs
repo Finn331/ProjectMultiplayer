@@ -1,29 +1,44 @@
 using Fusion;
-using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
 /// Footstep SFX untuk player. Non-networked: tiap client memutar audio
-/// secara lokal berdasarkan state animasi lokomosi player.
+/// secara lokal berdasarkan state player.
 ///
-/// - SYNC ANIMASI (utama): langkah dipicu dari fase normalizedTime state
-///   Walk/Run di Animator (2 titik kontak kaki per siklus), sehingga suara
-///   selalu pas dengan kaki yang menginjak — jalan maupun lari, looping terus.
-/// - Pemilihan clip set mengikuti STATE animasi: Walk -> walkClips,
-///   Run -> runClips (run juga dipakai untuk sprint karena controller ini
-///   hanya punya state Walk & Run).
-/// - FALLBACK: jika Animator tidak ditemukan / tidak sedang di state lokomosi
-///   yang dikenali, dipakai timer berbasis kecepatan aktual (dengan stabilizer
-///   grounding anti-flicker) supaya footstep tetap bunyi.
-/// - Jump up/down kini ikut state animasi (masuk JumpStart / masuk Land),
-///   bukan lagi heuristik velocity.
-/// - Random clip + pitch variation supaya tidak monoton.
-/// - 3D spatial (rolloff) sehingga pemain lain mendengar langkah dari posisi aslinya.
+/// CATATAN EVOLUSI:
+/// - V1: timer + grounding raycast kompleks (sUMBER flicker).
+/// - V2: tambah anim-sync (normalizedTime footfall) ... TAPI animator Carlo
+///   ternyata hanya punya state Idle/Run/Fall (TIDAK ada Walk, JumpStart, Land),
+///   sehingga jalur anim-sync HANYA aktif saat lari dan tidak pernah saat jalan
+///   pelan. Jalan pelan selalu masuk fallback timer yang punya grounding flicker.
+/// - V3: PURE timer-based (pola Cowsins) + grounding pakai parameter Animator
+///   `IsGrounded` (lebih reliable dari raycast di terrain uneven) dengan fallback
+///   ke `controller.isGrounded`. Tidak bergantung pada nama state animasi.
+///   Berlaku konsisten untuk jalan pelan maupun lari.
+/// - V4 (sekarang): DISTANCE-BASED step trigger — `interval = stepLength / speed`.
+///   Natural karena langkah manusia konstan per meter, bukan per detik.
+///   Sebelumnya time-based (`dt * speed/15` + reset 0.5s) terlalu lambat di speed
+///   rendah dan terlalu cepat di speed tinggi. Default step length pakai ukuran
+///   langkah manusia realistis (walk 0.75m, run 1.5m, sprint 1.75m).
+///
+/// Desain:
+/// - Distance-based: `stepInterval = stepLength / horizontalSpeed`, di-clamp ke
+///   [minStepInterval, maxStepInterval] supaya natural di semua speed range.
+/// - Min-speed threshold rendah (0.3 m/s) supaya jalan pelan tetap bunyi.
+/// - Landing dideteksi dari perubahan sign `VerticalVelocity` (negatif) + ground
+///   check, dengan debounce anti-double-trigger.
+/// - Jump up dideteksi dari `VerticalVelocity` tiba-tiba positif saat leave-ground.
+/// - Random clip + pitch variation (0.7-1.3) supaya tidak monoton.
+/// - 3D spatial (rolloff) sehingga pemain lain mendengar dari posisi asli.
+/// - Dedicated AudioSource kedua (index 1) agar tidak interferensi dengan audio
+///   senjata (pola Cowsins).
+/// - PlayerSurfaceEffects hook tetap dipanggil via event Footfall untuk jejak
+///   salju (kompatibilitas mundur).
 /// </summary>
 [RequireComponent(typeof(FusionPlayerMovement))]
 public class PlayerFootstepAudio : MonoBehaviour
 {
-    private enum SurfaceType { Wood = 0, Snow = 1, Ice = 2 }
+    private enum SurfaceType { Wood = 0, Snow = 1, Ice = 2, Grass = 3, Metal = 4, Mud = 5 }
 
     [Header("Surface")]
     [SerializeField] private SurfaceType surface = SurfaceType.Wood;
@@ -35,38 +50,52 @@ public class PlayerFootstepAudio : MonoBehaviour
     [SerializeField] private AudioClip[] jumpUpClips;
     [SerializeField] private AudioClip[] jumpDownClips;
 
-    [Header("Timing Fallback (detik antar langkah, tanpa sync animasi)")]
-    [SerializeField] private float walkStepInterval = 0.4f;   // = panjang siklus HumanM@Walk01 (0.8s) / 2
-    [SerializeField] private float runStepInterval = 0.3f;    // = panjang siklus HumanM@Run01 (0.6s) / 2
-    [SerializeField] private float sprintStepInterval = 0.28f;
+    [Header("Timing")]
+    [Tooltip("Panjang satu langkah dalam meter saat jalan pelan. Standar manusia: 0.7-0.8m.")]
+    [SerializeField, Range(0.3f, 1.5f)] private float walkStepLength = 0.75f;
+    [Tooltip("Panjang satu langkah dalam meter saat lari. Standar manusia: 1.3-1.6m.")]
+    [SerializeField, Range(0.5f, 2.5f)] private float runStepLength = 1.5f;
+    [Tooltip("Panjang satu langkah dalam meter saat sprint. Standar pelari cepat: 1.6-1.9m.")]
+    [SerializeField, Range(0.6f, 3f)] private float sprintStepLength = 1.75f;
+    [Tooltip("Interval minimum antar langkah (anti double-play saat frame hitch).")]
+    [SerializeField, Range(0.05f, 0.4f)] private float minStepInterval = 0.14f;
+    [Tooltip("Interval maksimum antar langkah (anti jeda terlalu panjang saat jalan super pelan).")]
+    [SerializeField, Range(0.4f, 1.5f)] private float maxStepInterval = 0.7f;
 
     [Header("Volume")]
-    [Range(0f, 1f)] public float localVolume = 0.7f;    // volume untuk pemain lokal sendiri
-    [Range(0f, 1f)] public float remoteVolume = 0.9f;   // volume langkah pemain lain
+    [Range(0f, 1f)] public float localVolume = 0.7f;
+    [Range(0f, 1f)] public float remoteVolume = 0.9f;
     [SerializeField] private float jumpVolumeScale = 1.15f;
 
     [Header("Pitch Variation")]
-    [SerializeField] private float pitchMin = 0.92f;
-    [SerializeField] private float pitchMax = 1.08f;
+    [SerializeField] private float pitchMin = 0.7f;
+    [SerializeField] private float pitchMax = 1.3f;
 
-    [Header("Anim Sync")]
-    [SerializeField] private Animator animator; // otomatis GetComponentInChildren jika kosong
-    [SerializeField] private string walkStateName = "Walk";
-    [SerializeField] private string runStateName = "Run";
-    [SerializeField] private string jumpStartStateName = "JumpStart";
-    [SerializeField] private string landStateName = "Land";
-    [Tooltip("Kecepatan horizontal minimum agar langkah tersync tetapi dibunyikan.")]
-    [SerializeField] private float syncedMinSpeed = 0.3f;
+    [Header("Detection")]
+    [Tooltip("Kecepatan horizontal minimum untuk bunyi langkah (m/s). 0.3 = jalan pelan.")]
+    [SerializeField] private float minSpeedToStep = 0.3f;
+    [Tooltip(">= ini = run clip.")]
+    [SerializeField] private float runSpeedThreshold = 3.4f;
+    [Tooltip(">= ini = sprint clip.")]
+    [SerializeField] private float sprintSpeedThreshold = 5.5f;
+    [Tooltip("Vertical velocity minimum (positif) untuk trigger jump up.")]
+    [SerializeField] private float jumpUpVelocity = 1.2f;
+    [Tooltip("Vertical velocity minimum (negatif) untuk trigger landing.")]
+    [SerializeField] private float landingVelocity = -1.5f;
+    [Tooltip("Waktu minimum di udara sebelum landing bisa trigger (anti false-positive).")]
+    [SerializeField] private float minAirTimeForLand = 0.08f;
+    [Tooltip("Jarak raycast dari bawah CharacterController ke tanah untuk deteksi foot-down (meter). Lebih besar = lebih toleran saat lari cepat (bouncing).")]
+    [SerializeField] private float groundCheckDist = 0.5f;
+    [Tooltip("Debounce antar langkah (anti double-trigger saat kaki menyentuh tanah flat). Di-scale oleh speed supaya sprint tidak terlalu sering.")]
+    [SerializeField] private float stepDebounceTime = 0.15f;
+    [Tooltip("Gunakan raycast foot-down detection sebagai primary (lebih akurat dari timer).")]
+    [SerializeField] private bool useRaycastFootDown = true;
 
-    [Header("Detection (fallback timer)")]
-    [SerializeField] private float minSpeedToStep = 0.6f;   // kecepatan horizontal minimum dianggap berjalan
-    [SerializeField] private float runSpeedThreshold = 3.4f; // >= ini = run
-    [SerializeField] private float sprintSpeedThreshold = 5.5f; // >= ini = sprint
-
-    [Header("Grounding Stabilizer (fallback timer, anti flicker di terrain)")]
-    [SerializeField] private LayerMask groundMask = ~0;
-    [SerializeField] private float groundCheckExtra = 0.3f;
-    [SerializeField] private float freeFallVelocity = -6f;
+    [Header("Animator (opsional, untuk ground & velocity parameter)")]
+    [SerializeField] private Animator animator;
+    [SerializeField] private string isGroundedParam = "IsGrounded";
+    [SerializeField] private string verticalVelocityParam = "VerticalVelocity";
+    [SerializeField] private string speedParam = "Speed";
 
     [Header("AudioSource")]
     [SerializeField] private AudioSource audioSource;
@@ -77,36 +106,32 @@ public class PlayerFootstepAudio : MonoBehaviour
     [SerializeField] private bool debugLogSteps = false;
 
     private const string ResourceRoot = "Audio/Footsteps/";
-    private static readonly string[] SurfaceNames = { "wood", "snow", "ice" };
+    private static readonly string[] SurfaceNames = { "wood", "snow", "ice", "grass", "metal", "mud" };
 
     private FusionPlayerMovement movement;
     private CharacterController controller;
-    private int walkStateHash;
-    private int runStateHash;
-    private int jumpStartStateHash;
-    private int landStateHash;
+    private int isGroundedHash;
+    private int verticalVelocityHash;
+    private int speedHash;
+    private bool hasIsGroundedParam;
+    private bool hasVerticalVelocityParam;
+    private bool hasSpeedParam;
 
-    // Anim-sync tracking
-    private int prevAnimStateHash;
-    private bool hasPrevAnimState;
-    private int prevFootfallIndex;   // indeks langkah = floor(normalizedTime * 2)
-    private bool hasPrevFootfall;
-
-    // Fallback timer tracking
-    private bool wasStableGrounded = true;
-    private float airTime;
+    // Timer & state
     private float stepTimer;
+    private float airTime;
+    private bool wasGrounded = true;
+    private float prevVerticalVelocity;
     private Vector3 lastPosition;
     private bool hasLastPosition;
+    private float lastStepTime;
     private readonly System.Random rng = new System.Random();
 
     /// <summary>
-    /// Dipicu tiap langkah (jalur sync animasi maupun timer fallback).
-    /// Argumen: surface ID saat ini (0=wood,1=snow,2=ice) dan kecepatan horizontal (m/s).
+    /// Dipicu tiap langkah. Argumen: surface ID (0..5) dan kecepatan horizontal (m/s).
     /// Dipakai PlayerSurfaceEffects untuk jejak kaki salju.
     /// </summary>
     public event System.Action<int, float> Footfall;
-
     private void Awake()
     {
         movement = GetComponent<FusionPlayerMovement>();
@@ -114,10 +139,22 @@ public class PlayerFootstepAudio : MonoBehaviour
 
         if (audioSource == null)
         {
-            audioSource = GetComponent<AudioSource>();
-            if (audioSource == null)
+            // Pola Cowsins: dedicated AudioSource kedua untuk footstep agar tidak
+            // mengganggu audio senjata (yang biasanya pakai AudioSource pertama).
+            var existingSources = GetComponents<AudioSource>();
+            if (existingSources.Length > 1)
+            {
+                audioSource = existingSources[1];
+            }
+            else
             {
                 audioSource = gameObject.AddComponent<AudioSource>();
+                var mainSource = existingSources.Length > 0 ? existingSources[0] : null;
+                if (mainSource != null)
+                {
+                    audioSource.spatialBlend = mainSource.spatialBlend;
+                    audioSource.outputAudioMixerGroup = mainSource.outputAudioMixerGroup;
+                }
             }
         }
 
@@ -133,18 +170,42 @@ public class PlayerFootstepAudio : MonoBehaviour
             animator = GetComponentInChildren<Animator>();
         }
 
-        walkStateHash = Animator.StringToHash(walkStateName);
-        runStateHash = Animator.StringToHash(runStateName);
-        jumpStartStateHash = Animator.StringToHash(jumpStartStateName);
-        landStateHash = Animator.StringToHash(landStateName);
+        CacheAnimatorParams();
+
+        // stepTimer mulai pada interval menengah supaya langkah pertama tidak terlalu cepat/lambat.
+        stepTimer = minStepInterval;
+
+        // lastStepTime bebas debounce di awal.
+        lastStepTime = -10f;
 
         LoadClipsFromResources();
     }
 
-    /// <summary>
-    /// Auto-load clip sets dari Resources sesuai surface yang dipilih,
-    /// hanya untuk set yang belum diisi lewat Inspector.
-    /// </summary>
+    private void CacheAnimatorParams()
+    {
+        if (animator == null)
+        {
+            hasIsGroundedParam = false;
+            hasVerticalVelocityParam = false;
+            hasSpeedParam = false;
+            return;
+        }
+
+        isGroundedHash = Animator.StringToHash(isGroundedParam);
+        verticalVelocityHash = Animator.StringToHash(verticalVelocityParam);
+        speedHash = Animator.StringToHash(speedParam);
+
+        // Cache parameter existence — hindari GetComponent warning tiap frame.
+        var parameters = animator.parameters;
+        for (int i = 0; i < parameters.Length; i++)
+        {
+            if (parameters[i].name == isGroundedParam) hasIsGroundedParam = true;
+            else if (parameters[i].name == verticalVelocityParam) hasVerticalVelocityParam = true;
+            else if (parameters[i].name == speedParam) hasSpeedParam = true;
+        }
+    }
+
+    /// <summary>Auto-load clip sets dari Resources sesuai surface.</summary>
     public void LoadClipsFromResources()
     {
         if (walkClips == null || walkClips.Length == 0) walkClips = LoadSet("walk");
@@ -156,14 +217,12 @@ public class PlayerFootstepAudio : MonoBehaviour
 
     private AudioClip[] LoadSet(string action)
     {
-        // Nama file tidak seragam ("fst_ice_light_jumpdown_001", "fst_light_ice_run_001"),
-        // jadi muat semua sub-asset dalam folder via Resources.LoadAll.
         string path = ResourceRoot + SurfaceNames[(int)surface] + "/" + action;
         AudioClip[] clips = Resources.LoadAll<AudioClip>(path);
         return clips ?? new AudioClip[0];
     }
 
-    /// <summary>Ganti permukaan saat runtime (misalnya nanti ada sistem material terrain).</summary>
+    /// <summary>Ganti permukaan saat runtime (untuk sistem material terrain nanti).</summary>
     public void SetSurface(int newSurface)
     {
         if (surface == (SurfaceType)newSurface) return;
@@ -183,91 +242,72 @@ public class PlayerFootstepAudio : MonoBehaviour
             return;
         }
 
-        // Jalur utama: sinkron dengan fase animasi kaki. EKSKLUSIF — jika Animator
-        // dengan controller ada, JANGAN campur jalur timer (hindari langkah ganda saat
-        // state bertransisi; Idle/udara/memang bukan momen langkah).
-        if (animator != null && animator.runtimeAnimatorController != null)
-        {
-            TryUpdateFromAnimation();
-            return;
-        }
-
-        // Fallback: hanya dipakai bila sama sekali tidak ada Animator/controller.
-        UpdateLegacyTimer();
+        // V3: PURE timer-based. Konsisten untuk semua kondisi (jalan/lari/lompat)
+        // karena TIDAK bergantung pada nama state Animator (Carlo hanya punya Idle/Run/Fall).
+        UpdateFootstepTimer();
     }
 
     private void ResetTrackers()
     {
         stepTimer = 0f;
         airTime = 0f;
-        wasStableGrounded = true;
-        hasPrevFootfall = false;
-        prevFootfallIndex = 0;
-        hasPrevAnimState = false;
+        wasGrounded = true;
+        prevVerticalVelocity = 0f;
+        hasLastPosition = false;
+        lastStepTime = -10f; // bebas debounce di awal
     }
 
     // ------------------------------------------------------------------
-    // SYNC ANIMASI
+    // GROUND & VELOCITY (multi-source, fallback chain)
     // ------------------------------------------------------------------
 
-    private void TryUpdateFromAnimation()
+    /// <summary>True bila player sedang di tanah. Prioritas: controller.isGrounded (fisik real-time)
+    /// > Animator param (bisa lag karena diisi network/Fusion).</summary>
+    private bool IsGrounded()
     {
-        AnimatorStateInfo st = animator.GetCurrentAnimatorStateInfo(0);
-        int hash = st.shortNameHash;
-        float normalizedTime = st.normalizedTime;
-
-        bool isWalk = hash == walkStateHash;
-        bool isRun = hash == runStateHash;
-
-        if (!isWalk && !isRun && hash != jumpStartStateHash && hash != landStateHash)
+        if (controller != null)
         {
-            // State lain (Idle, attack, dsb.) — bukan momen langkah berjalan.
-            hasPrevAnimState = false;
-            hasPrevFootfall = false;
-            return;
+            return controller.isGrounded;
         }
-
-        // Deteksi transisi antar state untuk event sekali-jalan.
-        if (hasPrevAnimState && hash != prevAnimStateHash)
+        if (hasIsGroundedParam && animator != null)
         {
-            if (hash == jumpStartStateHash)
-            {
-                PlayRandom(jumpUpClips, BaseVolume());
-                if (debugLogSteps) Debug.Log("[Footstep] jump up (state)");
-            }
-            else if (hash == landStateHash)
-            {
-                PlayRandom(jumpDownClips, BaseVolume() * jumpVolumeScale);
-                if (debugLogSteps) Debug.Log("[Footstep] landed (state)");
-            }
+            return animator.GetBool(isGroundedHash);
         }
-        hasPrevAnimState = true;
-        prevAnimStateHash = hash;
+        return false;
+    }
 
-        if (!isWalk && !isRun)
+    /// <summary>Vertical velocity (m/s). Prioritas: controller.velocity.y (fisik real-time)
+    /// > Animator param (bisa lag karena diisi network/Fusion).</summary>
+    private float GetVerticalVelocity()
+    {
+        if (controller != null)
         {
-            // Di udara / mendarat: tidak ada langkah berjalan.
-            hasPrevFootfall = false;
-            return;
+            return controller.velocity.y;
         }
-
-        // Kecepatan aktual (position delta) untuk filter slide.
-        float hSpeed = MeasureHSpeed();
-
-        // Indeks langkah: 2 langkah per siklus animasi. floor(normalizedTime*2)
-        // naik monoton selama state berjalan — kebal frame rate rendah/hitch
-        // (beda dengan cek penyeberangan titik fase yang bisa melompati kontak).
-        int footfallIndex = Mathf.FloorToInt(normalizedTime * 2f);
-
-        if (hasPrevFootfall && hSpeed >= syncedMinSpeed && footfallIndex != prevFootfallIndex)
+        if (hasVerticalVelocityParam && animator != null)
         {
-            PlayRandom(isRun ? runClips : walkClips, BaseVolume());
-            Footfall?.Invoke((int)surface, hSpeed);
-            if (debugLogSteps) Debug.Log("[Footstep] step state=" + (isRun ? runStateName : walkStateName)
-                + " nT=" + normalizedTime.ToString("F2") + " hSpeed=" + hSpeed.ToString("F1"));
+            return animator.GetFloat(verticalVelocityHash);
         }
-        prevFootfallIndex = footfallIndex;
-        hasPrevFootfall = true;
+        return 0f;
+    }
+
+    /// <summary>Speed (m/s). Prioritas: controller.velocity aktual > Animator param > position delta.
+    /// controller.velocity dipakai sebagai primary karena merefleksikan gerakan fisik real-time
+    /// (tanpa lag animator param yang diisi network/Fusion).</summary>
+    private float GetSpeed()
+    {
+        if (controller != null)
+        {
+            Vector3 v = controller.velocity;
+            v.y = 0f;
+            float mag = v.magnitude;
+            if (mag > 0.001f) return mag;
+        }
+        if (hasSpeedParam && animator != null)
+        {
+            return animator.GetFloat(speedHash);
+        }
+        return MeasureHSpeed();
     }
 
     /// <summary>Kecepatan horizontal aktual dari position delta (dengan hitch guard).</summary>
@@ -300,109 +340,119 @@ public class PlayerFootstepAudio : MonoBehaviour
     }
 
     // ------------------------------------------------------------------
-    // FALLBACK TIMER (dipakai jika Animator tidak ada / state tak dikenali)
+    // FOOTSTEP TIMER (pola Cowsins, robust untuk semua kondisi)
     // ------------------------------------------------------------------
 
-    private void UpdateLegacyTimer()
+    private void UpdateFootstepTimer()
     {
-        float hSpeed = MeasureHSpeed();
-
-        // Grounding stabil: isGrounded sering flicker false beberapa frame di lereng/
-        // bump terrain (Move() hanya dipanggil per Fusion tick). Anggap grounded selama
-        // ada tanah dekat di bawah kaki dan kita tidak sedang naik tinggi / jatuh bebas.
-        bool rawGrounded = controller.isGrounded;
-        bool stableGrounded = rawGrounded
-            || (controller.velocity.y < 1f && controller.velocity.y > freeFallVelocity && HasGroundBelow());
-
-        float airBefore = airTime;
-        if (stableGrounded)
+        bool grounded = IsGrounded();
+        float verticalVelocity = GetVerticalVelocity();
+        float hSpeed = GetSpeed();
+        // === Jump / Landing detection (parameter-based, tidak bergantung state name) ===
+        if (grounded)
         {
+            // Landing: baru mendarat setelah sebelumnya di udara cukup lama & velocity turun.
+            if (!wasGrounded && airTime >= minAirTimeForLand && prevVerticalVelocity <= landingVelocity)
+            {
+                PlayRandom(jumpDownClips, BaseVolume() * jumpVolumeScale);
+                if (debugLogSteps) Debug.Log($"[Footstep] LAND (vY={prevVerticalVelocity:F2} airTime={airTime:F2})");
+                // Reset separuh interval agar langkah pertama setelah landing tidak kelamaan.
+                stepTimer = minStepInterval;
+            }
             airTime = 0f;
         }
         else
         {
             airTime += Time.deltaTime;
-        }
 
-        // Takeoff / landing versi timer (fallback saja; jalur utama pakai state animasi).
-        if (wasStableGrounded && !stableGrounded && airTime >= 0.12f && controller.velocity.y > 0.5f)
-        {
-            PlayRandom(jumpUpClips, BaseVolume());
-        }
-        else if (!wasStableGrounded && stableGrounded && airBefore >= 0.12f && controller.velocity.y < -0.1f)
-        {
-            PlayRandom(jumpDownClips, BaseVolume() * jumpVolumeScale);
-            stepTimer = 0f;
-        }
-        wasStableGrounded = stableGrounded;
-
-        if (!stableGrounded || hSpeed < minSpeedToStep)
-        {
-            if (!stableGrounded)
+            // Jump up: tinggalkan tanah dengan velocity positif.
+            if (wasGrounded && airTime < 0.05f && verticalVelocity >= jumpUpVelocity)
             {
-                stepTimer = Mathf.Min(stepTimer, 0.05f);
+                PlayRandom(jumpUpClips, BaseVolume());
+                if (debugLogSteps) Debug.Log($"[Footstep] JUMP UP (vY={verticalVelocity:F2})");
             }
+        }
+
+        wasGrounded = grounded;
+        prevVerticalVelocity = verticalVelocity;
+
+        // === Footstep detection ===
+        if (!grounded || hSpeed < minSpeedToStep)
+        {
+            // Di udara atau diam: reset timer (anti false-trigger saat mendarat).
+            stepTimer = minStepInterval;
             return;
         }
 
+        // Pilih clip set by speed bracket.
         AudioClip[] set;
-        float interval;
-        if (hSpeed >= sprintSpeedThreshold)
+        string setName;
+        if (hSpeed >= sprintSpeedThreshold) { set = sprintClips; setName = "sprint"; }
+        else if (hSpeed >= runSpeedThreshold) { set = runClips; setName = "run"; }
+        else { set = walkClips; setName = "walk"; }
+
+        bool stepped = false;
+
+        if (useRaycastFootDown)
         {
-            set = sprintClips; interval = sprintStepInterval;
-        }
-        else if (hSpeed >= runSpeedThreshold)
-        {
-            set = runClips; interval = runStepInterval;
+            // RAYCAST FOOT-DOWN: bunyi saat kaki (raycast bawah) benar-benar menyentuh tanah.
+            // Ini sinkron dengan animasi kaki (bukan timer), sehingga cocok dengan visual langkah.
+            if (CheckFootDown() && (Time.time - lastStepTime) >= stepDebounceTime)
+            {
+                stepped = true;
+            }
         }
         else
         {
-            set = walkClips; interval = walkStepInterval;
+            // FALLBACK: distance-based timer (natural rhythm jika animator tidak punya foot keyframe).
+            float stepLength = (hSpeed >= sprintSpeedThreshold) ? sprintStepLength
+                              : (hSpeed >= runSpeedThreshold) ? runStepLength : walkStepLength;
+            float interval = Mathf.Clamp(stepLength / hSpeed, minStepInterval, maxStepInterval);
+            stepTimer -= Time.deltaTime;
+            if (stepTimer <= 0f)
+            {
+                stepTimer = interval;
+                stepped = true;
+            }
         }
 
-        stepTimer += Time.deltaTime;
-        if (stepTimer >= interval)
+        if (stepped)
         {
-            stepTimer = 0f;
+            lastStepTime = Time.time;
             PlayRandom(set, BaseVolume());
             Footfall?.Invoke((int)surface, hSpeed);
-            if (debugLogSteps) Debug.Log("[Footstep] step (timer) surface=" + SurfaceNames[(int)surface]
-                + " hSpeed=" + hSpeed.ToString("F1"));
+            if (debugLogSteps) Debug.Log($"[Footstep] STEP {setName} surface={SurfaceNames[(int)surface]} hSpeed={hSpeed:F1} raycast={useRaycastFootDown}");
         }
     }
 
-    /// <summary>
-    /// Cek ada tanah dekat di bawah telapak kaki (fallback saat isGrounded flicker).
-    /// Raycast ke bawah dari sekitar pinggang, abaikan collider milik player sendiri.
-    /// </summary>
-    private bool HasGroundBelow()
+    /// <summary>Raycast dari bawah CharacterController ke tanah. True bila kaki menyentuh ground.</summary>
+    private bool CheckFootDown()
     {
         if (controller == null) return false;
-
-        float probeTop = Mathf.Max(controller.height * 0.9f, 0.8f);
-        Vector3 origin = transform.position + Vector3.up * probeTop;
-        float maxDistance = probeTop + groundCheckExtra;
-
-        RaycastHit[] hits = Physics.RaycastAll(origin, Vector3.down, maxDistance, groundMask, QueryTriggerInteraction.Ignore);
-        for (int i = 0; i < hits.Length; i++)
+        // Origin: titik di antara 2 kaki (bawah controller, offset sedikit ke dalam radius).
+        Vector3 origin = transform.position + Vector3.down * (controller.height * 0.5f - controller.radius * 0.5f);
+        float dist = groundCheckDist + controller.skinWidth;
+        RaycastHit hit;
+        if (Physics.Raycast(origin, Vector3.down, out hit, dist, ~0, QueryTriggerInteraction.Ignore))
         {
-            Collider hitCollider = hits[i].collider;
-            if (hitCollider == null) continue;
-            if (hitCollider.transform == transform || hitCollider.transform.IsChildOf(transform)) continue;
-            // Tanah harus di bawah telapak (dekat ujung ray), bukan dinding di sebelah kaki.
-            if (hits[i].distance >= probeTop - 0.15f)
-            {
-                return true;
-            }
+            // Hanya trigger jika benar-benar tanah (bukan langit/plafon).
+            return hit.distance <= groundCheckDist;
         }
         return false;
     }
 
     private float BaseVolume()
     {
-        // Local player = punya State Authority atas object-nya sendiri (Shared Mode)
+        // Local player = punya State Authority atas object-nya sendiri (Shared Mode).
+        // Guard: NetworkObject bisa belum Spawned (mis. di Editor test tanpa Fusion runner)
+        // → anggap local player (pakai localVolume) supaya tidak throw.
         NetworkObject nob = GetComponent<NetworkObject>();
-        bool isLocal = nob != null && nob.HasStateAuthority;
+        bool isLocal = true;
+        if (nob != null)
+        {
+            try { isLocal = nob.HasStateAuthority; }
+            catch (System.Exception) { isLocal = true; }
+        }
         return isLocal ? localVolume : remoteVolume;
     }
 
