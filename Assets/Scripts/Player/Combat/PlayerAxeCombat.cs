@@ -51,6 +51,7 @@ public class PlayerAxeCombat : MonoBehaviour
 
     [Header("Damage")]
     [SerializeField] private float treeDamagePerHit = 1f;
+    [SerializeField] private float animalDamagePerHit = 25f;
     [SerializeField] private float playerDamagePerHit = 10f;
 
     [Header("Animation")]
@@ -351,7 +352,7 @@ public class PlayerAxeCombat : MonoBehaviour
         AnimalAI animal = hit.collider.GetComponentInParent<AnimalAI>();
         if (animal != null && !animal.IsDead)
         {
-            float appliedAnimalDamage = Mathf.Max(0f, this.treeDamagePerHit * this.runtimeTreeDamageMultiplier);
+            float appliedAnimalDamage = Mathf.Max(0f, this.animalDamagePerHit * this.runtimeTreeDamageMultiplier);
             animal.TakeDamage(appliedAnimalDamage);
             return;
         }

@@ -33,20 +33,29 @@ public class PlayerSurfaceDetector : MonoBehaviour
     [SerializeField] private string[] woodTagNames = { "Wood" };
     [SerializeField] private string[] snowTagNames = { "Snow" };
     [SerializeField] private string[] iceTagNames = { "Ice" };
+    [SerializeField] private string[] grassTagNames = { "Grass" };
+    [SerializeField] private string[] metalTagNames = { "Metal" };
+    [SerializeField] private string[] mudTagNames = { "Mud" };
 
-    [Header("Mapping: nama Terrain Layer -> surface ID (0=wood,1=snow,2=ice)")]
+    [Header("Mapping: nama Terrain Layer -> surface ID (0=wood,1=snow,2=ice,3=grass,4=metal,5=mud)")]
     [SerializeField] private string[] snowLayerNames = { "Snow" };
-    [SerializeField] private string[] woodLayerNames = { "Rock", "Grass", "Dirt", "Ground" };
+    [SerializeField] private string[] woodLayerNames = { "Rock", "Dirt", "Ground" };
     [SerializeField] private string[] iceLayerNames = { "Ice" };
+    [SerializeField] private string[] grassLayerNames = { "Grass" };
+    [SerializeField] private string[] metalLayerNames = { "Metal", "Iron", "Steel" };
+    [SerializeField] private string[] mudLayerNames = { "Mud" };
 
     [Header("Mapping non-terrain: substring nama material -> surface")]
     [SerializeField] private string iceMaterialKeyword = "ice";
     [SerializeField] private string snowMaterialKeyword = "snow";
+    [SerializeField] private string grassMaterialKeyword = "grass";
+    [SerializeField] private string metalMaterialKeyword = "metal";
+    [SerializeField] private string mudMaterialKeyword = "mud";
 
     private float nextDetectTime;
     private int lastSurface = -1;
 
-    /// <summary>ID permukaan aktif terakhir (0=wood, 1=snow, 2=ice; -1 = belum terdeteksi).</summary>
+    /// <summary>ID permukaan aktif terakhir (0=wood,1=snow,2=ice,3=grass,4=metal,5=mud; -1=belum terdeteksi).</summary>
     public int CurrentSurface => lastSurface;
 
     /// <summary>Dipanggil saat permukaan berganti (argumen = ID surface baru).</summary>
@@ -124,7 +133,8 @@ public class PlayerSurfaceDetector : MonoBehaviour
     {
         while (t != null)
         {
-            if (ContainsAny(t.tag, woodTagNames) || ContainsAny(t.tag, snowTagNames) || ContainsAny(t.tag, iceTagNames)) return true;
+            if (ContainsAny(t.tag, woodTagNames) || ContainsAny(t.tag, snowTagNames) || ContainsAny(t.tag, iceTagNames)
+                || ContainsAny(t.tag, grassTagNames) || ContainsAny(t.tag, metalTagNames) || ContainsAny(t.tag, mudTagNames)) return true;
             t = t.parent;
         }
         return false;
@@ -140,6 +150,9 @@ public class PlayerSurfaceDetector : MonoBehaviour
             if (ContainsAny(t.tag, woodTagNames)) return 0;
             if (ContainsAny(t.tag, snowTagNames)) return 1;
             if (ContainsAny(t.tag, iceTagNames)) return 2;
+            if (ContainsAny(t.tag, grassTagNames)) return 3;
+            if (ContainsAny(t.tag, metalTagNames)) return 4;
+            if (ContainsAny(t.tag, mudTagNames)) return 5;
             t = t.parent;
         }
 
@@ -152,6 +165,9 @@ public class PlayerSurfaceDetector : MonoBehaviour
             {
                 if (ContainsAny(layerName, iceLayerNames)) return 2;
                 if (ContainsAny(layerName, snowLayerNames)) return 1;
+                if (ContainsAny(layerName, grassLayerNames)) return 3;
+                if (ContainsAny(layerName, metalLayerNames)) return 4;
+                if (ContainsAny(layerName, mudLayerNames)) return 5;
                 if (ContainsAny(layerName, woodLayerNames)) return 0;
                 return 0; // layer tak dikenal -> default wood
             }
@@ -168,6 +184,9 @@ public class PlayerSurfaceDetector : MonoBehaviour
                 string n = mat.name.ToLowerInvariant();
                 if (n.Contains(iceMaterialKeyword)) return 2;
                 if (!string.IsNullOrEmpty(snowMaterialKeyword) && n.Contains(snowMaterialKeyword)) return 1;
+                if (!string.IsNullOrEmpty(grassMaterialKeyword) && n.Contains(grassMaterialKeyword)) return 3;
+                if (!string.IsNullOrEmpty(metalMaterialKeyword) && n.Contains(metalMaterialKeyword)) return 4;
+                if (!string.IsNullOrEmpty(mudMaterialKeyword) && n.Contains(mudMaterialKeyword)) return 5;
             }
         }
 
@@ -224,6 +243,9 @@ public class PlayerSurfaceDetector : MonoBehaviour
         {
             case 1: return "snow";
             case 2: return "ice";
+            case 3: return "grass";
+            case 4: return "metal";
+            case 5: return "mud";
             default: return "wood";
         }
     }

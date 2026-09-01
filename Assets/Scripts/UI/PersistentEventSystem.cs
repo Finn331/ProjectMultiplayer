@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
+using UnityEngine.InputSystem.UI;
 
 /// <summary>
 /// Keeps the gameplay EventSystem alive across Fusion scene transitions together with the
@@ -61,9 +62,23 @@ public class PersistentEventSystem : MonoBehaviour
             eventSystem = instance.gameObject.AddComponent<EventSystem>();
         }
 
-        if (instance.GetComponent<StandaloneInputModule>() == null)
+        // The project runs with the Input System package (activeInputHandler: 2), so the legacy
+        // StandaloneInputModule reads dead Input.touches / Input.mousePosition and never routes
+        // pointer events to the Floating Joystick / LookArea. Use InputSystemUIInputModule instead,
+        // otherwise the mobile joystick never receives OnDrag and the player cannot move/look.
+        StandaloneInputModule legacy = instance.GetComponent<StandaloneInputModule>();
+        if (legacy != null)
         {
-            instance.gameObject.AddComponent<StandaloneInputModule>();
+            Object.Destroy(legacy);
+        }
+
+        if (instance.GetComponent<InputSystemUIInputModule>() == null)
+        {
+            InputSystemUIInputModule inputModule = instance.gameObject.AddComponent<InputSystemUIInputModule>();
+            if (inputModule != null)
+            {
+                inputModule.AssignDefaultActions();
+            }
         }
     }
 }

@@ -30,7 +30,12 @@ public enum ItemType
     RoofItem,
     DoorItem,
     RawMeat,
-    CookedMeat
+    CookedMeat,
+    // === Senjata tambahan untuk PlayerClassSystem (Hunter) ===
+    // Disimpan di akhir agar tidak menggeser index item existing
+    // (ScriptableObject & SaveData serial pakai index → tambah di akhir = non-breaking).
+    Bow,
+    Spear
 }
 
 public class PickableItem : MonoBehaviour

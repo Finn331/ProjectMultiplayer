@@ -209,6 +209,32 @@ public class PlayerFootstepAudio : MonoBehaviour
         if (jumpDownClips == null || jumpDownClips.Length == 0) jumpDownClips = LoadSet("jumpdown");
     }
 
+    /// <summary>Dipanggil FusionFPSController saat SAS OnJump() fire (off-ground).
+    /// Memaksa play jumpUpClips dengan volume standar dan reset stride agar langkah
+    /// pertama setelah mendarat tidak terlalu cepat/lambat.</summary>
+    public void TriggerJump()
+    {
+        if (audioSource == null) return;
+        PlayRandom(jumpUpClips, BaseVolume());
+        stepTimer = 0.4f;
+        airTime = 0f;
+        wasGrounded = false;
+        if (debugLogSteps) Debug.Log("[Footstep] JUMP (SAS event)");
+    }
+
+    /// <summary>Dipanggil FusionFPSController saat SAS OnLanded() fire (kembali ke ground).
+    /// Memaksa play jumpDownClips dengan volume jump dan reset half-interval.</summary>
+    public void TriggerLand()
+    {
+        if (audioSource == null) return;
+        PlayRandom(jumpDownClips, BaseVolume() * jumpVolumeScale);
+        stepTimer = 0.4f;
+        airTime = 0f;
+        wasGrounded = true;
+        prevVerticalVelocity = 0f;
+        if (debugLogSteps) Debug.Log("[Footstep] LAND (SAS event)");
+    }
+
     private AudioClip[] LoadSet(string action)
     {
         string path = ResourceRoot + SurfaceNames[(int)surface] + "/" + action;

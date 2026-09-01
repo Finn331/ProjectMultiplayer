@@ -53,6 +53,26 @@ public class PlayerSurvivalSystem : MonoBehaviour
 
     public bool IsDead => isDead;
 
+    // ===== Multiplier pasif (di-set oleh PlayerClassSystem saat class applied) =====
+    [Header("Class Multipliers (default 1)")]
+    [SerializeField, Range(0.25f, 1.5f)] private float hungerDecayMultiplier = 1f;
+    [SerializeField, Range(0.25f, 1.5f)] private float thirstDecayMultiplier = 1f;
+    [SerializeField, Range(0.25f, 1.5f)] private float warmthDecayMultiplier = 1f;
+    [SerializeField, Range(0.1f, 1f)] private float fallDamageMultiplier = 1f;
+
+    public float HungerDecayMultiplier => hungerDecayMultiplier;
+    public float ThirstDecayMultiplier => thirstDecayMultiplier;
+    public float WarmthDecayMultiplier => warmthDecayMultiplier;
+    public float FallDamageMultiplier => fallDamageMultiplier;
+
+    public void SetStatMultipliers(float hunger, float thirst, float warmth, float fall)
+    {
+        hungerDecayMultiplier = Mathf.Clamp(hunger, 0.25f, 1.5f);
+        thirstDecayMultiplier = Mathf.Clamp(thirst, 0.25f, 1.5f);
+        warmthDecayMultiplier = Mathf.Clamp(warmth, 0.25f, 1.5f);
+        fallDamageMultiplier = Mathf.Clamp(fall, 0.1f, 1f);
+    }
+
     private float currentHealth;
     private float currentHunger;
     private float currentThirst;
@@ -121,6 +141,13 @@ public class PlayerSurvivalSystem : MonoBehaviour
     public void SetLocalSimulationEnabled(bool enabled)
     {
         localSimulationEnabled = enabled;
+    }
+
+    /// <summary>Dipanggil PlayerClassSystem saat class applied. Ubah maxHealth & re-clamp current.</summary>
+    public void SetMaxHealth(float newMax)
+    {
+        maxHealth = Mathf.Max(1f, newMax);
+        if (currentHealth > maxHealth) currentHealth = maxHealth;
     }
 
     public void ApplyNetworkSnapshot(float healthValue, float hungerValue, float thirstValue)

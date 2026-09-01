@@ -97,3 +97,8 @@ InitTestScene*.unity*
 
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
+
+# Vendor assets (paid, import from Unity Asset Store after fresh clone; versioned patches
+# live in Assets/Editor/UnarmedAnimationMaintainer.cs — run Tools > Fix Unarmed Animation)
+Assets/KINEMATION/
+Assets/Cowsins/

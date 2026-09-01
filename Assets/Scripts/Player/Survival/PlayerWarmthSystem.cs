@@ -43,11 +43,13 @@ public class PlayerWarmthSystem : MonoBehaviour
 
     [Header("Movement Penalty")]
     [SerializeField] private bool applyFreezingPenalty = true;
+#pragma warning disable CS0414 // Field assigned but never used (reserved for planned freeze-penalty feature)
     [SerializeField, Range(0.1f, 1f)] private float freezingSpeedMultiplier = 0.75f;
     [SerializeField, Range(0f, 0.5f)] private float freezingThresholdNormalized = 0.2f; // warmth <= 20% = kedinginan
 
     [Header("Debug")]
     [SerializeField] private bool debugLog = false;
+#pragma warning restore CS0414
 
     public float CurrentWarmth => currentWarmth;
     public float MaxWarmth => maxWarmth;

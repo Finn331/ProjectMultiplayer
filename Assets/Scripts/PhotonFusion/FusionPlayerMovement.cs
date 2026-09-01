@@ -7,14 +7,14 @@ public class FusionPlayerMovement : NetworkBehaviour
     private static readonly System.Collections.Generic.HashSet<int> MissingTransformSyncWarnings = new System.Collections.Generic.HashSet<int>();
 
     [Header("Movement")]
-    [SerializeField] private float moveSpeed = 5f;
-    [SerializeField] private CharacterController controller;
-    [SerializeField] private FloatingJoystick moveJoystick;
+    [SerializeField] protected float moveSpeed = 5f;
+    [SerializeField] protected CharacterController controller;
+    [SerializeField] protected FloatingJoystick moveJoystick;
 
     [Header("Gravity & Jump")]
-    [SerializeField] private bool enableJump = true;
-    [SerializeField] private float gravity = -9.81f;
-    [SerializeField] private float jumpForce = 1.6f;
+    [SerializeField] protected bool enableJump = true;
+    [SerializeField] protected float gravity = -9.81f;
+    [SerializeField] protected float jumpForce = 1.6f;
     [SerializeField] private Button jumpButton;
     [SerializeField] private bool autoBindJumpButton = true;
     [SerializeField] private string jumpButtonNameContains = "jump";
@@ -26,23 +26,30 @@ public class FusionPlayerMovement : NetworkBehaviour
     [SerializeField] private float lookSensitivity = 0.2f;
     [SerializeField] private float maxLookAngle = 80f;
 
+    [Header("Network")]
+    [SerializeField] private bool useNetworkTransform = true;
+
     private float verticalVelocity;
     private float xRotation;
     private float nextJumpButtonSearchTime;
     private bool jumpButtonBound;
     private bool warnedNonSharedMode;
-    private Vector3 animatorPlanarVelocity;
-    private Vector2 animatorMoveInput;
-    private float animatorSpeed;
+    protected Vector3 animatorPlanarVelocity;
+    protected Vector2 animatorMoveInput;
+    protected float animatorSpeed;
 
     // Surface modifier (deep snow slowdown) — diisi PlayerSurfaceEffects.
-    private float surfaceSpeedMultiplier = 1f;
+    // Was private — promoted to protected so FusionFPSController can read it.
+    protected float surfaceSpeedMultiplier = 1f;
 
-    /// <summary>Kalikan kecepatan gerak dari permukaan tanah (1 = normal, <1 = lambat).</summary>
+    /// <summary>Kalikan kecepatan gerak dari permukaan tanah (1 = normal, &lt;1 = lambat).</summary>
     public void SetSurfaceSpeedMultiplier(float multiplier)
     {
         surfaceSpeedMultiplier = Mathf.Clamp(multiplier, 0.2f, 2f);
     }
+
+    /// <summary>Protected accessor for subclasses (FusionFPSController forwards to SAS SpeedMultiplier).</summary>
+    protected float GetSurfaceSpeedMultiplier() => surfaceSpeedMultiplier;
 
     public float MoveSpeed => moveSpeed;
     public Vector3 AnimatorPlanarVelocity => animatorPlanarVelocity;
@@ -148,7 +155,7 @@ public class FusionPlayerMovement : NetworkBehaviour
         verticalVelocity = Mathf.Sqrt(jumpForce * -2f * gravity);
     }
 
-    private void Move()
+    protected virtual void Move()
     {
         if (moveJoystick == null)
         {

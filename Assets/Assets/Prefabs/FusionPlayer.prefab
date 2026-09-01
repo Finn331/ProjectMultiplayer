@@ -217,6 +217,9 @@ GameObject:
   - component: {fileID: 4937394701735701012}
   - component: {fileID: 4289780020064991489}
   - component: {fileID: 8193601595173232817}
+  - component: {fileID: 1239615847827688492}
+  - component: {fileID: 6092511882842444086}
+  - component: {fileID: -1552572176583878383}
   m_Layer: 0
   m_Name: FusionPlayer
   m_TagString: Untagged
@@ -883,6 +886,7 @@ MonoBehaviour:
   - {fileID: 4694464254698259601}
   - {fileID: 8955619082866634284}
   - {fileID: 1952420705053856019}
+  - {fileID: 1239615847827688492}
   ForceRemoteRenderTimeframe: 0
 --- !u!114 &4243588901381709582
 MonoBehaviour:
@@ -926,6 +930,7 @@ MonoBehaviour:
   lookArea: {fileID: 0}
   lookSensitivity: 0.2
   maxLookAngle: 80
+  useNetworkTransform: 1
 --- !u!114 &105624594761249741
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1440,7 +1445,7 @@ MonoBehaviour:
   walkStepLength: 1.4
   runStepLength: 2.2
   sprintStepLength: 2.8
-  minStepInterval: 0.30
+  minStepInterval: 0.3
   maxStepInterval: 0.7
   localVolume: 0.7
   remoteVolume: 0.9
@@ -1453,6 +1458,8 @@ MonoBehaviour:
   jumpUpVelocity: 1.2
   landingVelocity: -1.5
   minAirTimeForLand: 0.08
+  gateStepOnRaycast: 1
+  groundCheckDist: 0.3
   animator: {fileID: 0}
   isGroundedParam: IsGrounded
   verticalVelocityParam: VerticalVelocity
@@ -1572,6 +1579,64 @@ MonoBehaviour:
   yOffsetAboveGround: 0.03
   minStepSpacing: 0.45
   minTrailSpeed: 0.8
+--- !u!114 &1239615847827688492
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4472293491055181419}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f4763ee0fffb05443a2120024d843caa, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  moveSpeed: 5
+  controller: {fileID: 0}
+  moveJoystick: {fileID: 0}
+  enableJump: 1
+  gravity: -9.81
+  jumpForce: 1.6
+  jumpButton: {fileID: 0}
+  autoBindJumpButton: 1
+  jumpButtonNameContains: jump
+  jumpButtonRetryInterval: 1
+  cameraHolder: {fileID: 0}
+  lookArea: {fileID: 0}
+  lookSensitivity: 0.2
+  maxLookAngle: 80
+  useNetworkTransform: 1
+  sasMovement: {fileID: 6092511882842444086}
+  sasMovementSettings: {fileID: 11400000, guid: 7d33a2d0b337ad54e8d85db297de9b26,
+    type: 2}
+  sasState: {fileID: 0}
+  sprintJoystickThreshold: 0.85
+--- !u!114 &6092511882842444086
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4472293491055181419}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ed2e60975b014a14bee2ee51f674b480, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  movementSettings: {fileID: 11400000, guid: 7d33a2d0b337ad54e8d85db297de9b26, type: 2}
+--- !u!114 &-1552572176583878383
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4472293491055181419}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 26b2896c936d4be59e98d9bf358c5a96, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  inputConfig: {fileID: 0}
 --- !u!1 &7516938604735521551
 GameObject:
   m_ObjectHideFlags: 0

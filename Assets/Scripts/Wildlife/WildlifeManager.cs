@@ -31,8 +31,6 @@ public class WildlifeManager : MonoBehaviour
         public float fleeRadius;
         public float attackDamage;
         public int meatDropAmount;
-        public Color bodyColor;
-        public float bodyHeight;
     }
 
     [Header("Konfigurasi spesies (kosong = default 4 spesies arktik)")]
@@ -459,16 +457,16 @@ public class WildlifeManager : MonoBehaviour
         {
             new SpeciesConfig { speciesName = "PolarBear", isPredator = true, maxHealth = 140f,
                 walkSpeed = 1.6f, runSpeed = 5.0f, aggroRadius = 9f, fleeRadius = 0f,
-                attackDamage = 18f, meatDropAmount = 4, bodyColor = new Color(0.91f, 0.93f, 0.95f), bodyHeight = 2.2f },
+                attackDamage = 18f, meatDropAmount = 4 },
             new SpeciesConfig { speciesName = "ArcticWolf", isPredator = true, maxHealth = 70f,
                 walkSpeed = 1.9f, runSpeed = 5.6f, aggroRadius = 12f, fleeRadius = 0f,
-                attackDamage = 10f, meatDropAmount = 2, bodyColor = new Color(0.62f, 0.66f, 0.70f), bodyHeight = 1.5f },
+                attackDamage = 10f, meatDropAmount = 2 },
             new SpeciesConfig { speciesName = "Deer", isPredator = false, maxHealth = 50f,
                 walkSpeed = 1.8f, runSpeed = 6.0f, aggroRadius = 0f, fleeRadius = 10f,
-                attackDamage = 0f, meatDropAmount = 2, bodyColor = new Color(0.54f, 0.42f, 0.31f), bodyHeight = 1.8f },
+                attackDamage = 0f, meatDropAmount = 2 },
             new SpeciesConfig { speciesName = "ArcticFox", isPredator = false, maxHealth = 35f,
                 walkSpeed = 2.0f, runSpeed = 6.4f, aggroRadius = 0f, fleeRadius = 13f,
-                attackDamage = 0f, meatDropAmount = 1, bodyColor = new Color(0.88f, 0.90f, 0.92f), bodyHeight = 1.0f }
+                attackDamage = 0f, meatDropAmount = 1 }
         };
     }
 }
