@@ -21,7 +21,11 @@ public class FusionPlayerPersistenceBridge : NetworkBehaviour
         capturedRoomCode = PhotonFusionSessionState.HasSession
             ? PhotonFusionSessionState.Active.RoomCode
             : string.Empty;
+#if UNITY_6000_5_OR_NEWER
+        capturedRunnerInstanceId = Runner != null ? (int)UnityEngine.EntityId.ToULong(Runner.GetEntityId()) : 0;
+#else
         capturedRunnerInstanceId = Runner != null ? Runner.GetInstanceID() : 0;
+#endif
     }
 
     private void OnDestroy()

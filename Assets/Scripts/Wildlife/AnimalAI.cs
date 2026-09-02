@@ -65,6 +65,9 @@ public class AnimalAI : NetworkBehaviour
     private float attackCooldown;
     private bool deathVisualApplied;
     private bool authorityDespawnScheduled;
+    // Networked properties throw InvalidOperationException before Spawned() runs; Update()
+    // ticks from the first frame, so every networked read in Update must wait for this flag.
+    private bool _spawned;
 
     public void InitializeFromConfig(bool predatorFlag, float healthMax, float speedWalk, float speedRun,
         float aggro, float flee, float damage, int meatCount)
@@ -82,6 +85,7 @@ public class AnimalAI : NetworkBehaviour
 
     public override void Spawned()
     {
+        _spawned = true;
         agent = GetComponent<NavMeshAgent>();
         CurrentState = State.Idle;
         homePosition = transform.position;
@@ -120,6 +124,11 @@ public class AnimalAI : NetworkBehaviour
 
     private void Update()
     {
+        if (!_spawned)
+        {
+            return;
+        }
+
         if (IsDead)
         {
             if (!deathVisualApplied)

@@ -125,7 +125,11 @@ public class FusionPlayerInventory : NetworkBehaviour
             return false;
         }
 
+#if UNITY_6000_5_OR_NEWER
+        int itemObjectId = (int)UnityEngine.EntityId.ToULong(item.gameObject.GetEntityId());
+#else
         int itemObjectId = item.gameObject.GetInstanceID();
+#endif
         if (ClaimedLocalPickupIds.Contains(itemObjectId))
         {
             return false;
@@ -326,8 +330,8 @@ public class FusionPlayerInventory : NetworkBehaviour
                 rigidbody.useGravity = true;
                 rigidbody.isKinematic = false;
                 rigidbody.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
-                rigidbody.drag = 2f;
-                rigidbody.angularDrag = 3f;
+                rigidbody.linearDamping = 2f;
+                rigidbody.angularDamping = 3f;
                 rigidbody.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
             }
 
@@ -405,7 +409,11 @@ public class FusionPlayerInventory : NetworkBehaviour
         }
 
         CacheSceneDropTemplate(item);
+#if UNITY_6000_5_OR_NEWER
+        ClaimedLocalPickupIds.Add((int)UnityEngine.EntityId.ToULong(item.gameObject.GetEntityId()));
+#else
         ClaimedLocalPickupIds.Add(item.gameObject.GetInstanceID());
+#endif
         Destroy(item.gameObject);
     }
 
@@ -578,8 +586,8 @@ public class FusionPlayerInventory : NetworkBehaviour
 
         rigidbody.isKinematic = false;
         rigidbody.detectCollisions = true;
-        rigidbody.drag = 0f;
-        rigidbody.angularDrag = 1f;
+        rigidbody.linearDamping = 0f;
+        rigidbody.angularDamping = 1f;
         rigidbody.AddForce((forward.normalized + Vector3.up).normalized * 2f, ForceMode.VelocityChange);
     }
 

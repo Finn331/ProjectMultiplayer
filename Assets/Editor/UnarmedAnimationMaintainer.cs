@@ -150,8 +150,12 @@ public static class UnarmedAnimationMaintainer
         return null;
     }
 
-    // Body (non-arm) curves from the weapon-authored jump clip + constant arm/hand pose from
+    // Body (non-arm) curves from the weapon-authored jump clip + CONSTANT arm/hand pose from
     // Unarmed_Idle. Arm paths: Shoulder/UpperArm/LowerArm/Hand incl. all finger bones.
+    // CRITICAL: arm curves must be flat (2 keys, same value) sampled from the idle pose at t=0 —
+    // raw-copying the idle curves stretched every clip to 1.967 s (Unarmed_Idle's length), which
+    // made the jump stick in JumpStart/JumpEnd (exit times are fractions of clip length) until
+    // the player moved again. Clip length must stay == base clip length.
     static AnimationClip SynthesizeUnarmedJump(AnimationClip src, AnimationClip idle, string outPath)
     {
         var clip = new AnimationClip { frameRate = src.frameRate, wrapMode = src.wrapMode };
@@ -165,11 +169,18 @@ public static class UnarmedAnimationMaintainer
             if (IsArm(b.path)) continue;
             AnimationUtility.SetEditorCurve(clip, b, AnimationUtility.GetEditorCurve(src, b));
         }
+        float bodyDur = src.length;
         var idleBindings = AnimationUtility.GetCurveBindings(idle);
         foreach (var b in idleBindings)
         {
             if (!IsArm(b.path)) continue;
-            AnimationUtility.SetEditorCurve(clip, b, AnimationUtility.GetEditorCurve(idle, b));
+            var idleCurve = AnimationUtility.GetEditorCurve(idle, b);
+            if (idleCurve == null || idleCurve.keys.Length == 0) continue;
+            float v0 = idleCurve.keys[0].value;
+            var constCurve = new AnimationCurve(new Keyframe(0f, v0), new Keyframe(bodyDur, v0));
+            for (int k = 0; k < constCurve.keys.Length; k++)
+                AnimationUtility.SetKeyBroken(constCurve, k, true);
+            AnimationUtility.SetEditorCurve(clip, b, constCurve);
         }
         AssetDatabase.CreateAsset(clip, outPath); // overwrites if the path already exists
         return clip;

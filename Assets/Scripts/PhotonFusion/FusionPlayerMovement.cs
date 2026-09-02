@@ -355,7 +355,11 @@ public class FusionPlayerMovement : NetworkBehaviour
     private int GetTransformSyncWarningKey()
     {
         NetworkObject networkObject = Object;
+#if UNITY_6000_5_OR_NEWER
+        return networkObject != null ? (int)UnityEngine.EntityId.ToULong(networkObject.GetEntityId()) : (int)UnityEngine.EntityId.ToULong(GetEntityId());
+#else
         return networkObject != null ? networkObject.GetInstanceID() : GetInstanceID();
+#endif
     }
 
     private bool HasNetworkTransformComponent()

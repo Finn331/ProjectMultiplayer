@@ -59,7 +59,11 @@ public class TreeChoppable : MonoBehaviour
         if (preventRapidDuplicateHits)
         {
             float now = Time.time;
+#if UNITY_6000_5_OR_NEWER
+            int attackerInstanceId = attacker != null ? (int)UnityEngine.EntityId.ToULong(attacker.GetEntityId()) : int.MinValue;
+#else
             int attackerInstanceId = attacker != null ? attacker.GetInstanceID() : int.MinValue;
+#endif
             bool sameAttacker = attacker == null || attackerInstanceId == lastAttackerInstanceId;
             float minInterval = Mathf.Max(0f, minHitIntervalSeconds);
 

@@ -2182,7 +2182,13 @@ namespace Fusion.Editor {
       }
       
       (AssetGuid, _) = AssetDatabaseUtils.GetGUIDAndLocalFileIdentifierOrThrow(obj);
+#if UNITY_6000_5_OR_NEWER
+      InstanceID = obj.GetEntityId();
+#elif UNITY_6000_3_OR_NEWER
+      InstanceID = (ObjectIdType)obj.GetInstanceID();
+#else
       InstanceID = obj.GetInstanceID();
+#endif
       AssetName = obj.name;
       IsMainAsset = AssetDatabase.IsMainAsset(obj);
     } 
@@ -7523,7 +7529,11 @@ namespace Fusion.Editor {
               hashCode = HashCodeUtilities.CombineHashCodes(hashCode, p.colorValue.GetHashCode());
               break;
             case SerializedPropertyType.ObjectReference:
+#if UNITY_6000_5_OR_NEWER
+              hashCode = HashCodeUtilities.CombineHashCodes(hashCode, p.objectReferenceEntityIdValue.GetHashCode());
+#else
               hashCode = HashCodeUtilities.CombineHashCodes(hashCode, p.objectReferenceInstanceIDValue);
+#endif
               break;
             case SerializedPropertyType.LayerMask:
               hashCode = HashCodeUtilities.CombineHashCodes(hashCode, p.intValue);
@@ -9928,7 +9938,11 @@ namespace Fusion.Editor {
           return CheckCondition(doIf, compareProperty.longValue);
 
         case SerializedPropertyType.ObjectReference:
+#if UNITY_6000_5_OR_NEWER
+          return CheckCondition(doIf, (long)UnityEngine.EntityId.ToULong(compareProperty.objectReferenceEntityIdValue));
+#else
           return CheckCondition(doIf, compareProperty.objectReferenceInstanceIDValue);
+#endif
 
         case SerializedPropertyType.Float:
           return CheckCondition(doIf, compareProperty.doubleValue);
@@ -12159,8 +12173,13 @@ namespace Fusion.Editor {
 
     [RuntimeInitializeOnLoadMethod]
     public static void Initialize() {
+#if UNITY_6000_5_OR_NEWER
+      UnityEditor.EditorApplication.hierarchyWindowItemByEntityIdOnGUI -= HierarchyWindowOverlay;
+      UnityEditor.EditorApplication.hierarchyWindowItemByEntityIdOnGUI += HierarchyWindowOverlay;
+#else
       UnityEditor.EditorApplication.hierarchyWindowItemOnGUI -= HierarchyWindowOverlay;
       UnityEditor.EditorApplication.hierarchyWindowItemOnGUI += HierarchyWindowOverlay;
+#endif
     }
 
     [StaticField(StaticFieldResetMode.None)]
@@ -12176,9 +12195,15 @@ namespace Fusion.Editor {
     [StaticField(StaticFieldResetMode.None)]
     private static GUIContent s_multipleInstancesContent = EditorGUIUtility.IconContent("Warning", "multiple");
 
-    private static void HierarchyWindowOverlay(int instanceId, Rect position) {
-#if UNITY_6000_3_OR_NEWER
-      var entityId = (EntityId)instanceId;
+    private static void HierarchyWindowOverlay(
+#if UNITY_6000_5_OR_NEWER
+      EntityId instanceId,
+#else
+      int instanceId,
+#endif
+      Rect position) {
+#if UNITY_6000_5_OR_NEWER
+      var entityId = instanceId;
       var obj = UnityEditor.EditorUtility.EntityIdToObject(entityId);
 #else
       var entityId = instanceId;
@@ -12192,7 +12217,11 @@ namespace Fusion.Editor {
       Scene scene = default;
       for (int i = 0; i < SceneManager.sceneCount; ++i) {
         var s = SceneManager.GetSceneAt(i);
+#if UNITY_6000_5_OR_NEWER
+        if (s.handle.GetRawData() == EntityId.ToULong(entityId)) {
+#else
         if (s.handle == entityId) {
+#endif
           scene = s;
           break;
         }
@@ -12240,7 +12269,11 @@ namespace Fusion.Editor {
               if (!otherScene.IsValid()) {
                 continue;
               }
+#if UNITY_6000_5_OR_NEWER
+              if (otherScene.handle.GetRawData() == EntityId.ToULong(instanceId)) {
+#else
               if (otherScene.handle == instanceId) {
+#endif
                 menu.AddItem(MakeRunnerContent(runner), false, () => {
                   EditorGUIUtility.PingObject(runner);
                   Selection.activeObject = runner;

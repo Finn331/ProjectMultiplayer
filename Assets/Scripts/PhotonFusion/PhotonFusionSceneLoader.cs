@@ -63,7 +63,11 @@ public class PhotonFusionSceneLoader : MonoBehaviour
         try
         {
             string roomCode = PhotonFusionSessionState.HasSession ? PhotonFusionSessionState.Active.RoomCode : string.Empty;
+#if UNITY_6000_5_OR_NEWER
+            int runnerInstanceId = (int)UnityEngine.EntityId.ToULong(bootstrap.Runner.GetEntityId());
+#else
             int runnerInstanceId = bootstrap.Runner.GetInstanceID();
+#endif
             int sessionGeneration = GetSessionGeneration(roomCode, runnerInstanceId);
             long loadToken = ++nextLoadToken;
             SceneRef sceneRef = SceneRef.FromIndex(buildIndex);
@@ -169,7 +173,11 @@ public class PhotonFusionSceneLoader : MonoBehaviour
     private static int GetActiveRunnerInstanceId()
     {
         PhotonFusionBootstrap activeBootstrap = FindObjectOfType<PhotonFusionBootstrap>(true);
+#if UNITY_6000_5_OR_NEWER
+        return activeBootstrap != null && activeBootstrap.Runner != null ? (int)UnityEngine.EntityId.ToULong(activeBootstrap.Runner.GetEntityId()) : 0;
+#else
         return activeBootstrap != null && activeBootstrap.Runner != null ? activeBootstrap.Runner.GetInstanceID() : 0;
+#endif
     }
 
     private sealed class LoadCompletionCallback

@@ -5,6 +5,14 @@ using UnityEngine;
 using static Utilities.BetterHierarchy.BetterHierarchyPreferences;
 using Type = System.Type;
 
+// Unity 6.5 (6000.5) switched hierarchy selection APIs from int instance IDs to EntityId.
+// Alias the id type so the same code compiles on both API generations.
+#if UNITY_6000_5_OR_NEWER
+using HierItemId = UnityEngine.EntityId;
+#else
+using HierItemId = System.Int32;
+#endif
+
 namespace Utilities.BetterHierarchy
 {
     [InitializeOnLoad]
@@ -12,14 +20,19 @@ namespace Utilities.BetterHierarchy
     {
         private static bool hierarchyHasFocus;
         private static EditorWindow hierarchyEditorWindow;
-        private static readonly HashSet<int> additionalSelectedInstanceIDs;
+        private static readonly HashSet<HierItemId> additionalSelectedInstanceIDs;
         private const float HIERARCHY_ICON_WIDTH = 18.5f;
 
         static BetterHierarchyIconDisplayer()
         {
-			additionalSelectedInstanceIDs = new HashSet<int>();
+			additionalSelectedInstanceIDs = new HashSet<HierItemId>();
+#if UNITY_6000_5_OR_NEWER
+            EditorApplication.hierarchyWindowItemByEntityIdOnGUI -= OnHierarchyWindowItemOnGUI;
+            EditorApplication.hierarchyWindowItemByEntityIdOnGUI += OnHierarchyWindowItemOnGUI;
+#else
             EditorApplication.hierarchyWindowItemOnGUI -= OnHierarchyWindowItemOnGUI;
             EditorApplication.hierarchyWindowItemOnGUI += OnHierarchyWindowItemOnGUI;
+#endif
             EditorApplication.update -= OnEditorUpdate;
             EditorApplication.update += OnEditorUpdate;
             OnSettingsChangedEvents -= EditorApplication.RepaintHierarchyWindow;
@@ -47,12 +60,16 @@ namespace Utilities.BetterHierarchy
             return focusedWindow != null && focusedWindow.GetType().Name == "SceneHierarchyWindow";
         }
 
-        private static void OnHierarchyWindowItemOnGUI(int instanceID, Rect selectionRect)
+        private static void OnHierarchyWindowItemOnGUI(HierItemId instanceID, Rect selectionRect)
         {
             if (!IsEnabled)
                 return;
 
+#if UNITY_6000_5_OR_NEWER
+            GameObject obj = EditorUtility.EntityIdToObject(instanceID) as GameObject;
+#else
             GameObject obj = EditorUtility.InstanceIDToObject(instanceID) as GameObject;
+#endif
 
             if (!obj)
                 return;
@@ -109,7 +126,7 @@ namespace Utilities.BetterHierarchy
                 expandChildrenIconRect.x -= HIERARCHY_EXPAND_ICON_X_OFFSET;
                 expandChildrenIconRect.width = HIERARCHY_EXPAND_ICON_WIDTH;
 
-                objectStatus.IsSelected = Selection.instanceIDs.Contains(instanceID);
+                objectStatus.IsSelected = Selection.entityIds.Contains(instanceID);
                 objectStatus.IsHovered = entireRowRect.Contains(Event.current.mousePosition);
                 objectStatus.IsDropDownHovered = expandChildrenIconRect.Contains(Event.current.mousePosition);
 
@@ -120,7 +137,7 @@ namespace Utilities.BetterHierarchy
             {
                 if (objectStatus.IsSelected || (objectStatus.IsDropDownHovered && MouseStatus.IsMouseDown))
                 {
-                    if (Selection.instanceIDs.Length > 1)
+                    if (Selection.entityIds.Length > 1)
                         additionalSelectedInstanceIDs.Clear();
                     
                     additionalSelectedInstanceIDs.Add(instanceID);
@@ -227,7 +244,7 @@ namespace Utilities.BetterHierarchy
 
         private static void ClearOriginalIcon(HierarchyObjectStatus hierarchyObjectStatus, Rect selectionRect)
         {
-            int selectedAmount = Selection.instanceIDs.Length > 1 ? Selection.instanceIDs.Length : additionalSelectedInstanceIDs.Count;
+            int selectedAmount = Selection.entityIds.Length > 1 ? Selection.entityIds.Length : additionalSelectedInstanceIDs.Count;
             Color color = UnityEditorBackgroundColor.Get(hierarchyObjectStatus, hierarchyHasFocus, selectedAmount);
             Rect backgroundRect = selectionRect;
             backgroundRect.width = HIERARCHY_ICON_WIDTH;

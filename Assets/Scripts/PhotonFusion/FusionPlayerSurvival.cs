@@ -31,9 +31,13 @@ public class FusionPlayerSurvival : NetworkBehaviour
     private float lastAppliedHealth = float.NaN;
     private float lastAppliedHunger = float.NaN;
     private float lastAppliedThirst = float.NaN;
+    // Networked properties throw InvalidOperationException before Spawned() runs; Update()
+    // ticks from the first frame, so every networked read in Update must wait for this flag.
+    private bool _spawned;
 
     public override void Spawned()
     {
+        _spawned = true;
         if (HasFusionStateAuthority())
         {
             string name = PhotonFusionSessionState.HasSession
@@ -77,6 +81,7 @@ public class FusionPlayerSurvival : NetworkBehaviour
 
     public override void Despawned(NetworkRunner runner, bool hasState)
     {
+        _spawned = false;
         if (survivalSystem != null)
         {
             survivalSystem.StatsChanged -= OnStateAuthoritySurvivalChanged;
@@ -100,6 +105,11 @@ public class FusionPlayerSurvival : NetworkBehaviour
 
     private void Update()
     {
+        if (!_spawned)
+        {
+            return;
+        }
+
         if (!HasFusionStateAuthority() && IsInitialized && HasNetworkSnapshotChanged())
         {
             ApplySnapshotToLocalSystem();

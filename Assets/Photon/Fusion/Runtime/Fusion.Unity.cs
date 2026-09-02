@@ -3737,11 +3737,19 @@ namespace Fusion {
 
     public class SceneEqualityComparer : IEqualityComparer<Scene> {
       public bool Equals(Scene x, Scene y) {
+#if UNITY_6000_5_OR_NEWER
         return x.handle == y.handle;
+#else
+        return (int)x.handle == (int)y.handle;
+#endif
       }
 
       public int GetHashCode(Scene obj) {
-        return obj.handle;
+#if UNITY_6000_5_OR_NEWER
+        return (int)obj.handle.GetRawData();
+#else
+        return (int)obj.handle;
+#endif
       }
     }
 
@@ -3898,7 +3906,11 @@ namespace Fusion {
         result.Append("<Invalid>");
       }
 
-      result.Append(", handle:").Append(scene.handle);
+#if UNITY_6000_5_OR_NEWER
+      result.Append(", handle:").Append(scene.handle.GetRawData());
+#else
+      result.Append(", handle:").Append((int)scene.handle);
+#endif
       result.Append("]");
       return result.ToString();
     }

@@ -107,7 +107,11 @@ public class FusionPlayerSpawner : MonoBehaviour
 
         PlayerInventory inventory = playerObject.GetComponent<PlayerInventory>();
         PlayerSurvivalSystem survival = playerObject.GetComponent<PlayerSurvivalSystem>();
+#if UNITY_6000_5_OR_NEWER
+        FusionPlayerPersistence.TryRestore(roomCode, (int)UnityEngine.EntityId.ToULong(runner.GetEntityId()), inventory, survival);
+#else
         FusionPlayerPersistence.TryRestore(roomCode, runner.GetInstanceID(), inventory, survival);
+#endif
 
         // Lobby (Gameplay) adalah zona aman: karakter yang baru dibuat di sini
         // selalu lahir sehat, terlepas dari sisa state jaringan sesi sebelumnya
@@ -216,7 +220,11 @@ public class FusionPlayerSpawner : MonoBehaviour
         }
 
         int pathComparison = string.CompareOrdinal(GetHierarchyPath(left.transform), GetHierarchyPath(right.transform));
+#if UNITY_6000_5_OR_NEWER
+        return pathComparison != 0 ? pathComparison : (int)UnityEngine.EntityId.ToULong(left.GetEntityId()).CompareTo((int)UnityEngine.EntityId.ToULong(right.GetEntityId()));
+#else
         return pathComparison != 0 ? pathComparison : left.GetInstanceID().CompareTo(right.GetInstanceID());
+#endif
     }
 
     private static string GetHierarchyPath(Transform transform)
